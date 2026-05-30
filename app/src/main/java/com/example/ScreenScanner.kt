@@ -112,51 +112,63 @@ class ScreenScanner(
                 val foundCommCards = mutableListOf<Card>()
                 val foundHoleCards = mutableListOf<Card>()
                 
+                android.util.Log.d("ScreenScanner", "MLKit raw text:\n${result.text}")
+                
                 val cardPattern = Regex("^(10|[AKQJ]|[2-9])\$")
                 
                 for (block in result.textBlocks) {
                     for (line in block.lines) {
                         for (element in line.elements) {
-                            val text = element.text.uppercase()
+                            val text = element.text.uppercase(java.util.Locale.US).replace(Regex("[^10AKQJ2-9]"), "")
                             if (cardPattern.matches(text)) {
                                 val box = element.boundingBox
                                 if (box != null) {
                                     // Try to determine suit from pixel color right below the text
+                                    // We need to look below the text where the suit symbol typically is
                                     val checkX = box.centerX()
-                                    val checkY = minOf(bitmap.height - 1, box.bottom + (box.height() / 2))
+                                    // Let's check a range of pixels below the box, or inside the box if it includes the suit
+                                    val checkY = minOf(bitmap.height - 1, box.bottom + (box.height() / 4))
                                     
                                     var isRed = false
                                     var isGreen = false
                                     var isBlue = false
                                     var isBlack = false
                                     
-                                    if (checkX >= 0 && checkX < bitmap.width && checkY >= 0 && checkY < bitmap.height) {
-                                        val pixel = bitmap.getPixel(checkX, checkY)
-                                        val r = android.graphics.Color.red(pixel)
-                                        val g = android.graphics.Color.green(pixel)
-                                        val b = android.graphics.Color.blue(pixel)
-                                        
-                                        if (r > 150 && g < 100 && b < 100) isRed = true
-                                        else if (g > 120 && r < 100 && b < 100) isGreen = true
-                                        else if (b > 120 && r < 100 && g < 100) isBlue = true
-                                        else if (r < 80 && g < 80 && b < 80) isBlack = true
+                                    // Check a 5x5 grid around the check point
+                                    for (dx in -10..10 step 5) {
+                                        for (dy in -5..15 step 5) {
+                                            val px = (checkX + dx).coerceIn(0, bitmap.width - 1)
+                                            val py = (checkY + dy).coerceIn(0, bitmap.height - 1)
+                                            
+                                            val pixel = bitmap.getPixel(px, py)
+                                            val r = android.graphics.Color.red(pixel)
+                                            val g = android.graphics.Color.green(pixel)
+                                            val b = android.graphics.Color.blue(pixel)
+                                            
+                                            if (r > 150 && g < 100 && b < 100) isRed = true
+                                            if (g > 120 && r < 100 && b < 100) isGreen = true
+                                            if (b > 120 && r < 100 && g < 100) isBlue = true
+                                            if (r < 80 && g < 80 && b < 80 && (r+g+b) < 150) isBlack = true
+                                        }
                                     }
                                     
                                     val rank = parseRank(text) ?: continue
                                     var suit = Suit.SPADES // Default
                                     
-                                    // Standard 2-color logic for now, with fallback for 4-color
-                                    if (isRed) suit = Suit.HEARTS // Or diamonds
+                                    if (isRed) suit = Suit.HEARTS 
                                     else if (isGreen) suit = Suit.CLUBS
                                     else if (isBlue) suit = Suit.DIAMONDS
                                     else if (isBlack) suit = Suit.SPADES
                                     
                                     val card = Card(rank, suit)
+                                    android.util.Log.d("ScreenScanner", "Detected Card: $text ($suit) at bounds $box")
                                     
                                     if (commRect.contains(box.centerX(), box.centerY())) {
                                         foundCommCards.add(card)
+                                        android.util.Log.d("ScreenScanner", "-> Assigned to Comm")
                                     } else if (holeRect.contains(box.centerX(), box.centerY())) {
                                         foundHoleCards.add(card)
+                                        android.util.Log.d("ScreenScanner", "-> Assigned to Hole")
                                     }
                                 }
                             }
@@ -164,7 +176,10 @@ class ScreenScanner(
                     }
                 }
                 
-                scanStatus.value = "Holes: \${foundHoleCards.size}, Comm: \${foundCommCards.size}"
+                val commW = pokerHudService.getCommRect().width()
+                val holeW = pokerHudService.getHoleRect().width()
+                scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} (${commW},${holeW})"
+
                 
                 if (foundHoleCards.isNotEmpty() || foundCommCards.isNotEmpty()) {
                     val h1 = foundHoleCards.getOrNull(0)
