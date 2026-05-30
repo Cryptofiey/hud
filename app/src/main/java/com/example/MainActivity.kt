@@ -64,6 +64,7 @@ object ScannerConfig {
     var pendingProjectionData: Intent? = null
     var pendingProjectionResultCode: Int = 0
     val isProjectionGranted = MutableStateFlow(false)
+    var activeProjection: android.media.projection.MediaProjection? = null
 }
 
 fun Context.findActivity(): Activity? {

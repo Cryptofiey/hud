@@ -163,11 +163,28 @@ class PokerHudService : Service() {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                var type = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                var type = 0
                 if (Build.VERSION.SDK_INT >= 34) { // Build.VERSION_CODES.UPSIDE_DOWN_CAKE
                     type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
                 }
-                startForeground(717, notification, type)
+                
+                if (PokerHudSharedState.multiDataScannerToggle.value && ScannerConfig.pendingProjectionData != null) {
+                    type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                    try {
+                        if (ScannerConfig.activeProjection == null) {
+                            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                            ScannerConfig.activeProjection = projectionManager.getMediaProjection(ScannerConfig.pendingProjectionResultCode, ScannerConfig.pendingProjectionData!!)
+                        }
+                    } catch(e: Exception) {
+                        android.util.Log.e("PokerHudService", "Failed to getMediaProjection before startForeground", e)
+                    }
+                }
+                
+                if (type == 0) {
+                    startForeground(717, notification)
+                } else {
+                    startForeground(717, notification, type)
+                }
             } else {
                 startForeground(717, notification)
             }
@@ -1455,5 +1472,9 @@ class PokerHudService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopFloatingOverlay()
+        ScannerConfig.activeProjection?.stop()
+        ScannerConfig.activeProjection = null
+        ScannerConfig.pendingProjectionData = null
+        ScannerConfig.isProjectionGranted.value = false
     }
 }

@@ -50,8 +50,11 @@ class ScreenScanner(
             isScanning.value = true
             scanStatus.value = "Starting modern ML Kit scanner..."
 
-            val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            mediaProjection = projectionManager.getMediaProjection(resultCode, resultData)
+            if (ScannerConfig.activeProjection == null) {
+                val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                ScannerConfig.activeProjection = projectionManager.getMediaProjection(resultCode, resultData)
+            }
+            mediaProjection = ScannerConfig.activeProjection
 
             val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
             val metrics = DisplayMetrics()
@@ -112,8 +115,8 @@ class ScreenScanner(
             try {
                 val result = recognizer.process(inputImage).await()
                 
-                val commRect = pokerHudService.getCommRect()
-                val holeRect = pokerHudService.getHoleRect()
+                val commRect = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { pokerHudService.getCommRect() }
+                val holeRect = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { pokerHudService.getHoleRect() }
                 
                 val foundCommCards = mutableListOf<Card>()
                 val foundHoleCards = mutableListOf<Card>()
@@ -195,8 +198,8 @@ class ScreenScanner(
                     }
                 }
                 
-                val commW = pokerHudService.getCommRect().width()
-                val holeW = pokerHudService.getHoleRect().width()
+                val commW = commRect.width()
+                val holeW = holeRect.width()
                 val paddedBoard = foundCommCards.take(5) + List(maxOf(0, 5 - foundCommCards.size)) { null }
                 val h1 = foundHoleCards.getOrNull(0)
                 val h2 = foundHoleCards.getOrNull(1)
@@ -246,7 +249,6 @@ class ScreenScanner(
         scanJob?.cancel()
         virtualDisplay?.release()
         imageReader?.close()
-        mediaProjection?.stop()
         scanStatus.value = "Scanner stopped."
     }
 }
