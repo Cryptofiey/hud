@@ -46,44 +46,48 @@ class ScreenScanner(
     @SuppressLint("WrongConstant")
     fun start() {
         if (isScanning.value) return
-        isScanning.value = true
-        scanStatus.value = "Starting modern ML Kit scanner..."
+        try {
+            isScanning.value = true
+            scanStatus.value = "Starting modern ML Kit scanner..."
 
-        val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        mediaProjection = projectionManager.getMediaProjection(resultCode, resultData)
+            val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            mediaProjection = projectionManager.getMediaProjection(resultCode, resultData)
 
-        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val metrics = DisplayMetrics()
-        windowManager.defaultDisplay.getRealMetrics(metrics)
+            val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val metrics = DisplayMetrics()
+            windowManager.defaultDisplay.getRealMetrics(metrics)
 
-        val width = metrics.widthPixels
-        val height = metrics.heightPixels
-        val density = metrics.densityDpi
+            val width = metrics.widthPixels
+            val height = metrics.heightPixels
+            val density = metrics.densityDpi
 
-        imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-        virtualDisplay = mediaProjection?.createVirtualDisplay(
-            "ScreenScanner",
-            width, height, density,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            imageReader?.surface, null, null
-        )
+            imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
+            virtualDisplay = mediaProjection?.createVirtualDisplay(
+                "ScreenScanner",
+                width, height, density,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                imageReader?.surface, null, null
+            )
 
-        scanJob = scope.launch {
-            while (isActive) {
-                processLatestImage()
-                delay(2000) // Scan every 2 seconds
+            scanJob = scope.launch {
+                while (isActive) {
+                    processLatestImage()
+                    delay(2000) // Scan every 2 seconds
+                }
             }
+        } catch (e: Exception) {
+            android.util.Log.e("ScreenScanner", "Error starting scanner", e)
+            scanStatus.value = "Scanner start failed: ${e.message}"
+            isScanning.value = false
         }
     }
 
     private suspend fun processLatestImage() {
-        val image: Image? = try {
-            imageReader?.acquireLatestImage()
-        } catch (e: Exception) {
-            null
-        }
-
-        if (image != null) {
+        var image: Image? = null
+        try {
+            image = imageReader?.acquireLatestImage()
+            if (image == null) return
+            
             val width = image.width
             val height = image.height
             val planes = image.planes
@@ -99,9 +103,7 @@ class ScreenScanner(
                 Bitmap.Config.ARGB_8888
             )
             bitmap.copyPixelsFromBuffer(buffer)
-            image.close()
 
-            // Crucial: create a clean bitmap without padding so ML Kit bounding boxes perfectly match screen coordinates!
             val cleanBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height)
             bitmap.recycle()
 
@@ -116,75 +118,77 @@ class ScreenScanner(
                 val foundCommCards = mutableListOf<Card>()
                 val foundHoleCards = mutableListOf<Card>()
                 
-                android.util.Log.d("ScreenScanner", "MLKit raw text:\n${result.text}")
-                
                 val cardPattern = Regex("^(10|T|[AKQJ]|[2-9])$")
+                val debugLogs = mutableListOf<String>()
                 
                 for (block in result.textBlocks) {
                     for (line in block.lines) {
                         for (element in line.elements) {
+                            val box = element.boundingBox ?: continue
+                            val expCommRect = android.graphics.Rect(commRect.left - 40, commRect.top - 40, commRect.right + 40, commRect.bottom + 40)
+                            val expHoleRect = android.graphics.Rect(holeRect.left - 40, holeRect.top - 40, holeRect.right + 40, holeRect.bottom + 40)
+                            
+                            val inComm = expCommRect.contains(box.centerX(), box.centerY())
+                            val inHole = expHoleRect.contains(box.centerX(), box.centerY())
+                            
+                            if (inComm || inHole) {
+                                debugLogs.add(element.text)
+                            }
+                            
                             val rawText = element.text.uppercase(java.util.Locale.US)
                             val text = rawText.replace(Regex("[^10AKQJT2-9]"), "")
-                            if (cardPattern.matches(text) && rawText.length <= 4) { // Ignore long text that just happens to resolve to a card
-                                val box = element.boundingBox
-                                if (box != null) {
-                                    // Try to determine suit from pixel color right below or to the left of the text
-                                    val checkX = box.centerX()
-                                    val checkY = box.centerY()
-                                    
-                                    var isRed = false
-                                    var isGreen = false
-                                    var isBlue = false
-                                    var isBlack = false
-                                    
-                                    var redCount = 0
-                                    var greenCount = 0
-                                    var blueCount = 0
-                                    var blackCount = 0
-                                    
-                                    // Check a wider grid around the box (left side and bottom)
-                                    val startX = maxOf(0, box.left - box.width())
-                                    val endX = minOf(cleanBitmap.width - 1, box.right + (box.width() / 4))
-                                    val startY = maxOf(0, box.top - (box.height() / 4))
-                                    val endY = minOf(cleanBitmap.height - 1, box.bottom + (box.height() / 2))
-                                    
-                                    for (px in startX..endX step 3) {
-                                        for (py in startY..endY step 3) {
-                                            val pixel = cleanBitmap.getPixel(px, py)
-                                            val r = android.graphics.Color.red(pixel)
-                                            val g = android.graphics.Color.green(pixel)
-                                            val b = android.graphics.Color.blue(pixel)
-                                            
-                                            if (r > 150 && g < 100 && b < 100) redCount++
-                                            if (g > 120 && r < 100 && b < 100) greenCount++
-                                            if (b > 120 && r < 100 && g < 100) blueCount++
-                                            if (r < 80 && g < 80 && b < 80 && (r+g+b) < 150) blackCount++
-                                        }
+                            if (cardPattern.matches(text) && rawText.length <= 4) { 
+                                val checkX = box.centerX()
+                                val checkY = box.centerY()
+                                
+                                var isRed = false
+                                var isGreen = false
+                                var isBlue = false
+                                var isBlack = false
+                                
+                                var redCount = 0
+                                var greenCount = 0
+                                var blueCount = 0
+                                var blackCount = 0
+                                
+                                val startX = maxOf(0, box.left - box.width())
+                                val endX = minOf(cleanBitmap.width - 1, box.right + (box.width() / 4))
+                                val startY = maxOf(0, box.top - (box.height() / 4))
+                                val endY = minOf(cleanBitmap.height - 1, box.bottom + (box.height() / 2))
+                                
+                                for (px in startX..endX step 3) {
+                                    for (py in startY..endY step 3) {
+                                        val pixel = cleanBitmap.getPixel(px, py)
+                                        val r = android.graphics.Color.red(pixel)
+                                        val g = android.graphics.Color.green(pixel)
+                                        val b = android.graphics.Color.blue(pixel)
+                                        
+                                        if (r > 150 && g < 100 && b < 100) redCount++
+                                        if (g > 120 && r < 100 && b < 100) greenCount++
+                                        if (b > 120 && r < 100 && g < 100) blueCount++
+                                        if (r < 80 && g < 80 && b < 80 && (r+g+b) < 150) blackCount++
                                     }
-                                    
-                                    if (redCount > 5) isRed = true
-                                    if (greenCount > 5) isGreen = true
-                                    if (blueCount > 5) isBlue = true
-                                    if (blackCount > 10) isBlack = true
-                                    
-                                    val rank = parseRank(text) ?: continue
-                                    var suit = Suit.SPADES // Default
-                                    
-                                    if (isRed) suit = Suit.HEARTS 
-                                    else if (isGreen) suit = Suit.CLUBS
-                                    else if (isBlue) suit = Suit.DIAMONDS
-                                    else if (isBlack) suit = Suit.SPADES
-                                    
-                                    val card = Card(rank, suit)
-                                    // Expand hit box slightly to tolerate user sloppiness
-                                    val expCommRect = android.graphics.Rect(commRect.left - 40, commRect.top - 40, commRect.right + 40, commRect.bottom + 40)
-                                    val expHoleRect = android.graphics.Rect(holeRect.left - 40, holeRect.top - 40, holeRect.right + 40, holeRect.bottom + 40)
-                                    
-                                    if (expCommRect.contains(box.centerX(), box.centerY())) {
-                                        foundCommCards.add(card)
-                                    } else if (expHoleRect.contains(box.centerX(), box.centerY())) {
-                                        foundHoleCards.add(card)
-                                    }
+                                }
+                                
+                                if (redCount > 5) isRed = true
+                                if (greenCount > 5) isGreen = true
+                                if (blueCount > 5) isBlue = true
+                                if (blackCount > 10) isBlack = true
+                                
+                                val rank = parseRank(text) ?: continue
+                                var suit = Suit.SPADES 
+                                
+                                if (isRed) suit = Suit.HEARTS 
+                                else if (isGreen) suit = Suit.CLUBS
+                                else if (isBlue) suit = Suit.DIAMONDS
+                                else if (isBlack) suit = Suit.SPADES
+                                
+                                val card = Card(rank, suit)
+                                
+                                if (inComm) {
+                                    foundCommCards.add(card)
+                                } else if (inHole) {
+                                    foundHoleCards.add(card)
                                 }
                             }
                         }
@@ -193,28 +197,28 @@ class ScreenScanner(
                 
                 val commW = pokerHudService.getCommRect().width()
                 val holeW = pokerHudService.getHoleRect().width()
-                scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} (${commW},${holeW})"
-
+                val paddedBoard = foundCommCards.take(5) + List(maxOf(0, 5 - foundCommCards.size)) { null }
+                val h1 = foundHoleCards.getOrNull(0)
+                val h2 = foundHoleCards.getOrNull(1)
+                scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} (${commW},${holeW})\n" +
+                                   "Box: ${debugLogs.joinToString(", ")}\n" + 
+                                   "Board: ${paddedBoard.joinToString("") { it?.toString() ?: "[?]" }}"
                 
                 if (foundHoleCards.isNotEmpty() || foundCommCards.isNotEmpty()) {
-                    val h1 = foundHoleCards.getOrNull(0)
-                    val h2 = foundHoleCards.getOrNull(1)
-                    val paddedBoard = foundCommCards.take(5).toMutableList<Card?>()
-                    while (paddedBoard.size < 5) paddedBoard.add(null)
-                    
-                    // TODO: Implement parsing for opponent VPIP, chip stacks, and Pot size.
-                    // Currently OCR only extracts Hole and Community Cards patterns.
-                    
                     PokerHudSharedState.externalActions.tryEmit(
                         ExternalAction.UpdateCards(h1, h2, paddedBoard)
                     )
                 }
                 
             } catch (e: Exception) {
-                scanStatus.value = "OCR Failed: \${e.message}"
+                scanStatus.value = "OCR Failed: ${e.message}"
             } finally {
                 cleanBitmap.recycle()
             }
+        } catch (e: Throwable) {
+            android.util.Log.e("ScreenScanner", "Fatal Error", e)
+        } finally {
+            try { image?.close() } catch(ignored: Exception) {}
         }
     }
 

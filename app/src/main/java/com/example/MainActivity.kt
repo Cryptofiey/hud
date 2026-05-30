@@ -88,8 +88,13 @@ class MainActivity : ComponentActivity() {
             ScannerConfig.isProjectionGranted.value = true
             if (pendingStartService) {
                 pendingStartService = false
-                val serviceIntent = Intent(this, PokerHudService::class.java)
-                androidx.core.content.ContextCompat.startForegroundService(this, serviceIntent)
+                try {
+                    val serviceIntent = Intent(this, PokerHudService::class.java)
+                    androidx.core.content.ContextCompat.startForegroundService(this, serviceIntent)
+                } catch (e: Exception) {
+                    android.util.Log.e("MainActivity", "Failed to startForegroundService", e)
+                    android.widget.Toast.makeText(this, "Failed to start HUD: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         } else {
             pendingStartService = false

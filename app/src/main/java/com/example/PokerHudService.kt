@@ -157,14 +157,22 @@ class PokerHudService : Service() {
         val notification = notificationBuilder
             .setContentTitle("Poker HUD Overlay Active")
             .setContentText("Displaying live equity calculations and stats overlay.")
-            .setSmallIcon(android.R.drawable.sym_def_app_icon)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(717, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-        } else {
-            startForeground(717, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                var type = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                if (Build.VERSION.SDK_INT >= 34) { // Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+                    type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                }
+                startForeground(717, notification, type)
+            } else {
+                startForeground(717, notification)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PokerHudService", "Failed to startForeground", e)
         }
     }
 
