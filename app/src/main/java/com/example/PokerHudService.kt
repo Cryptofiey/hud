@@ -744,10 +744,10 @@ class PokerHudService : Service() {
 
         val frame = FrameLayout(this).apply {
             background = createBackgroundDrawable(
-                AndroidColor.parseColor("#332196F3"),
+                AndroidColor.parseColor("#00000000"), // Transparent inside
                 8f,
                 dpToPx(1.5f),
-                AndroidColor.parseColor("#CC2196F3")
+                AndroidColor.parseColor("#FF2196F3") // Visible border
             )
             setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
         }
@@ -835,7 +835,7 @@ class PokerHudService : Service() {
                     laserLine.visibility = if (scanning) View.VISIBLE else View.GONE
                     if (scanning) {
                         frame.background = createBackgroundDrawable(
-                            AndroidColor.parseColor("#332196F3"),
+                            AndroidColor.parseColor("#00000000"),
                             8f,
                             dpToPx(1.5f),
                             AndroidColor.parseColor("#FF00FFCC")
@@ -843,10 +843,10 @@ class PokerHudService : Service() {
                         try { anim.start() } catch (ignored: Exception) {}
                     } else {
                         frame.background = createBackgroundDrawable(
-                            AndroidColor.parseColor("#332196F3"),
+                            AndroidColor.parseColor("#00000000"),
                             8f,
                             dpToPx(1.5f),
-                            AndroidColor.parseColor("#CC2196F3")
+                            AndroidColor.parseColor("#FF2196F3")
                         )
                         try { anim.cancel() } catch (ignored: Exception) {}
                     }
@@ -901,10 +901,10 @@ class PokerHudService : Service() {
 
         val frame = FrameLayout(this).apply {
             background = createBackgroundDrawable(
-                AndroidColor.parseColor("#33E53935"),
+                AndroidColor.parseColor("#00000000"), // Transparent inside
                 8f,
                 dpToPx(1.5f),
-                AndroidColor.parseColor("#CCE53935")
+                AndroidColor.parseColor("#FFE53935") // Visible border
             )
             setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
         }
@@ -992,7 +992,7 @@ class PokerHudService : Service() {
                     laserLine.visibility = if (scanning) View.VISIBLE else View.GONE
                     if (scanning) {
                         frame.background = createBackgroundDrawable(
-                            AndroidColor.parseColor("#33E53935"),
+                            AndroidColor.parseColor("#00000000"),
                             8f,
                             dpToPx(1.5f),
                             AndroidColor.parseColor("#FF00FFCC")
@@ -1000,10 +1000,10 @@ class PokerHudService : Service() {
                         try { anim.start() } catch (ignored: Exception) {}
                     } else {
                         frame.background = createBackgroundDrawable(
-                            AndroidColor.parseColor("#33E53935"),
+                            AndroidColor.parseColor("#00000000"),
                             8f,
                             dpToPx(1.5f),
-                            AndroidColor.parseColor("#CCE53935")
+                            AndroidColor.parseColor("#FFE53935")
                         )
                         try { anim.cancel() } catch (ignored: Exception) {}
                     }

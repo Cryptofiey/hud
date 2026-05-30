@@ -291,12 +291,15 @@ fun MainOverlayApp(
                         val activity = context.findActivity() as? MainActivity
                         val ok = activity?.checkAndRequestOverlayPermission(context) ?: true
                         if (ok) {
+                            if (multiDataScannerToggle && !ScannerConfig.isProjectionGranted.value) {
+                                activity?.requestScreenCapture()
+                            }
                             try {
                                 val serviceIntent = Intent(context, PokerHudService::class.java)
                                 ContextCompat.startForegroundService(context, serviceIntent)
                             } catch (e: Exception) {
                                 Log.e("MainActivity", "Failed to start PokerHudService: ${e.message}", e)
-                                Toast.makeText(context, "Error starting HUD service: ${e.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Error starting HUD service: \${e.message}", Toast.LENGTH_LONG).show()
                             }
                         } else {
                             Toast.makeText(context, "Please grant Overlay Permissions to display floating HUD above other apps!", Toast.LENGTH_LONG).show()

@@ -101,7 +101,11 @@ class ScreenScanner(
             bitmap.copyPixelsFromBuffer(buffer)
             image.close()
 
-            val inputImage = InputImage.fromBitmap(bitmap, 0)
+            // Crucial: create a clean bitmap without padding so ML Kit bounding boxes perfectly match screen coordinates!
+            val cleanBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height)
+            bitmap.recycle()
+
+            val inputImage = InputImage.fromBitmap(cleanBitmap, 0)
             
             try {
                 val result = recognizer.process(inputImage).await()
@@ -114,43 +118,54 @@ class ScreenScanner(
                 
                 android.util.Log.d("ScreenScanner", "MLKit raw text:\n${result.text}")
                 
-                val cardPattern = Regex("^(10|T|[AKQJ]|[2-9])\$")
+                val cardPattern = Regex("^(10|T|[AKQJ]|[2-9])$")
                 
                 for (block in result.textBlocks) {
                     for (line in block.lines) {
                         for (element in line.elements) {
-                            val text = element.text.uppercase(java.util.Locale.US).replace(Regex("[^10AKQJT2-9]"), "")
-                            if (cardPattern.matches(text)) {
+                            val rawText = element.text.uppercase(java.util.Locale.US)
+                            val text = rawText.replace(Regex("[^10AKQJT2-9]"), "")
+                            if (cardPattern.matches(text) && rawText.length <= 4) { // Ignore long text that just happens to resolve to a card
                                 val box = element.boundingBox
                                 if (box != null) {
-                                    // Try to determine suit from pixel color right below the text
-                                    // We need to look below the text where the suit symbol typically is
+                                    // Try to determine suit from pixel color right below or to the left of the text
                                     val checkX = box.centerX()
-                                    // Let's check a range of pixels below the box, or inside the box if it includes the suit
-                                    val checkY = minOf(bitmap.height - 1, box.bottom + (box.height() / 4))
+                                    val checkY = box.centerY()
                                     
                                     var isRed = false
                                     var isGreen = false
                                     var isBlue = false
                                     var isBlack = false
                                     
-                                    // Check a 5x5 grid around the check point
-                                    for (dx in -10..10 step 5) {
-                                        for (dy in -5..15 step 5) {
-                                            val px = (checkX + dx).coerceIn(0, bitmap.width - 1)
-                                            val py = (checkY + dy).coerceIn(0, bitmap.height - 1)
-                                            
-                                            val pixel = bitmap.getPixel(px, py)
+                                    var redCount = 0
+                                    var greenCount = 0
+                                    var blueCount = 0
+                                    var blackCount = 0
+                                    
+                                    // Check a wider grid around the box (left side and bottom)
+                                    val startX = maxOf(0, box.left - box.width())
+                                    val endX = minOf(cleanBitmap.width - 1, box.right + (box.width() / 4))
+                                    val startY = maxOf(0, box.top - (box.height() / 4))
+                                    val endY = minOf(cleanBitmap.height - 1, box.bottom + (box.height() / 2))
+                                    
+                                    for (px in startX..endX step 3) {
+                                        for (py in startY..endY step 3) {
+                                            val pixel = cleanBitmap.getPixel(px, py)
                                             val r = android.graphics.Color.red(pixel)
                                             val g = android.graphics.Color.green(pixel)
                                             val b = android.graphics.Color.blue(pixel)
                                             
-                                            if (r > 150 && g < 100 && b < 100) isRed = true
-                                            if (g > 120 && r < 100 && b < 100) isGreen = true
-                                            if (b > 120 && r < 100 && g < 100) isBlue = true
-                                            if (r < 80 && g < 80 && b < 80 && (r+g+b) < 150) isBlack = true
+                                            if (r > 150 && g < 100 && b < 100) redCount++
+                                            if (g > 120 && r < 100 && b < 100) greenCount++
+                                            if (b > 120 && r < 100 && g < 100) blueCount++
+                                            if (r < 80 && g < 80 && b < 80 && (r+g+b) < 150) blackCount++
                                         }
                                     }
+                                    
+                                    if (redCount > 5) isRed = true
+                                    if (greenCount > 5) isGreen = true
+                                    if (blueCount > 5) isBlue = true
+                                    if (blackCount > 10) isBlack = true
                                     
                                     val rank = parseRank(text) ?: continue
                                     var suit = Suit.SPADES // Default
@@ -161,14 +176,14 @@ class ScreenScanner(
                                     else if (isBlack) suit = Suit.SPADES
                                     
                                     val card = Card(rank, suit)
-                                    android.util.Log.d("ScreenScanner", "Detected Card: $text ($suit) at bounds $box")
+                                    // Expand hit box slightly to tolerate user sloppiness
+                                    val expCommRect = android.graphics.Rect(commRect.left - 40, commRect.top - 40, commRect.right + 40, commRect.bottom + 40)
+                                    val expHoleRect = android.graphics.Rect(holeRect.left - 40, holeRect.top - 40, holeRect.right + 40, holeRect.bottom + 40)
                                     
-                                    if (commRect.contains(box.centerX(), box.centerY())) {
+                                    if (expCommRect.contains(box.centerX(), box.centerY())) {
                                         foundCommCards.add(card)
-                                        android.util.Log.d("ScreenScanner", "-> Assigned to Comm")
-                                    } else if (holeRect.contains(box.centerX(), box.centerY())) {
+                                    } else if (expHoleRect.contains(box.centerX(), box.centerY())) {
                                         foundHoleCards.add(card)
-                                        android.util.Log.d("ScreenScanner", "-> Assigned to Hole")
                                     }
                                 }
                             }
@@ -198,7 +213,7 @@ class ScreenScanner(
             } catch (e: Exception) {
                 scanStatus.value = "OCR Failed: \${e.message}"
             } finally {
-                bitmap.recycle()
+                cleanBitmap.recycle()
             }
         }
     }
