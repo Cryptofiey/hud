@@ -162,9 +162,7 @@ class PokerHudService : Service() {
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(717, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(717, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            startForeground(717, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(717, notification)
         }
@@ -1112,7 +1110,9 @@ class PokerHudService : Service() {
         serviceScope.launch(job) {
             PokerHudSharedState.uiState.collect { state ->
                 val res = state.simulationResult
-                if (res != null) {
+                if (state.heroCard1 == null || state.heroCard2 == null) {
+                    txtWin.text = "Winning chance: 0.0%"
+                } else if (res != null) {
                     val combinedWin = res.heroWinPct + res.heroTiePct
                     txtWin.text = String.format(Locale.US, "Winning chance: %.1f%%", combinedWin)
                 } else {
@@ -1345,40 +1345,11 @@ class PokerHudService : Service() {
                     activeOpps.forEachIndexed { index, opp ->
                         val prefix = if (index > 0) "\n" else ""
                         val hands = opp.stats?.handsPlayed ?: 0
-                        if (hands >= minHands || opp.nickname.isNotEmpty()) { // We still show mock logic for now if it's there
-                            val vpipVal = opp.stats?.vpip?.toInt() ?: when (opp.nickname) {
-                                "Sharky" -> 19
-                                "Calling Station" -> 48
-                                "Loose Cannon" -> 39
-                                "crushup" -> 39
-                                "Domitheki..." -> 19
-                                "Chiefpickles" -> 25
-                                "Alfy" -> 22
-                                "BAM81" -> 44
-                                else -> 25
-                            }
-                            val pfrVal = opp.stats?.pfr?.toInt() ?: when (opp.nickname) {
-                                "Sharky" -> 15
-                                "Calling Station" -> 11
-                                "Loose Cannon" -> 31
-                                "crushup" -> 31
-                                "Domitheki..." -> 15
-                                "Chiefpickles" -> 18
-                                "Alfy" -> 14
-                                "BAM81" -> 35
-                                else -> 19
-                            }
-                            val afVal = when (opp.nickname) {
-                                "Sharky" -> 3.2
-                                "Calling Station" -> 0.8
-                                "Loose Cannon" -> 2.8
-                                "crushup" -> 2.8
-                                "Domitheki..." -> 3.2
-                                "Chiefpickles" -> 2.0
-                                "Alfy" -> 1.5
-                                "BAM81" -> 2.5
-                                else -> 1.8
-                            }
+                        if (hands >= minHands || opp.nickname.isNotEmpty()) { 
+                            val vpipVal = opp.stats?.vpip?.toInt() ?: 0
+                            val pfrVal = opp.stats?.pfr?.toInt() ?: 0
+                            // Calculate basic AF if we had total aggression stats, otherwise 0.0
+                            val afVal = 0.0
                             val stackStr = if (opp.stackSize > 0) " (\$${opp.stackSize})" else ""
                             val betStr = if (opp.betSize > 0) " [Bet: \$${opp.betSize}]" else ""
                             sb.append("${prefix}${opp.nickname}${stackStr}: VPIP: ${vpipVal}%  PFR: ${pfrVal}%  AF: ${afVal}${betStr}")

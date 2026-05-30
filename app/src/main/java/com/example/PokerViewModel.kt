@@ -25,11 +25,11 @@ data class PokerUiState(
     val heroCard2: Card? = null,
     val board: List<Card?> = listOf(null, null, null, null, null), // Flop1..3, Turn, River
     val opponents: List<OpponentState> = listOf(
-        OpponentState(id = 1, isActive = true, isRandom = true, nickname = "crushup", betSize = 39, stackSize = 39),
-        OpponentState(id = 2, isActive = true, isRandom = true, nickname = "Domitheki...", betSize = 64, stackSize = 150),
-        OpponentState(id = 3, isActive = true, isRandom = true, nickname = "Chiefpickles", betSize = 0, stackSize = 21),
-        OpponentState(id = 4, isActive = true, isRandom = true, nickname = "Alfy", betSize = 0, stackSize = 99),
-        OpponentState(id = 5, isActive = false, isRandom = true, nickname = "BAM81", betSize = 0, stackSize = 12)
+        OpponentState(id = 1, isActive = false, isRandom = true, nickname = "Opponent 1", betSize = 0, stackSize = 0),
+        OpponentState(id = 2, isActive = false, isRandom = true, nickname = "Opponent 2", betSize = 0, stackSize = 0),
+        OpponentState(id = 3, isActive = false, isRandom = true, nickname = "Opponent 3", betSize = 0, stackSize = 0),
+        OpponentState(id = 4, isActive = false, isRandom = true, nickname = "Opponent 4", betSize = 0, stackSize = 0),
+        OpponentState(id = 5, isActive = false, isRandom = true, nickname = "Opponent 5", betSize = 0, stackSize = 0)
     ),
     val activeTarget: SelectionTarget? = SelectionTarget.Hero1,
     val isCalculating: Boolean = false,

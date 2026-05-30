@@ -803,7 +803,7 @@ fun SettingsLayout(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "ACTIVE SIMULATOR TELEMETRY",
+                        text = "LIVE DATA TELEMETRY",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
@@ -821,13 +821,13 @@ fun SettingsLayout(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
-                                text = "Opponents range calibration",
+                                text = "Live Opponent Stats",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = "Modify active profile numbers to tune probability solvers pre-game:",
+                                text = "Real-time statistics tracked for active players at the table. (TODO: Implement automated VPIP/PFR extraction via OCR)",
                                 color = Color(0xB3FFFFFF),
                                 fontSize = 11.sp
                             )
@@ -841,30 +841,12 @@ fun SettingsLayout(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(opp.nickname, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Text(if (opp.nickname.isNotEmpty()) opp.nickname else "Empty Seed", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                         Text(
-                                            "VPIP: ${String.format(Locale.US, "%.0f", opp.stats?.vpip ?: 30f)}% | PFR: ${String.format(Locale.US, "%.0f", opp.stats?.pfr ?: 22f)}% | Hands: ${opp.stats?.handsPlayed ?: 150}",
+                                            "VPIP: ${String.format(Locale.US, "%.0f", opp.stats?.vpip ?: 0f)}% | PFR: ${String.format(Locale.US, "%.0f", opp.stats?.pfr ?: 0f)}% | Hands: ${opp.stats?.handsPlayed ?: 0}",
                                             color = Color.LightGray,
                                             fontSize = 9.sp
                                         )
-                                    }
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Button(
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x2EFFFFFF)),
-                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                            modifier = Modifier.height(26.dp),
-                                            onClick = { pokerViewModel.incrementPlayerStat(opp.nickname, "vpip") }
-                                        ) {
-                                            Text("+VPIP", fontSize = 8.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                        }
-                                        Button(
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x2EFFFFFF)),
-                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                            modifier = Modifier.height(26.dp),
-                                            onClick = { pokerViewModel.incrementPlayerStat(opp.nickname, "pfr") }
-                                        ) {
-                                            Text("+PFR", fontSize = 8.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                        }
                                     }
                                 }
                             }
@@ -959,6 +941,102 @@ fun SettingsLayout(
                                         Text("${size} runs", fontSize = 11.sp, color = Color.White)
                                     }
                                 }
+                            }
+                        }
+                    }
+
+                    // Layout Calibration HUD Overlays
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF0F0F0F))
+                            .border(BorderStroke(1.dp, Color(0xFFD82229)), RoundedCornerShape(8.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Calibration bounding boxes map layout",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = "Disable boxes after setting their coordinates over the poker table to leave only probabilities and statistics visually on screen during actual play.",
+                                color = Color(0xB3FFFFFF),
+                                fontSize = 11.sp
+                            )
+
+                            HorizontalDivider(color = Color(0x1AFFFFFF), modifier = Modifier.padding(vertical = 4.dp))
+
+                            val showCommBox by PokerHudSharedState.showCommBox.collectAsStateWithLifecycle()
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { PokerHudSharedState.showCommBox.value = !showCommBox }.padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = showCommBox,
+                                    onCheckedChange = null,
+                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFFD82229), uncheckedColor = Color.Gray)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Community Cards scanning box", color = Color.White, fontSize = 12.sp)
+                            }
+
+                            val showHoleBox by PokerHudSharedState.showHoleBox.collectAsStateWithLifecycle()
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { PokerHudSharedState.showHoleBox.value = !showHoleBox }.padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = showHoleBox,
+                                    onCheckedChange = null,
+                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFFD82229), uncheckedColor = Color.Gray)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Hole Cards scanning box", color = Color.White, fontSize = 12.sp)
+                            }
+
+                            val showProbsBox by PokerHudSharedState.showProbsBox.collectAsStateWithLifecycle()
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { PokerHudSharedState.showProbsBox.value = !showProbsBox }.padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = showProbsBox,
+                                    onCheckedChange = null,
+                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFFD82229), uncheckedColor = Color.Gray)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Probabilities dashboard map location", color = Color.White, fontSize = 12.sp)
+                            }
+
+                            val showAdvisorBox by PokerHudSharedState.showAdvisorBox.collectAsStateWithLifecycle()
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { PokerHudSharedState.showAdvisorBox.value = !showAdvisorBox }.padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = showAdvisorBox,
+                                    onCheckedChange = null,
+                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFFD82229), uncheckedColor = Color.Gray)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Action Advisor panel location", color = Color.White, fontSize = 12.sp)
+                            }
+
+                            val showOppBox by PokerHudSharedState.showOpponentsBox.collectAsStateWithLifecycle()
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { PokerHudSharedState.showOpponentsBox.value = !showOppBox }.padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = showOppBox,
+                                    onCheckedChange = null,
+                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFFD82229), uncheckedColor = Color.Gray)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Opponents advanced stats frame", color = Color.White, fontSize = 12.sp)
                             }
                         }
                     }
@@ -1146,7 +1224,9 @@ fun OverlaySimulatorLayout(
     
     // Trigger scanning states
     val isScanning by PokerHudSharedState.isScanning.collectAsStateWithLifecycle()
-    var scanLoggedStep by remember { mutableStateOf("Status: Bounding Boxes Aligned") }
+    
+    // Instead of local state, lets read status if we need a global one or just show standard info if not scanning inside Main App layout
+    val scanLoggedStep = if (isScanning) "OCR Pipeline Active. Bounding Boxes Aligned." else "Status: Waiting for Scanner..."
     
     // Draggable offsets of the hand probabilities overlay widget
     var floatWidgetOffsetX by remember { mutableFloatStateOf(10f) }
@@ -1175,95 +1255,6 @@ fun OverlaySimulatorLayout(
         ),
         label = "Laser sweep line"
     )
-
-    // Trigger simulation scans for automated demonstration
-    fun runAutoScanSimulation(phase: String) {
-        if (isScanning) return
-        PokerHudSharedState.isScanning.value = true
-        coroutineScope.launch {
-            scanLoggedStep = "[MediaProjection API] Initializing frame buffer pipeline..."
-            delay(500)
-            scanLoggedStep = "[Screen Scraper] Cropping target zones: Box 1 & Box 2..."
-            delay(600)
-            scanLoggedStep = "[Suit Filter] Running HSV color-chroma isolation for 4-Color deck..."
-            delay(500)
-            scanLoggedStep = "[OCR engine] Performing template rank matching on isolated cards..."
-            delay(600)
-            
-            // Apply card presets based on the stage selected
-            val h1: Card?
-            val h2: Card?
-            val boardList: List<Card?>
-            var statusLog = ""
-            
-            when (phase) {
-                "Pre-flop" -> {
-                    h1 = Card(Rank.ACE, Suit.HEARTS)
-                    h2 = Card(Rank.ACE, Suit.DIAMONDS)
-                    boardList = listOf(null, null, null, null, null)
-                    statusLog = "[OCR Success] Found Hole Cards: [Ah] [Ad] | Community: Empty (Pre-flop)"
-                }
-                "Flop" -> {
-                    h1 = Card(Rank.ACE, Suit.HEARTS)
-                    h2 = Card(Rank.ACE, Suit.DIAMONDS)
-                    boardList = listOf(
-                        Card(Rank.KING, Suit.SPADES),
-                        Card(Rank.QUEEN, Suit.CLUBS),
-                        Card(Rank.JACK, Suit.DIAMONDS),
-                        null,
-                        null
-                    )
-                    statusLog = "[OCR Success] Cards Parsed: [Ah d] | Board Flop: [Ks Qc Jd]"
-                }
-                "Turn" -> {
-                    h1 = Card(Rank.ACE, Suit.HEARTS)
-                    h2 = Card(Rank.ACE, Suit.DIAMONDS)
-                    boardList = listOf(
-                        Card(Rank.KING, Suit.SPADES),
-                        Card(Rank.QUEEN, Suit.CLUBS),
-                        Card(Rank.JACK, Suit.DIAMONDS),
-                        Card(Rank.TEN, Suit.HEARTS),
-                        null
-                    )
-                    statusLog = "[OCR Success] Parsed Turn Card: [10h]. Hero holds a Broadside Straight!"
-                }
-                "River" -> {
-                    h1 = Card(Rank.ACE, Suit.HEARTS)
-                    h2 = Card(Rank.ACE, Suit.DIAMONDS)
-                    boardList = listOf(
-                        Card(Rank.KING, Suit.SPADES),
-                        Card(Rank.QUEEN, Suit.CLUBS),
-                        Card(Rank.JACK, Suit.DIAMONDS),
-                        Card(Rank.TEN, Suit.HEARTS),
-                        Card(Rank.NINE, Suit.SPADES)
-                    )
-                    statusLog = "[OCR Success] Parsed River Card: [9s]. Solver recalculating overall split risk."
-                }
-                else -> {
-                    h1 = uiState.heroCard1
-                    h2 = uiState.heroCard2
-                    boardList = uiState.board
-                    statusLog = "Recalibrated current layout overlays successfully."
-                }
-            }
-            
-            val scannerSuffix = if (multiDataScannerToggle) {
-                "\n[Multi-OCR Succeeded] " + when (phase) {
-                    "Pre-flop" -> "Seats parsed: BAM81 (Fold), Domitheki... (Check), Chiefpickles (Check). Pot: $150. Stage: pre-flop. Blinds: 50/100."
-                    "Flop" -> "Seats parsed: BAM81 (Fold), crushup (Bet $39), Domitheki... (Bet $64). Pot: $840. Stage: flop."
-                    "Turn" -> "Seats parsed: BAM81 (Fold), crushup (Call $64), Domitheki... (Check). Pot: $1200. Stage: turn."
-                    "River" -> "Seats parsed: crushup (Check), Domitheki... (Check). Pot: $2400. Stage: river."
-                    else -> "Adaptive seats status synchronized."
-                }
-            } else ""
-
-            scanLoggedStep = statusLog + scannerSuffix
-            
-            pokerViewModel.loadGamePreset(h1, h2, boardList)
-            delay(400)
-            PokerHudSharedState.isScanning.value = false
-        }
-    }
 
     val scannerOpacity by animateFloatAsState(
         targetValue = if (isGameMode) 0f else 1f,
@@ -1311,44 +1302,31 @@ fun OverlaySimulatorLayout(
                 }
 
                 // Draw CoinPoker table automatic adaptive reader frames
-                // Seat 3 (Top Center)
-                SeatScannerFrame(
-                    label = "[Seat 3: BAM81]\nStatus: Folded",
-                    x = 135.dp, y = 30.dp, width = 100.dp, height = 36.dp,
-                    isActive = false
+                // TODO: Sync these coordinate layouts with actual player slots based on resolution
+                val coordsMap = listOf(
+                    Pair(135.dp, 30.dp),
+                    Pair(15.dp, 110.dp),
+                    Pair(255.dp, 110.dp),
+                    Pair(40.dp, 210.dp),
+                    Pair(230.dp, 210.dp)
                 )
 
-                // Seat 1 (Middle Left)
-                SeatScannerFrame(
-                    label = "[Seat 1: crushup]\nVPIP: 39% | Bet: $39",
-                    x = 15.dp, y = 110.dp, width = 100.dp, height = 36.dp,
-                    isActive = true
-                )
-
-                // Seat 2 (Middle Right)
-                SeatScannerFrame(
-                    label = "[Seat 2: Domitheki...]\nVPIP: 19% | Bet: $64",
-                    x = 255.dp, y = 110.dp, width = 105.dp, height = 36.dp,
-                    isActive = true
-                )
-
-                // Seat 5 (Bottom Left)
-                SeatScannerFrame(
-                    label = "[Seat 5: Chiefpickles]\nVPIP: 25% | Check",
-                    x = 40.dp, y = 210.dp, width = 100.dp, height = 36.dp,
-                    isActive = true
-                )
-
-                // Seat 4 (Bottom Right)
-                SeatScannerFrame(
-                    label = "[Seat 4: Alfy]\nVPIP: 22% | Check",
-                    x = 230.dp, y = 210.dp, width = 100.dp, height = 36.dp,
-                    isActive = true
-                )
+                uiState.opponents.forEachIndexed { idx, opp ->
+                    if (idx < coordsMap.size) {
+                        SeatScannerFrame(
+                            label = "[Seat ${idx + 1}: ${opp.nickname}]\nVPIP: ${String.format(Locale.US, "%.0f", opp.stats?.vpip ?: 0f)}% | Bet: $${opp.betSize}",
+                            x = coordsMap[idx].first,
+                            y = coordsMap[idx].second,
+                            width = 105.dp,
+                            height = 36.dp,
+                            isActive = opp.isActive
+                        )
+                    }
+                }
 
                 // Centered automatic Pot and Stage parsing frame
                 SeatScannerFrame(
-                    label = "[Pot Zone Parser]\nPot: $840 / $2400",
+                    label = "[Pot Zone Parser]\nPot: $${uiState.potSize}",
                     x = 135.dp, y = 145.dp, width = 100.dp, height = 36.dp,
                     isActive = true
                 )
@@ -1459,55 +1437,6 @@ fun OverlaySimulatorLayout(
                         lineHeight = 11.sp,
                         fontFamily = FontFamily.Monospace
                     )
-                }
-
-                // Stage Trigger Buttons
-                Text(text = "Inject poker stage preset:", color = Color.Gray, fontSize = 8.sp)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Button(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(26.dp),
-                            onClick = { runAutoScanSimulation("Pre-flop") },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2C3D)),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("Pre-flop", fontSize = 8.sp, color = Color.White)
-                        }
-                        Button(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(26.dp),
-                            onClick = { runAutoScanSimulation("Flop") },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2C3D)),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("Flop", fontSize = 8.sp, color = Color.White)
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Button(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(26.dp),
-                            onClick = { runAutoScanSimulation("Turn") },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2C3D)),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("Turn", fontSize = 8.sp, color = Color.White)
-                        }
-                        Button(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(26.dp),
-                            onClick = { runAutoScanSimulation("River") },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2C3D)),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("River", fontSize = 8.sp, color = Color.White)
-                        }
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(2.dp))

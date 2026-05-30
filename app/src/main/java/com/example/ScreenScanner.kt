@@ -114,12 +114,12 @@ class ScreenScanner(
                 
                 android.util.Log.d("ScreenScanner", "MLKit raw text:\n${result.text}")
                 
-                val cardPattern = Regex("^(10|[AKQJ]|[2-9])\$")
+                val cardPattern = Regex("^(10|T|[AKQJ]|[2-9])\$")
                 
                 for (block in result.textBlocks) {
                     for (line in block.lines) {
                         for (element in line.elements) {
-                            val text = element.text.uppercase(java.util.Locale.US).replace(Regex("[^10AKQJ2-9]"), "")
+                            val text = element.text.uppercase(java.util.Locale.US).replace(Regex("[^10AKQJT2-9]"), "")
                             if (cardPattern.matches(text)) {
                                 val box = element.boundingBox
                                 if (box != null) {
@@ -187,6 +187,9 @@ class ScreenScanner(
                     val paddedBoard = foundCommCards.take(5).toMutableList<Card?>()
                     while (paddedBoard.size < 5) paddedBoard.add(null)
                     
+                    // TODO: Implement parsing for opponent VPIP, chip stacks, and Pot size.
+                    // Currently OCR only extracts Hole and Community Cards patterns.
+                    
                     PokerHudSharedState.externalActions.tryEmit(
                         ExternalAction.UpdateCards(h1, h2, paddedBoard)
                     )
@@ -194,6 +197,8 @@ class ScreenScanner(
                 
             } catch (e: Exception) {
                 scanStatus.value = "OCR Failed: \${e.message}"
+            } finally {
+                bitmap.recycle()
             }
         }
     }
@@ -214,56 +219,6 @@ class ScreenScanner(
             "3" -> Rank.THREE
             "2" -> Rank.TWO
             else -> null
-        }
-    }
-
-    private fun parseCardsFromText(text: String) {
-        // Very basic mock parser: look for patterns like Ah, Kd, 10c, 9s
-        val cardPattern = Regex("([AKQJTaktqj2-9]|10)\\s*(?i)(h|d|c|s)")
-        val foundCards = cardPattern.findAll(text).map { match ->
-            val rankStr = match.groupValues[1].uppercase()
-            val suitStr = match.groupValues[2].lowercase()
-            
-            val rank = when (rankStr) {
-                "A" -> Rank.ACE
-                "K" -> Rank.KING
-                "Q" -> Rank.QUEEN
-                "J" -> Rank.JACK
-                "T", "10" -> Rank.TEN
-                "9" -> Rank.NINE
-                "8" -> Rank.EIGHT
-                "7" -> Rank.SEVEN
-                "6" -> Rank.SIX
-                "5" -> Rank.FIVE
-                "4" -> Rank.FOUR
-                "3" -> Rank.THREE
-                "2" -> Rank.TWO
-                else -> Rank.TWO
-            }
-            val suit = when (suitStr) {
-                "h" -> Suit.HEARTS
-                "d" -> Suit.DIAMONDS
-                "c" -> Suit.CLUBS
-                "s" -> Suit.SPADES
-                else -> Suit.SPADES
-            }
-            Card(rank, suit)
-        }.toList()
-
-        if (foundCards.size >= 2) {
-            val h1 = foundCards[0]
-            val h2 = foundCards[1]
-            val board = if (foundCards.size > 2) foundCards.drop(2).take(5) else emptyList()
-            
-            val paddedBoard = board.toMutableList<Card?>()
-            while (paddedBoard.size < 5) paddedBoard.add(null)
-            
-            val success = PokerHudSharedState.externalActions.tryEmit(
-                ExternalAction.UpdateCards(h1, h2, paddedBoard)
-            )
-            if (success) {
-                scanStatus.value = "Updated cards successfully from Scanner."
-            }
         }
     }
 

@@ -383,7 +383,7 @@ class PreferencesManager(context: Context) {
 
     // Returns a list of some pre-populated standard player nicknames to make the interface extremely helpful
     fun getPlayerProfilesList(): List<String> {
-        val set = mutableSetOf("Challenger", "Sharky", "Calling Station", "Loose Cannon", "Grinder", "Fishy")
+        val set = mutableSetOf<String>()
         // Load whatever other nicknames have been saved in prefs
         prefs.all.keys.forEach { key ->
             if (key.startsWith("player_") && key.endsWith("_hands_played")) {
