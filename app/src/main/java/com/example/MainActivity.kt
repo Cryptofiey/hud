@@ -79,11 +79,21 @@ fun Context.findActivity(): Activity? {
 
 class MainActivity : ComponentActivity() {
 
+    var pendingStartService = false
+
     private val mediaProjectionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK && result.data != null) {
             ScannerConfig.pendingProjectionData = result.data
             ScannerConfig.pendingProjectionResultCode = result.resultCode
             ScannerConfig.isProjectionGranted.value = true
+            if (pendingStartService) {
+                pendingStartService = false
+                val serviceIntent = Intent(this, PokerHudService::class.java)
+                androidx.core.content.ContextCompat.startForegroundService(this, serviceIntent)
+            }
+        } else {
+            pendingStartService = false
+            android.widget.Toast.makeText(this, "Screen Capture Permission Denied", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -178,12 +188,8 @@ fun MainOverlayApp(
         }
     }
 
-    // Direct real-time state bridge for the background HUD overlay service
-    LaunchedEffect(pokerViewModel) {
-        pokerViewModel.uiState.collect { state ->
-            PokerHudSharedState.uiState.value = state
-        }
-    }
+    // Removed bridge because ViewModel uses shared state directly
+    /* LaunchedEffect(pokerViewModel) removed */
 
     LaunchedEffect(winProbToggle, handStrengthToggle, sklanskyToggle, advStatsToggle, showActionAdvisor, multiDataScannerToggle, hudWidgetScale, hudOpacity) {
         PokerHudSharedState.winProbToggle.value = winProbToggle
@@ -247,14 +253,6 @@ fun MainOverlayApp(
         }
     }
 
-    LaunchedEffect(pokerViewModel) {
-        PokerHudSharedState.externalActions.collect { action ->
-            if (action is ExternalAction.UpdateCards) {
-                pokerViewModel.loadGamePreset(action.hero1, action.hero2, action.board)
-            }
-        }
-    }
-
     Box(
         modifier = modifier.fillMaxSize()
     ) {
@@ -287,19 +285,20 @@ fun MainOverlayApp(
                     pokerViewModel = pokerViewModel,
                     isAccessibilityActive = isAccessibilityActive,
                     onPlayClicked = {
-                        // Launch actual foreground background overlay service for actual installations
                         val activity = context.findActivity() as? MainActivity
                         val ok = activity?.checkAndRequestOverlayPermission(context) ?: true
                         if (ok) {
                             if (multiDataScannerToggle && !ScannerConfig.isProjectionGranted.value) {
+                                activity?.pendingStartService = true
                                 activity?.requestScreenCapture()
-                            }
-                            try {
-                                val serviceIntent = Intent(context, PokerHudService::class.java)
-                                ContextCompat.startForegroundService(context, serviceIntent)
-                            } catch (e: Exception) {
-                                Log.e("MainActivity", "Failed to start PokerHudService: ${e.message}", e)
-                                Toast.makeText(context, "Error starting HUD service: \${e.message}", Toast.LENGTH_LONG).show()
+                            } else {
+                                try {
+                                    val serviceIntent = Intent(context, PokerHudService::class.java)
+                                    ContextCompat.startForegroundService(context, serviceIntent)
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Failed to start PokerHudService: ${e.message}", e)
+                                    Toast.makeText(context, "Error starting HUD service: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
                             }
                         } else {
                             Toast.makeText(context, "Please grant Overlay Permissions to display floating HUD above other apps!", Toast.LENGTH_LONG).show()

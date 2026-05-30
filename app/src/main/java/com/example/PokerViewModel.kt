@@ -65,8 +65,9 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefsManager = PreferencesManager(application)
 
-    private val _uiState = MutableStateFlow(PokerUiState())
-    val uiState: StateFlow<PokerUiState> = _uiState.asStateFlow()
+    val uiState: StateFlow<PokerUiState> = PokerHudSharedState.uiState.asStateFlow()
+
+    private val _uiState = PokerHudSharedState.uiState
 
     private var calculationJob: Job? = null
     private var autocalcJob: Job? = null
@@ -82,6 +83,13 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     opp.copy(stats = loadedStats)
                 }
             )
+        }
+        viewModelScope.launch {
+            PokerHudSharedState.externalActions.collect { action ->
+                if (action is ExternalAction.UpdateCards) {
+                    loadGamePreset(action.hero1, action.hero2, action.board)
+                }
+            }
         }
         triggerAutoCalculation()
     }

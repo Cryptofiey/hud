@@ -161,8 +161,8 @@ class PokerHudService : Service() {
             .setOngoing(true)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(717, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(717, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         } else {
             startForeground(717, notification)
         }
@@ -633,7 +633,51 @@ class PokerHudService : Service() {
         // 6. OBSERVE PROGRAMMATIC CONTROL COMMANDS VIA BROADCASTS (e.g. from Termux scripts)
         serviceScope.launch {
             PokerHudSharedState.externalActions.collect { action ->
-                if (action is ExternalAction.ControlHud) {
+                if (action is ExternalAction.UpdateCards) {
+                    val currentState = PokerHudSharedState.uiState.value
+                    val updatedState = currentState.copy(
+                        heroCard1 = action.hero1,
+                        heroCard2 = action.hero2,
+                        board = action.board.take(5) + List(maxOf(0, 5 - action.board.size)) { null }
+                    )
+                    PokerHudSharedState.uiState.value = updatedState
+                    
+                    serviceScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                        try {
+                            val result = com.example.SimulationEngine.runHoldemSimulation(
+                                heroCard1 = updatedState.heroCard1,
+                                heroCard2 = updatedState.heroCard2,
+                                opponents = updatedState.opponents,
+                                board = updatedState.board,
+                                simulations = updatedState.simulationSize
+                            )
+                            val recommendation = com.example.AdvisorEngine.computeRecommendation(
+                                heroCard1 = updatedState.heroCard1,
+                                heroCard2 = updatedState.heroCard2,
+                                board = updatedState.board,
+                                potSize = updatedState.potSize,
+                                heroBet = updatedState.heroBet,
+                                opponents = updatedState.opponents,
+                                activeOpponentsCount = updatedState.opponents.count { it.isActive },
+                                simResult = result,
+                                settings = updatedState.settings,
+                                position = updatedState.position,
+                                stage = updatedState.stage,
+                                smallBlind = updatedState.smallBlind,
+                                bigBlind = updatedState.bigBlind,
+                                heroStack = updatedState.heroStack
+                            )
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                PokerHudSharedState.uiState.value = PokerHudSharedState.uiState.value.copy(
+                                    simulationResult = result,
+                                    recommendation = recommendation
+                                )
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("PokerHudService", "Simulation err", e)
+                        }
+                    }
+                } else if (action is ExternalAction.ControlHud) {
                     when (action.command.lowercase(Locale.US)) {
                         "hide", "minimize" -> {
                             expandedLayout?.visibility = View.GONE
