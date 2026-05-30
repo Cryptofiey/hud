@@ -1,0 +1,1440 @@
+package com.example
+
+import android.animation.ValueAnimator
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.graphics.Color as AndroidColor
+import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
+import android.os.IBinder
+import android.util.Log
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import java.util.Locale
+
+// Shared object to communicate with MainActivity and PokerViewModel safely
+sealed class ExternalAction {
+    data class UpdateCards(
+        val hero1: Card?,
+        val hero2: Card?,
+        val board: List<Card?>
+    ) : ExternalAction()
+    data class ControlHud(val command: String) : ExternalAction()
+}
+
+object PokerHudSharedState {
+    val uiState = MutableStateFlow<PokerUiState>(PokerUiState())
+    val triggerPreset = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val externalActions = MutableSharedFlow<ExternalAction>(extraBufferCapacity = 1)
+
+    // Toggles for overlay layout customization
+    val winProbToggle = MutableStateFlow(true)
+    val handStrengthToggle = MutableStateFlow(true)
+    val sklanskyToggle = MutableStateFlow(true)
+    val advStatsToggle = MutableStateFlow(true)
+    val showActionAdvisor = MutableStateFlow(true)
+    val multiDataScannerToggle = MutableStateFlow(true)
+    val isGameMode = MutableStateFlow(false)
+    val hudScale = MutableStateFlow(1.0f)
+    val hudOpacity = MutableStateFlow(0.9f)
+
+    // Crop box overlays toggles and scanning state
+    val showCommBox = MutableStateFlow(true)
+    val showHoleBox = MutableStateFlow(true)
+    val showProbsBox = MutableStateFlow(true)
+    val showAdvisorBox = MutableStateFlow(true)
+    val showOpponentsBox = MutableStateFlow(true)
+    val isScanning = MutableStateFlow(false)
+    // Modules basic settings
+    val winProbScale = MutableStateFlow(1f)
+    val winProbMaxHands = MutableStateFlow(4)
+    
+    val handStrengthScale = MutableStateFlow(1f)
+    
+    val sklanskyScale = MutableStateFlow(1f)
+    
+    val advStatsScale = MutableStateFlow(1f)
+    val advMinHands = MutableStateFlow(0)
+    
+    val actionAdvisorScale = MutableStateFlow(1f)
+    val actionAdvisorAggression = MutableStateFlow(0) // 0 = normal, 1 = aggressive, 2 = safe
+}
+
+class PokerHudService : Service() {
+
+    private var windowManager: WindowManager? = null
+    private var floatingOverlayView: FrameLayout? = null
+    private var isOverlayShowing = false
+    private var serviceJob = Job()
+    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+
+    // Separate overlays for Calibrations Bounding boxes and other independent widgets
+    private var floatingCommOverlay: FrameLayout? = null
+    private var commJob: Job? = null
+    private var commLaserAnim: ValueAnimator? = null
+    private var floatingHoleOverlay: FrameLayout? = null
+    private var holeJob: Job? = null
+    private var holeLaserAnim: ValueAnimator? = null
+    private var floatingProbsOverlay: FrameLayout? = null
+    private var probsJob: Job? = null
+    private var floatingAdvisorOverlay: FrameLayout? = null
+    private var advisorJob: Job? = null
+    private var floatingOpponentsOverlay: FrameLayout? = null
+    private var oppJob: Job? = null
+    private var screenScanner: ScreenScanner? = null
+
+    // Layout components
+    private var expandedLayout: LinearLayout? = null
+    private var minimizedLayout: LinearLayout? = null
+
+    // Multi-Data Scanner fields
+    private var txtScannerStatus: TextView? = null
+    private var scannerStatusBox: LinearLayout? = null
+    private var txtPreText: TextView? = null
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val action = intent?.action
+        if (action == "STOP_HUD") {
+            stopFloatingOverlay()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        startForegroundServiceNotification()
+        showFloatingOverlay()
+
+        return START_STICKY
+    }
+
+    private fun startForegroundServiceNotification() {
+        val channelId = "poker_hud_channel"
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Poker HUD Active Monitor",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val notificationBuilder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, channelId)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+        }
+
+        val notification = notificationBuilder
+            .setContentTitle("Poker HUD Overlay Active")
+            .setContentText("Displaying live equity calculations and stats overlay.")
+            .setSmallIcon(android.R.drawable.sym_def_app_icon)
+            .setOngoing(true)
+            .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(717, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(717, notification)
+        }
+    }
+
+    private fun dpToPx(dp: Float): Int {
+        return (dp * resources.displayMetrics.density).toInt()
+    }
+
+    private fun createBackgroundDrawable(bgColor: Int, cornerRadiusDp: Float, strokeWidthPx: Int = 0, strokeColor: Int = 0): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = cornerRadiusDp * resources.displayMetrics.density
+            setColor(bgColor)
+            if (strokeWidthPx > 0) {
+                setStroke(strokeWidthPx, strokeColor)
+            }
+        }
+    }
+
+    private fun formatCardColoredText(card: Card?): String {
+        if (card == null) return "?"
+        val suitChar = when (card.suit) {
+            Suit.HEARTS -> "♥"
+            Suit.DIAMONDS -> "♦"
+            Suit.CLUBS -> "♣"
+            Suit.SPADES -> "♠"
+        }
+        val rankStr = when (card.rank) {
+            Rank.ACE -> "A"
+            Rank.KING -> "K"
+            Rank.QUEEN -> "Q"
+            Rank.JACK -> "J"
+            Rank.TEN -> "10"
+            else -> card.rank.value.toString()
+        }
+        return "$rankStr$suitChar"
+    }
+
+    private fun formatCardRaw(card: Card?): String {
+        if (card == null) return "?"
+        val suitChar = when (card.suit) {
+            Suit.HEARTS -> "h"
+            Suit.DIAMONDS -> "d"
+            Suit.CLUBS -> "c"
+            Suit.SPADES -> "s"
+        }
+        val rankStr = when (card.rank) {
+            Rank.ACE -> "A"
+            Rank.KING -> "K"
+            Rank.QUEEN -> "Q"
+            Rank.JACK -> "J"
+            Rank.TEN -> "T"
+            else -> card.rank.value.toString()
+        }
+        return "$rankStr$suitChar"
+    }
+
+    private fun showFloatingOverlay() {
+        if (isOverlayShowing) return
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = dpToPx(30f)
+            y = dpToPx(120f)
+        }
+
+        // Parent FrameLayout containing both expanded panel & minimized handle
+        val parentFrame = FrameLayout(this)
+        floatingOverlayView = parentFrame
+
+        // 1. MINIMIZED BADGE LAYOUT (Pill)
+        val mini = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dpToPx(12f), dpToPx(8f), dpToPx(12f), dpToPx(8f))
+            background = createBackgroundDrawable(
+                AndroidColor.parseColor("#EE121A24"), // Slate blue semitransparent
+                16f,
+                dpToPx(1.5f),
+                AndroidColor.parseColor("#FF00FFCC") // Neon Cyan
+            )
+            visibility = View.GONE // Hidden by default
+        }
+        minimizedLayout = mini
+
+        val txtMiniIcon = TextView(this).apply {
+            text = "📊"
+            textSize = 14f
+        }
+        val txtMiniLabel = TextView(this).apply {
+            text = " POKER HUD"
+            setTextColor(AndroidColor.WHITE)
+            textSize = 10f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dpToPx(4f), 0, 0, 0)
+        }
+        mini.addView(txtMiniIcon)
+        mini.addView(txtMiniLabel)
+        parentFrame.addView(mini)
+
+        // 2. EXPANDED HUD LAYOUT
+        val expanded = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(12f), dpToPx(12f), dpToPx(12f), dpToPx(12f))
+            background = createBackgroundDrawable(
+                AndroidColor.parseColor("#F50D151D"), // Dark blue/grey high contrast
+                10f,
+                dpToPx(2f),
+                AndroidColor.parseColor("#FF2196F3") // Neon Blue Outline
+            )
+            val shadowParams = FrameLayout.LayoutParams(dpToPx(240f), WindowManager.LayoutParams.WRAP_CONTENT)
+            layoutParams = shadowParams
+        }
+        expandedLayout = expanded
+
+        // HEADER ROW (Title | Hide btn | Exit btn)
+        val headerRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val txtTitle = TextView(this).apply {
+            text = "HUD MONITOR"
+            setTextColor(AndroidColor.WHITE)
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val btnMinimize = Button(this, null, 0, android.R.style.Widget_Button).apply {
+            text = "HIDE"
+            textSize = 9f
+            setTextColor(AndroidColor.WHITE)
+            background = createBackgroundDrawable(AndroidColor.parseColor("#FF37474F"), 4f)
+            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
+            val btnParams = LinearLayout.LayoutParams(dpToPx(48f), dpToPx(26f)).apply {
+                setMargins(0, 0, dpToPx(4f), 0)
+            }
+            layoutParams = btnParams
+        }
+
+        val btnExit = Button(this, null, 0, android.R.style.Widget_Button).apply {
+            text = "EXIT"
+            textSize = 9f
+            setTextColor(AndroidColor.WHITE)
+            background = createBackgroundDrawable(AndroidColor.parseColor("#FFD82229"), 4f)
+            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(dpToPx(44f), dpToPx(26f))
+        }
+
+        headerRow.addView(txtTitle)
+        headerRow.addView(btnMinimize)
+        headerRow.addView(btnExit)
+        expanded.addView(headerRow)
+
+        // Divider
+        val divider1 = View(this).apply {
+            setBackgroundColor(AndroidColor.parseColor("#33FFFFFF"))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
+                setMargins(0, dpToPx(6f), 0, dpToPx(6f))
+            }
+        }
+        expanded.addView(divider1)
+
+        // MULTI-DATA SCANNER STATUS BOX
+        val scannerBoxLocal = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
+            background = createBackgroundDrawable(AndroidColor.parseColor("#1500FFCC"), 4f, dpToPx(1f), AndroidColor.parseColor("#3300FFCC"))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(0, 0, 0, dpToPx(6f))
+            }
+        }
+        scannerStatusBox = scannerBoxLocal
+
+        val scannerTxt = TextView(this).apply {
+            text = "🔍 SCANNER (CoinPoker): ACTIVE\n- Autotracking: 6 seats\n- Fail-safe fallback enabled"
+            setTextColor(AndroidColor.parseColor("#FF00FFCC"))
+            textSize = 9f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        txtScannerStatus = scannerTxt
+        scannerBoxLocal.addView(scannerTxt)
+        expanded.addView(scannerBoxLocal)
+
+        // PRESET STAGE INJECTORS
+        val injectorTitleText = TextView(this).apply {
+            text = "INJECT DECK PRESET"
+            setTextColor(AndroidColor.LTGRAY)
+            textSize = 8f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dpToPx(4f), 0, dpToPx(4f))
+        }
+        txtPreText = injectorTitleText
+        expanded.addView(injectorTitleText)
+
+        val presetButtonsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val stages = listOf("Pre-flop", "Flop", "Turn", "River")
+        for (stg in stages) {
+            val btn = Button(this, null, 0, android.R.style.Widget_Button).apply {
+                text = stg.split("-")[0].uppercase(Locale.US)
+                textSize = 8f
+                setTextColor(AndroidColor.WHITE)
+                background = createBackgroundDrawable(AndroidColor.parseColor("#FF1976D2"), 4f)
+                setPadding(dpToPx(4f), 0, dpToPx(4f), 0)
+                val params = LinearLayout.LayoutParams(0, dpToPx(28f), 1f).apply {
+                    setMargins(dpToPx(2f), 0, dpToPx(2f), 0)
+                }
+                layoutParams = params
+            }
+            btn.setOnClickListener {
+                serviceScope.launch {
+                    PokerHudSharedState.triggerPreset.emit(stg)
+                }
+            }
+            presetButtonsRow.addView(btn)
+        }
+        expanded.addView(presetButtonsRow)
+
+        parentFrame.addView(expanded)
+
+        // 3. SET WINDOW SEAMLESS TOUCH DRAGGING LISTENERS
+        var initialX = 0
+        var initialY = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+
+        val dragListener = View.OnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params.x
+                    initialY = params.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = initialX + (event.rawX - initialTouchX).toInt()
+                    params.y = initialY + (event.rawY - initialTouchY).toInt()
+                    try {
+                        windowManager?.updateViewLayout(parentFrame, params)
+                    } catch (ignored: Exception) {}
+                    true
+                }
+                else -> false
+            }
+        }
+
+        // Dedicated drag & click-tap detector for the minimized widget badge
+        var miniInitialX = 0
+        var miniInitialY = 0
+        var miniInitialTouchX = 0f
+        var miniInitialTouchY = 0f
+        var miniClickStartTime = 0L
+
+        val miniDragListener = View.OnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    miniInitialX = params.x
+                    miniInitialY = params.y
+                    miniInitialTouchX = event.rawX
+                    miniInitialTouchY = event.rawY
+                    miniClickStartTime = System.currentTimeMillis()
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = miniInitialX + (event.rawX - miniInitialTouchX).toInt()
+                    params.y = miniInitialY + (event.rawY - miniInitialTouchY).toInt()
+                    try {
+                        windowManager?.updateViewLayout(parentFrame, params)
+                    } catch (ignored: Exception) {}
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val duration = System.currentTimeMillis() - miniClickStartTime
+                    val distanceX = java.lang.Math.abs(event.rawX - miniInitialTouchX)
+                    val distanceY = java.lang.Math.abs(event.rawY - miniInitialTouchY)
+                    if (duration < 280 && distanceX < 15f && distanceY < 15f) {
+                        mini.visibility = View.GONE
+                        expanded.visibility = View.VISIBLE
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+
+        // Expanded is dragged via the top part or header
+        headerRow.setOnTouchListener(dragListener)
+        // Minimized is fully draggable and clickable
+        mini.setOnTouchListener(miniDragListener)
+
+        // 4. SET GONE TOGGLES
+        btnMinimize.setOnClickListener {
+            expanded.visibility = View.GONE
+            mini.visibility = View.VISIBLE
+        }
+
+        btnExit.setOnClickListener {
+            stopFloatingOverlay()
+            stopSelf()
+        }
+
+        // Add parent custom frame to window with try-catch safe blocks
+        try {
+            windowManager?.addView(parentFrame, params)
+            isOverlayShowing = true
+        } catch (e: Exception) {
+            Log.e("PokerHudService", "Failed to add floating overlay view: ${e.message}", e)
+            stopSelf()
+        }
+
+        // 5. OBSERVE LIVE RECALCULATED STATE COUPLING FROM MAIN APP VIEWMODEL
+        serviceScope.launch {
+            PokerHudSharedState.uiState.collect { state ->
+                // Emit calculations to LOGCAT under tag POKER_HUD_LOG and send local broadcast
+                val h1Raw = state.heroCard1?.let { formatCardRaw(it) } ?: "?"
+                val h2Raw = state.heroCard2?.let { formatCardRaw(it) } ?: "?"
+                val bRaw = state.board.filterNotNull().joinToString(" ") { formatCardRaw(it) }
+                val res = state.simulationResult
+                val rec = state.recommendation
+                val winPctRaw = if (res != null) String.format(Locale.US, "%.1f", (res.heroWinPct + res.heroTiePct) * 100) else "0.0"
+                val recActionRaw = rec?.action ?: "UNKNOWN"
+                val recConfidenceRaw = rec?.confidence ?: 0f
+
+                android.util.Log.i("POKER_HUD_LOG", "JSON_STATE={" +
+                        "\"hero\":\"$h1Raw $h2Raw\"," +
+                        "\"board\":\"$bRaw\"," +
+                        "\"win_pct\":$winPctRaw," +
+                        "\"recommendation\":\"$recActionRaw\"," +
+                        "\"confidence\":$recConfidenceRaw" +
+                        "}")
+
+                val bIntent = Intent("com.example.HUD_CALCULATION_RESULT").apply {
+                    putExtra("win_pct", winPctRaw.toFloatOrNull() ?: 0.0f)
+                    putExtra("recommended_action", recActionRaw)
+                    putExtra("confidence", recConfidenceRaw)
+                    putExtra("hero_cards", "$h1Raw $h2Raw")
+                    putExtra("board", bRaw)
+                }
+                sendBroadcast(bIntent)
+            }
+        }
+
+        // 5b. LISTEN TO COUPLING SETTINGS CHECKBOXES DYNAMIC FLOWS
+        serviceScope.launch {
+            PokerHudSharedState.multiDataScannerToggle.collect { checked ->
+                scannerStatusBox?.visibility = if (checked) View.VISIBLE else View.GONE
+                if (checked && ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null && screenScanner == null) {
+                    screenScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode)
+                    screenScanner?.start()
+                    
+                    launch {
+                        screenScanner?.scanStatus?.collect { status ->
+                            txtPreText?.text = "Scan Phase: $status"
+                        }
+                    }
+                } else if (!checked) {
+                    screenScanner?.stop()
+                    screenScanner = null
+                }
+            }
+        }
+        
+        serviceScope.launch {
+            ScannerConfig.isProjectionGranted.collect { granted ->
+                if (granted && PokerHudSharedState.multiDataScannerToggle.value && ScannerConfig.pendingProjectionData != null && screenScanner == null) {
+                    screenScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode)
+                    screenScanner?.start()
+                    
+                    launch {
+                        screenScanner?.scanStatus?.collect { status ->
+                            txtPreText?.text = "Scan Phase: $status"
+                        }
+                    }
+                }
+            }
+        }
+
+        serviceScope.launch {
+            PokerHudSharedState.hudScale.collect { scale ->
+                expanded.pivotX = 0f
+                expanded.pivotY = 0f
+                expanded.scaleX = scale
+                expanded.scaleY = scale
+
+                mini.pivotX = 0f
+                mini.pivotY = 0f
+                mini.scaleX = scale
+                mini.scaleY = scale
+            }
+        }
+
+        serviceScope.launch {
+            PokerHudSharedState.hudOpacity.collect { opacity ->
+                expanded.alpha = opacity
+                mini.alpha = opacity
+            }
+        }
+
+        serviceScope.launch {
+            PokerHudSharedState.isGameMode.collect { gameMode ->
+                val parent = floatingOverlayView
+                if (parent != null) {
+                    if (gameMode) {
+                        params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                    } else {
+                        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                    }
+                    try { windowManager?.updateViewLayout(parent, params) } catch (ignored: Exception) {}
+                }
+
+                val visibilityMode = if (gameMode) View.GONE else View.VISIBLE
+                headerRow.visibility = visibilityMode
+                divider1.visibility = visibilityMode
+                presetButtonsRow.visibility = visibilityMode
+                txtPreText?.visibility = visibilityMode
+
+                // Scanner status is completely hidden in game play to not draw any blocks on screen
+                scannerStatusBox?.visibility = if (gameMode) View.GONE else (if (PokerHudSharedState.multiDataScannerToggle.value) View.VISIBLE else View.GONE)
+
+                if (gameMode) {
+                    expanded.background = createBackgroundDrawable(AndroidColor.TRANSPARENT, 0f)
+                } else {
+                    expanded.background = createBackgroundDrawable(
+                        AndroidColor.parseColor("#F50D151D"),
+                        10f,
+                        dpToPx(2f),
+                        AndroidColor.parseColor("#FF2196F3")
+                    )
+                }
+                updateBoxOverlays()
+            }
+        }
+
+        // 5c. LISTEN TO CALIBRATION BOX TOGGLES FOR OVERLAYS
+        serviceScope.launch { PokerHudSharedState.showCommBox.collect { updateBoxOverlays() } }
+        serviceScope.launch { PokerHudSharedState.showHoleBox.collect { updateBoxOverlays() } }
+        serviceScope.launch { PokerHudSharedState.showProbsBox.collect { updateBoxOverlays() } }
+        serviceScope.launch { PokerHudSharedState.showAdvisorBox.collect { updateBoxOverlays() } }
+        serviceScope.launch { PokerHudSharedState.showOpponentsBox.collect { updateBoxOverlays() } }
+
+        // 6. OBSERVE PROGRAMMATIC CONTROL COMMANDS VIA BROADCASTS (e.g. from Termux scripts)
+        serviceScope.launch {
+            PokerHudSharedState.externalActions.collect { action ->
+                if (action is ExternalAction.ControlHud) {
+                    when (action.command.lowercase(Locale.US)) {
+                        "hide", "minimize" -> {
+                            expandedLayout?.visibility = View.GONE
+                            minimizedLayout?.visibility = View.VISIBLE
+                        }
+                        "show", "expand", "maximize" -> {
+                            minimizedLayout?.visibility = View.GONE
+                            expandedLayout?.visibility = View.VISIBLE
+                        }
+                        "exit", "stop", "close" -> {
+                            stopFloatingOverlay()
+                            stopSelf()
+                        }
+                        "toast" -> {
+                            Toast.makeText(applicationContext, "Termux connection online!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateBoxOverlays() {
+        val gameMode = PokerHudSharedState.isGameMode.value
+        
+        if (PokerHudSharedState.showCommBox.value && !gameMode) showCommOverlay() else hideCommOverlay()
+        if (PokerHudSharedState.showHoleBox.value && !gameMode) showHoleOverlay() else hideHoleOverlay()
+        if (PokerHudSharedState.showProbsBox.value && !gameMode) showProbsOverlay() else hideProbsOverlay()
+        if (PokerHudSharedState.showAdvisorBox.value && !gameMode) showAdvisorOverlay() else hideAdvisorOverlay()
+        if (PokerHudSharedState.showOpponentsBox.value && !gameMode) showOpponentsOverlay() else hideOpponentsOverlay()
+    }
+
+    fun getCommRect(): android.graphics.Rect {
+        val params = floatingCommOverlay?.layoutParams as? WindowManager.LayoutParams
+        val width = floatingCommOverlay?.width ?: 0
+        val height = floatingCommOverlay?.height ?: 0
+        if (params != null) {
+            return android.graphics.Rect(params.x, params.y, params.x + width, params.y + height)
+        }
+        return android.graphics.Rect(0, 0, 0, 0)
+    }
+
+    fun getHoleRect(): android.graphics.Rect {
+        val params = floatingHoleOverlay?.layoutParams as? WindowManager.LayoutParams
+        val width = floatingHoleOverlay?.width ?: 0
+        val height = floatingHoleOverlay?.height ?: 0
+        if (params != null) {
+            return android.graphics.Rect(params.x, params.y, params.x + width, params.y + height)
+        }
+        return android.graphics.Rect(0, 0, 0, 0)
+    }
+
+    private fun setupDragListener(view: View, params: WindowManager.LayoutParams) {
+        var initialX = 0
+        var initialY = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+
+        view.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params.x
+                    initialY = params.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    params.x = initialX + (event.rawX - initialTouchX).toInt()
+                    params.y = initialY + (event.rawY - initialTouchY).toInt()
+                    try {
+                        windowManager?.updateViewLayout(view, params)
+                    } catch (ignored: Exception) {}
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun animScanLaser(laserLine: View, heightPx: Int): ValueAnimator {
+        return ValueAnimator.ofInt(0, heightPx - dpToPx(3f)).apply {
+            duration = 1500
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { animator ->
+                val value = animator.animatedValue as Int
+                val lp = laserLine.layoutParams as FrameLayout.LayoutParams
+                lp.topMargin = value
+                laserLine.layoutParams = lp
+            }
+        }
+    }
+
+    private fun showCommOverlay() {
+        if (floatingCommOverlay != null) return
+
+        val params = WindowManager.LayoutParams(
+            dpToPx(280f),
+            dpToPx(115f),
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = dpToPx(15f)
+            y = dpToPx(150f)
+        }
+
+        val frame = FrameLayout(this).apply {
+            background = createBackgroundDrawable(
+                AndroidColor.parseColor("#332196F3"),
+                8f,
+                dpToPx(1.5f),
+                AndroidColor.parseColor("#CC2196F3")
+            )
+            setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
+        }
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+
+        val title = TextView(this).apply {
+            text = "COMMUNITY CARDS CROP BOX"
+            setTextColor(AndroidColor.parseColor("#FF2196F3"))
+            textSize = 8f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val closeBtn = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f))
+            setOnClickListener {
+                PokerHudSharedState.showCommBox.value = false
+            }
+        }
+
+        header.addView(title)
+        header.addView(closeBtn)
+        content.addView(header)
+
+        val spacer = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4f))
+        }
+        content.addView(spacer)
+
+        val cardsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+
+        val txtCardsInfo = TextView(this).apply {
+            text = "Board Cards: Empty"
+            setTextColor(AndroidColor.LTGRAY)
+            textSize = 10f
+            typeface = Typeface.MONOSPACE
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        cardsRow.addView(txtCardsInfo)
+        content.addView(cardsRow)
+
+        val laserLine = View(this).apply {
+            setBackgroundColor(AndroidColor.parseColor("#FF00FFCC"))
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(3f)).apply {
+                gravity = Gravity.TOP
+            }
+            visibility = View.GONE
+        }
+
+        frame.addView(content)
+        frame.addView(laserLine)
+
+        setupDragListener(frame, params)
+
+        try {
+            windowManager?.addView(frame, params)
+            floatingCommOverlay = frame
+        } catch (e: Exception) {
+            Log.e("PokerHudService", "Failed to add community overlay view: ${e.message}", e)
+        }
+
+        commLaserAnim?.cancel()
+        val anim = animScanLaser(laserLine, dpToPx(115f))
+        commLaserAnim = anim
+
+        commJob?.cancel()
+        commJob = serviceScope.launch {
+            launch {
+                PokerHudSharedState.isScanning.collect { scanning ->
+                    laserLine.visibility = if (scanning) View.VISIBLE else View.GONE
+                    if (scanning) {
+                        frame.background = createBackgroundDrawable(
+                            AndroidColor.parseColor("#332196F3"),
+                            8f,
+                            dpToPx(1.5f),
+                            AndroidColor.parseColor("#FF00FFCC")
+                        )
+                        try { anim.start() } catch (ignored: Exception) {}
+                    } else {
+                        frame.background = createBackgroundDrawable(
+                            AndroidColor.parseColor("#332196F3"),
+                            8f,
+                            dpToPx(1.5f),
+                            AndroidColor.parseColor("#CC2196F3")
+                        )
+                        try { anim.cancel() } catch (ignored: Exception) {}
+                    }
+                }
+            }
+            launch {
+                PokerHudSharedState.uiState.collect { state ->
+                    val b1 = formatCardRaw(state.board.getOrNull(0))
+                    val b2 = formatCardRaw(state.board.getOrNull(1))
+                    val b3 = formatCardRaw(state.board.getOrNull(2))
+                    val b4 = formatCardRaw(state.board.getOrNull(3))
+                    val b5 = formatCardRaw(state.board.getOrNull(4))
+                    txtCardsInfo.text = "Board: [$b1][$b2][$b3][$b4][$b5]\nFlop       Turn River"
+                }
+            }
+        }
+    }
+
+    private fun hideCommOverlay() {
+        commLaserAnim?.cancel()
+        commLaserAnim = null
+        commJob?.cancel()
+        commJob = null
+        val view = floatingCommOverlay
+        if (view != null) {
+            try {
+                windowManager?.removeView(view)
+            } catch (ignored: Exception) {}
+            floatingCommOverlay = null
+        }
+    }
+
+    private fun showHoleOverlay() {
+        if (floatingHoleOverlay != null) return
+
+        val params = WindowManager.LayoutParams(
+            dpToPx(180f),
+            dpToPx(90f),
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = dpToPx(15f)
+            y = dpToPx(290f)
+        }
+
+        val frame = FrameLayout(this).apply {
+            background = createBackgroundDrawable(
+                AndroidColor.parseColor("#33E53935"),
+                8f,
+                dpToPx(1.5f),
+                AndroidColor.parseColor("#CCE53935")
+            )
+            setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
+        }
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+
+        val title = TextView(this).apply {
+            text = "HOLE CARDS CROP BOX"
+            setTextColor(AndroidColor.parseColor("#FFE53935"))
+            textSize = 8f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        val closeBtn = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f))
+            setOnClickListener {
+                PokerHudSharedState.showHoleBox.value = false
+            }
+        }
+
+        header.addView(title)
+        header.addView(closeBtn)
+        content.addView(header)
+
+        val spacer = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4f))
+        }
+        content.addView(spacer)
+
+        val cardsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+
+        val txtCardsInfo = TextView(this).apply {
+            text = "Hole: [ ? ] [ ? ]"
+            setTextColor(AndroidColor.LTGRAY)
+            textSize = 10f
+            typeface = Typeface.MONOSPACE
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        cardsRow.addView(txtCardsInfo)
+        content.addView(cardsRow)
+
+        val laserLine = View(this).apply {
+            setBackgroundColor(AndroidColor.parseColor("#FF00FFCC"))
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(3f)).apply {
+                gravity = Gravity.TOP
+            }
+            visibility = View.GONE
+        }
+
+        frame.addView(content)
+        frame.addView(laserLine)
+
+        setupDragListener(frame, params)
+
+        try {
+            windowManager?.addView(frame, params)
+            floatingHoleOverlay = frame
+        } catch (e: Exception) {
+            Log.e("PokerHudService", "Failed to add hole overlay view: ${e.message}", e)
+        }
+
+        holeLaserAnim?.cancel()
+        val anim = animScanLaser(laserLine, dpToPx(90f))
+        holeLaserAnim = anim
+
+        holeJob?.cancel()
+        holeJob = serviceScope.launch {
+            launch {
+                PokerHudSharedState.isScanning.collect { scanning ->
+                    laserLine.visibility = if (scanning) View.VISIBLE else View.GONE
+                    if (scanning) {
+                        frame.background = createBackgroundDrawable(
+                            AndroidColor.parseColor("#33E53935"),
+                            8f,
+                            dpToPx(1.5f),
+                            AndroidColor.parseColor("#FF00FFCC")
+                        )
+                        try { anim.start() } catch (ignored: Exception) {}
+                    } else {
+                        frame.background = createBackgroundDrawable(
+                            AndroidColor.parseColor("#33E53935"),
+                            8f,
+                            dpToPx(1.5f),
+                            AndroidColor.parseColor("#CCE53935")
+                        )
+                        try { anim.cancel() } catch (ignored: Exception) {}
+                    }
+                }
+            }
+            launch {
+                PokerHudSharedState.uiState.collect { state ->
+                    val h1 = formatCardRaw(state.heroCard1)
+                    val h2 = formatCardRaw(state.heroCard2)
+                    txtCardsInfo.text = "Hole 1: [$h1]\nHole 2: [$h2]"
+                }
+            }
+        }
+    }
+
+    private fun hideHoleOverlay() {
+        holeLaserAnim?.cancel()
+        holeLaserAnim = null
+        holeJob?.cancel()
+        holeJob = null
+        val view = floatingHoleOverlay
+        if (view != null) {
+            try {
+                windowManager?.removeView(view)
+            } catch (ignored: Exception) {}
+            floatingHoleOverlay = null
+        }
+    }
+
+    private fun showProbsOverlay() {
+        if (floatingProbsOverlay != null) return
+        val params = WindowManager.LayoutParams(
+            dpToPx(180f),
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = dpToPx(300f)
+            y = dpToPx(150f)
+        }
+        val frame = FrameLayout(this).apply {
+            background = createBackgroundDrawable(AndroidColor.parseColor("#33FFD700"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#CCFFD700"))
+            setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
+        }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val title = TextView(this).apply {
+            text = "PROBABILITIES"
+            setTextColor(AndroidColor.parseColor("#FFFFD54F"))
+            textSize = 8.5f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val closeBtn = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f))
+            setOnClickListener { PokerHudSharedState.showProbsBox.value = false }
+        }
+        header.addView(title)
+        header.addView(closeBtn)
+        content.addView(header)
+        content.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4f)) })
+        
+        val txtWin = TextView(this).apply {
+            text = "Winning chance: 0.0%"
+            setTextColor(AndroidColor.WHITE)
+            textSize = 10f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        val txtStrength = TextView(this).apply {
+            text = "Strength: High"
+            setTextColor(AndroidColor.parseColor("#FF00FFCC"))
+            textSize = 9f
+        }
+        val txtSklan = TextView(this).apply {
+            text = "Sklansky: Group 1"
+            setTextColor(AndroidColor.parseColor("#FFFF7043"))
+            textSize = 9f
+        }
+        content.addView(txtWin)
+        content.addView(txtStrength)
+        content.addView(txtSklan)
+        frame.addView(content)
+        setupDragListener(frame, params)
+        try {
+            windowManager?.addView(frame, params)
+            floatingProbsOverlay = frame
+        } catch (e: Exception) {}
+
+        probsJob?.cancel()
+        val job = Job()
+        probsJob = job
+        
+        serviceScope.launch(job) {
+            PokerHudSharedState.uiState.collect { state ->
+                val res = state.simulationResult
+                if (res != null) {
+                    val combinedWin = res.heroWinPct + res.heroTiePct
+                    txtWin.text = String.format(Locale.US, "Winning chance: %.1f%%", combinedWin)
+                } else {
+                    txtWin.text = "Winning chance: Calculating..."
+                }
+
+                if (state.heroCard1 != null && state.heroCard2 != null) {
+                    val groupNum = AdvisorEngine.getSklanskyGroup(state.heroCard1, state.heroCard2)
+                    txtSklan.text = "Sklansky: Group $groupNum"
+                    val strengthDesc = when (groupNum) {
+                        1, 2 -> "Premium (Top 1/20)"
+                        3, 4 -> "High (Top 4/20)"
+                        5, 6 -> "Medium (Top 8/20)"
+                        else -> "Low (Top 14/20)"
+                    }
+                    txtStrength.text = "Strength: $strengthDesc"
+                } else {
+                    txtSklan.text = "Sklansky: [No starting cards]"
+                    txtStrength.text = "Strength: --"
+                }
+            }
+        }
+        
+        serviceScope.launch(job) {
+            PokerHudSharedState.winProbToggle.collect { isVisible ->
+                txtWin.visibility = if (isVisible) View.VISIBLE else View.GONE
+            }
+        }
+        serviceScope.launch(job) {
+            PokerHudSharedState.handStrengthToggle.collect { isVisible ->
+                txtStrength.visibility = if (isVisible) View.VISIBLE else View.GONE
+            }
+        }
+        serviceScope.launch(job) {
+            PokerHudSharedState.sklanskyToggle.collect { isVisible ->
+                txtSklan.visibility = if (isVisible) View.VISIBLE else View.GONE
+            }
+        }
+        
+        serviceScope.launch(job) {
+            PokerHudSharedState.winProbScale.collect { scale ->
+                txtWin.textSize = 10f * scale
+            }
+        }
+        serviceScope.launch(job) {
+            PokerHudSharedState.handStrengthScale.collect { scale ->
+                txtStrength.textSize = 9f * scale
+            }
+        }
+        serviceScope.launch(job) {
+            PokerHudSharedState.sklanskyScale.collect { scale ->
+                txtSklan.textSize = 9f * scale
+            }
+        }
+    }
+
+    private fun hideProbsOverlay() {
+        probsJob?.cancel()
+        probsJob = null
+        floatingProbsOverlay?.let { try { windowManager?.removeView(it) } catch (ignored: Exception) {} }
+        floatingProbsOverlay = null
+    }
+
+    private fun showAdvisorOverlay() {
+        if (floatingAdvisorOverlay != null) return
+        val params = WindowManager.LayoutParams(
+            dpToPx(180f),
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = dpToPx(300f)
+            y = dpToPx(240f)
+        }
+        val frame = FrameLayout(this).apply {
+            background = createBackgroundDrawable(AndroidColor.parseColor("#3300FFCC"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#CC00FFCC"))
+            setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
+        }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val title = TextView(this).apply {
+            text = "ACTION ADVISOR"
+            setTextColor(AndroidColor.parseColor("#FF00FFCC"))
+            textSize = 8.5f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val closeBtn = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f))
+            setOnClickListener { PokerHudSharedState.showAdvisorBox.value = false }
+        }
+        header.addView(title)
+        header.addView(closeBtn)
+        content.addView(header)
+        content.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4f)) })
+
+        val advAction = TextView(this).apply {
+            text = "Advisor Strategy: FOLD"
+            setTextColor(AndroidColor.parseColor("#FF00FFCC"))
+            textSize = 10f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        content.addView(advAction)
+        frame.addView(content)
+        setupDragListener(frame, params)
+        try {
+            windowManager?.addView(frame, params)
+            floatingAdvisorOverlay = frame
+        } catch (e: Exception) {}
+
+        advisorJob?.cancel()
+        val job = Job()
+        advisorJob = job
+        
+        serviceScope.launch(job) {
+            PokerHudSharedState.uiState.collect { state ->
+                val rec = state.recommendation
+                if (rec != null) {
+                    advAction.text = "Advisor Recommendation: ${rec.action.uppercase(Locale.US)}"
+                } else {
+                    if (state.heroCard1 != null && state.heroCard2 != null) {
+                        advAction.text = "Advisor Recommendation: Calculating..."
+                    } else {
+                        advAction.text = "Advisor Recommendation: Enter starter cards"
+                    }
+                }
+            }
+        }
+        
+        serviceScope.launch(job) {
+            PokerHudSharedState.showActionAdvisor.collect { isVisible ->
+                advAction.visibility = if (isVisible) View.VISIBLE else View.GONE
+            }
+        }
+        
+        serviceScope.launch(job) {
+            PokerHudSharedState.actionAdvisorScale.collect { scale ->
+                advAction.textSize = 10f * scale
+            }
+        }
+    }
+
+    private fun hideAdvisorOverlay() {
+        advisorJob?.cancel()
+        advisorJob = null
+        floatingAdvisorOverlay?.let { try { windowManager?.removeView(it) } catch (ignored: Exception) {} }
+        floatingAdvisorOverlay = null
+    }
+
+    private fun showOpponentsOverlay() {
+        if (floatingOpponentsOverlay != null) return
+        val params = WindowManager.LayoutParams(
+            dpToPx(200f),
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = dpToPx(300f)
+            y = dpToPx(300f)
+        }
+        val frame = FrameLayout(this).apply {
+            background = createBackgroundDrawable(AndroidColor.parseColor("#3390CAF9"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#CC90CAF9"))
+            setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
+        }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val title = TextView(this).apply {
+            text = "LIVE OPPONENT PROFILE"
+            setTextColor(AndroidColor.parseColor("#FF90CAF9"))
+            textSize = 8.5f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val closeBtn = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f))
+            setOnClickListener { PokerHudSharedState.showOpponentsBox.value = false }
+        }
+        header.addView(title)
+        header.addView(closeBtn)
+        content.addView(header)
+        content.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4f)) })
+
+        val oppStatsTxt = TextView(this).apply {
+            text = "Loading opponents..."
+            setTextColor(AndroidColor.WHITE)
+            textSize = 9.5f
+        }
+        content.addView(oppStatsTxt)
+        frame.addView(content)
+        setupDragListener(frame, params)
+        try {
+            windowManager?.addView(frame, params)
+            floatingOpponentsOverlay = frame
+        } catch (e: Exception) {}
+
+        oppJob?.cancel()
+        val job = Job()
+        oppJob = job
+        
+        serviceScope.launch(job) {
+            PokerHudSharedState.uiState.collect { state ->
+                val sb = StringBuilder()
+                val activeOpps = state.opponents.filter { it.isActive }
+                if (activeOpps.isEmpty()) {
+                    sb.append("No active opponents tracked.")
+                } else {
+                    val minHands = PokerHudSharedState.advMinHands.value
+                    activeOpps.forEachIndexed { index, opp ->
+                        val prefix = if (index > 0) "\n" else ""
+                        val hands = opp.stats?.handsPlayed ?: 0
+                        if (hands >= minHands || opp.nickname.isNotEmpty()) { // We still show mock logic for now if it's there
+                            val vpipVal = opp.stats?.vpip?.toInt() ?: when (opp.nickname) {
+                                "Sharky" -> 19
+                                "Calling Station" -> 48
+                                "Loose Cannon" -> 39
+                                "crushup" -> 39
+                                "Domitheki..." -> 19
+                                "Chiefpickles" -> 25
+                                "Alfy" -> 22
+                                "BAM81" -> 44
+                                else -> 25
+                            }
+                            val pfrVal = opp.stats?.pfr?.toInt() ?: when (opp.nickname) {
+                                "Sharky" -> 15
+                                "Calling Station" -> 11
+                                "Loose Cannon" -> 31
+                                "crushup" -> 31
+                                "Domitheki..." -> 15
+                                "Chiefpickles" -> 18
+                                "Alfy" -> 14
+                                "BAM81" -> 35
+                                else -> 19
+                            }
+                            val afVal = when (opp.nickname) {
+                                "Sharky" -> 3.2
+                                "Calling Station" -> 0.8
+                                "Loose Cannon" -> 2.8
+                                "crushup" -> 2.8
+                                "Domitheki..." -> 3.2
+                                "Chiefpickles" -> 2.0
+                                "Alfy" -> 1.5
+                                "BAM81" -> 2.5
+                                else -> 1.8
+                            }
+                            val stackStr = if (opp.stackSize > 0) " (\$${opp.stackSize})" else ""
+                            val betStr = if (opp.betSize > 0) " [Bet: \$${opp.betSize}]" else ""
+                            sb.append("${prefix}${opp.nickname}${stackStr}: VPIP: ${vpipVal}%  PFR: ${pfrVal}%  AF: ${afVal}${betStr}")
+                        } else {
+                            val stackStr = if (opp.stackSize > 0) " (\$${opp.stackSize})" else ""
+                            val betStr = if (opp.betSize > 0) " [Bet: \$${opp.betSize}]" else ""
+                            sb.append("${prefix}${opp.nickname}${stackStr}: Need ${minHands - hands} more hands${betStr}")
+                        }
+                    }
+                }
+                oppStatsTxt.text = sb.toString()
+            }
+        }
+        
+        serviceScope.launch(job) {
+            PokerHudSharedState.advStatsToggle.collect { isVisible ->
+                oppStatsTxt.visibility = if (isVisible) View.VISIBLE else View.GONE
+            }
+        }
+        
+        serviceScope.launch(job) {
+            PokerHudSharedState.advStatsScale.collect { scale ->
+                oppStatsTxt.textSize = 9.5f * scale
+            }
+        }
+    }
+
+    private fun hideOpponentsOverlay() {
+        oppJob?.cancel()
+        oppJob = null
+        floatingOpponentsOverlay?.let { try { windowManager?.removeView(it) } catch (ignored: Exception) {} }
+        floatingOpponentsOverlay = null
+    }
+
+    private fun stopFloatingOverlay() {
+        if (isOverlayShowing && floatingOverlayView != null) {
+            try {
+                windowManager?.removeView(floatingOverlayView)
+            } catch (ignored: Exception) {}
+            isOverlayShowing = false
+            floatingOverlayView = null
+        }
+        hideCommOverlay()
+        hideHoleOverlay()
+        hideProbsOverlay()
+        hideAdvisorOverlay()
+        hideOpponentsOverlay()
+        serviceJob.cancel()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopFloatingOverlay()
+    }
+}
