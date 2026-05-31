@@ -24,7 +24,18 @@ data class PlayerStats(
     val showdownWins: Int = 0,
     val showdownTotal: Int = 0,
     val aggressionCount: Int = 0, // bets/raises
-    val aggressionCalls: Int = 0  // calls
+    val aggressionCalls: Int = 0,  // calls
+    // Historical profile data extracted from user profile windows
+    val histVpip: Float? = null,
+    val histPfr: Float? = null,
+    val hist3Bet: Float? = null,
+    val histFoldTo3Bet: Float? = null,
+    val histCBet: Float? = null,
+    val histFoldToCBet: Float? = null,
+    val histSteal: Float? = null,
+    val histCheckRaise: Float? = null,
+    val histWtsd: Float? = null,
+    val histWsd: Float? = null
 ) {
     val vpip: Float get() = if (handsPlayed > 0) (vpipCount.toFloat() / handsPlayed * 100f) else 0f
     val pfr: Float get() = if (handsPlayed > 0) (pfrCount.toFloat() / handsPlayed * 100f) else 0f
@@ -183,32 +194,58 @@ object AdvisorEngine {
             else -> 0.1f
         }
 
-        // 5. Stats factor
+        // 5. Stats factor (Historical Data Filter)
         var statsFactor = 0.5f
         if (settings.useAdvancedStats && opponents.isNotEmpty()) {
             val opponent = opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
             val profile = opponent?.stats
-            val minHandsForStats = 20 // Default or from settings
 
-            if (profile != null && profile.handsPlayed >= minHandsForStats) {
-                val vpip = profile.vpip / 100f
-                val pfr = profile.pfr / 100f
-                val af = profile.aggressionFactor
+            if (profile != null) {
+                val hasHistorical = profile.histVpip != null
+                val hasEnoughLocalHands = profile.handsPlayed >= 20
+                
+                if (hasHistorical || hasEnoughLocalHands) {
+                    val vpip = (profile.histVpip ?: profile.vpip) / 100f
+                    val pfr = (profile.histPfr ?: profile.pfr) / 100f
+                    
+                    // Specific logic for VPIP and Sklansky relationship:
+                    // If VPIP is very low (tight player), they only play premium hands. We need premium hands to engage.
+                    if (vpip < 0.20f) {
+                        statsFactor = 0.3f
+                    } 
+                    // If VPIP is high (loose player), they play garbage. We can have higher confidence.
+                    else if (vpip > 0.40f) {
+                        statsFactor = 0.8f
+                    }
+                    
+                    // If player folds to C-Bet very rarely (calling station), decrease confidence on bluffs
+                    val foldToCBet = profile.histFoldToCBet?.div(100f) ?: 0.5f
+                    if (foldToCBet < 0.30f && betToCall == 0f) {
+                        statsFactor -= 0.1f // Don't bluff a calling station
+                    } else if (foldToCBet > 0.60f && betToCall == 0f) {
+                        statsFactor += 0.1f // Good target for C-bet squeeze
+                    }
+                    
+                    // WTSD (Went to Showdown) and WSD (Won at Showdown)
+                    val wtsd = profile.histWtsd?.div(100f) ?: 0.30f
+                    val wsd = profile.histWsd?.div(100f) ?: 0.50f
+                    
+                    if (wtsd > 0.35f && wsd < 0.45f) {
+                        // Calling station that loses often. Value bet them heavily!
+                        statsFactor += 0.15f 
+                    } else if (wtsd < 0.25f && wsd > 0.55f) {
+                        // Tight player that only bluffs occasionally or only shows nuts
+                        statsFactor -= 0.1f
+                    }
 
-                if (vpip > 0.35f && pfr < 0.15f) {
-                    statsFactor = 0.8f
-                } else if (vpip < 0.18f && pfr > 0.20f) {
-                    statsFactor = 0.3f
-                } else if (af > 1.5f) { // aggressionThreshold placeholder
-                    statsFactor = 0.4f
-                } else if (af < 1.0f) {
-                    statsFactor = 0.7f
+                    // Constrain the statsFactor between 0 and 1
+                    statsFactor = maxOf(0.1f, minOf(0.9f, statsFactor))
+
+                    val handsWeight = if (hasHistorical) 1.0f else minOf(1.0f, profile.handsPlayed / 200.0f)
+                    weightStats = 0.20f + (0.15f * handsWeight)
+                    weightSklansky = 0.20f - (0.05f * handsWeight)
+                    weightEquity = 1.0f - weightStats - weightSklansky - weightPosition - weightStage - weightDynamic
                 }
-
-                val handsWeight = minOf(1.0f, profile.handsPlayed / 200.0f)
-                weightStats = 0.20f + (0.15f * handsWeight)
-                weightSklansky = 0.20f - (0.05f * handsWeight)
-                weightEquity = 1.0f - weightStats - weightSklansky - weightPosition - weightStage - weightDynamic
             }
         }
 
@@ -360,7 +397,17 @@ class PreferencesManager(context: Context) {
             showdownWins = prefs.getInt("${prefix}showdown_wins", 0),
             showdownTotal = prefs.getInt("${prefix}showdown_total", 0),
             aggressionCount = prefs.getInt("${prefix}aggression_count", 0),
-            aggressionCalls = prefs.getInt("${prefix}aggression_calls", 0)
+            aggressionCalls = prefs.getInt("${prefix}aggression_calls", 0),
+            histVpip = if (prefs.contains("${prefix}histVpip")) prefs.getFloat("${prefix}histVpip", -1f) else null,
+            histPfr = if (prefs.contains("${prefix}histPfr")) prefs.getFloat("${prefix}histPfr", -1f) else null,
+            hist3Bet = if (prefs.contains("${prefix}hist3Bet")) prefs.getFloat("${prefix}hist3Bet", -1f) else null,
+            histFoldTo3Bet = if (prefs.contains("${prefix}histFoldTo3Bet")) prefs.getFloat("${prefix}histFoldTo3Bet", -1f) else null,
+            histCBet = if (prefs.contains("${prefix}histCBet")) prefs.getFloat("${prefix}histCBet", -1f) else null,
+            histFoldToCBet = if (prefs.contains("${prefix}histFoldToCBet")) prefs.getFloat("${prefix}histFoldToCBet", -1f) else null,
+            histSteal = if (prefs.contains("${prefix}histSteal")) prefs.getFloat("${prefix}histSteal", -1f) else null,
+            histCheckRaise = if (prefs.contains("${prefix}histCheckRaise")) prefs.getFloat("${prefix}histCheckRaise", -1f) else null,
+            histWtsd = if (prefs.contains("${prefix}histWtsd")) prefs.getFloat("${prefix}histWtsd", -1f) else null,
+            histWsd = if (prefs.contains("${prefix}histWsd")) prefs.getFloat("${prefix}histWsd", -1f) else null
         )
     }
 
@@ -377,6 +424,17 @@ class PreferencesManager(context: Context) {
             putInt("${prefix}showdown_total", stats.showdownTotal)
             putInt("${prefix}aggression_count", stats.aggressionCount)
             putInt("${prefix}aggression_calls", stats.aggressionCalls)
+            
+            stats.histVpip?.let { putFloat("${prefix}histVpip", it) }
+            stats.histPfr?.let { putFloat("${prefix}histPfr", it) }
+            stats.hist3Bet?.let { putFloat("${prefix}hist3Bet", it) }
+            stats.histFoldTo3Bet?.let { putFloat("${prefix}histFoldTo3Bet", it) }
+            stats.histCBet?.let { putFloat("${prefix}histCBet", it) }
+            stats.histFoldToCBet?.let { putFloat("${prefix}histFoldToCBet", it) }
+            stats.histSteal?.let { putFloat("${prefix}histSteal", it) }
+            stats.histCheckRaise?.let { putFloat("${prefix}histCheckRaise", it) }
+            stats.histWtsd?.let { putFloat("${prefix}histWtsd", it) }
+            stats.histWsd?.let { putFloat("${prefix}histWsd", it) }
             apply()
         }
     }

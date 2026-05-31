@@ -231,6 +231,25 @@ class ScreenScanner(
                 
                 val scannedOpponents = OpponentScanner.scan(result, cleanBitmap)
                 val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
+
+                val scannedProfile = ProfileScanner.scan(result, cleanBitmap)
+                if (scannedProfile != null && scannedProfile.nickname != "Unknown_Profile") {
+                    val prefsManager = PreferencesManager(pokerHudService)
+                    val existing = prefsManager.loadPlayerStats(scannedProfile.nickname)
+                    val updated = existing.copy(
+                        histVpip = scannedProfile.histVpip ?: existing.histVpip,
+                        histPfr = scannedProfile.histPfr ?: existing.histPfr,
+                        hist3Bet = scannedProfile.hist3Bet ?: existing.hist3Bet,
+                        histFoldTo3Bet = scannedProfile.histFoldTo3Bet ?: existing.histFoldTo3Bet,
+                        histCBet = scannedProfile.histCBet ?: existing.histCBet,
+                        histFoldToCBet = scannedProfile.histFoldToCBet ?: existing.histFoldToCBet,
+                        histSteal = scannedProfile.histSteal ?: existing.histSteal,
+                        histCheckRaise = scannedProfile.histCheckRaise ?: existing.histCheckRaise,
+                        histWtsd = scannedProfile.histWtsd ?: existing.histWtsd,
+                        histWsd = scannedProfile.histWsd ?: existing.histWsd
+                    )
+                    prefsManager.savePlayerStats(updated)
+                }
                 
                 scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} (${commW},${holeW})<br>" +
                                    "Opps: ${finalOpponents.size}<br>" +

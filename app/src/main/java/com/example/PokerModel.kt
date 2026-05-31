@@ -16,7 +16,7 @@ enum class Rank(val value: Int, val symbol: String) {
 }
 
 enum class Suit(val index: Int, val symbol: String, val colorHex: String, val nameStr: String) {
-    SPADES(0, "♠", "#FFFFFF", "Spades"),       // White for dark UI
+    SPADES(0, "♠", "#B0BEC5", "Spades"),       // Blue Grey for dark UI
     HEARTS(1, "♥", "#E53935", "Hearts"),       // Crimson Red
     DIAMONDS(2, "♦", "#1E88E5", "Diamonds"),   // Royal Blue (4-color deck)
     CLUBS(3, "♣", "#43A047", "Clubs");         // Forest Green (4-color deck)
