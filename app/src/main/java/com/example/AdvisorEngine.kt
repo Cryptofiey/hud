@@ -201,12 +201,15 @@ object AdvisorEngine {
             val profile = opponent?.stats
 
             if (profile != null) {
-                val hasHistorical = profile.histVpip != null
+                val useVpip = PokerHudSharedState.useVpipPfrFilter.value
+                val useWsd = PokerHudSharedState.useWsdWtsdFilter.value
+
+                val hasHistorical = profile.histVpip != null && useVpip
                 val hasEnoughLocalHands = profile.handsPlayed >= 20
                 
                 if (hasHistorical || hasEnoughLocalHands) {
-                    val vpip = (profile.histVpip ?: profile.vpip) / 100f
-                    val pfr = (profile.histPfr ?: profile.pfr) / 100f
+                    val vpip = if (useVpip && profile.histVpip != null) profile.histVpip!! / 100f else profile.vpip / 100f
+                    val pfr = if (useVpip && profile.histPfr != null) profile.histPfr!! / 100f else profile.pfr / 100f
                     
                     // Specific logic for VPIP and Sklansky relationship:
                     // If VPIP is very low (tight player), they only play premium hands. We need premium hands to engage.
@@ -227,8 +230,8 @@ object AdvisorEngine {
                     }
                     
                     // WTSD (Went to Showdown) and WSD (Won at Showdown)
-                    val wtsd = profile.histWtsd?.div(100f) ?: 0.30f
-                    val wsd = profile.histWsd?.div(100f) ?: 0.50f
+                    val wtsd = if (useWsd && profile.histWtsd != null) profile.histWtsd!! / 100f else 0.30f
+                    val wsd = if (useWsd && profile.histWsd != null) profile.histWsd!! / 100f else 0.50f
                     
                     if (wtsd > 0.35f && wsd < 0.45f) {
                         // Calling station that loses often. Value bet them heavily!
@@ -348,7 +351,15 @@ object AdvisorEngine {
             }
         }
 
-        return Recommendation(action, rawScore * 100f, explanation)
+        val confidence = when(action) {
+            "RAISE", "ALL-IN" -> ((rawScore - 0.5f) / 0.5f).coerceIn(0f, 1f) * 100f
+            "FOLD" -> ((0.3f - rawScore) / 0.3f).coerceIn(0f, 1f) * 100f
+            "CALL" -> (1.0f - kotlin.math.abs(rawScore - 0.5f) / 0.5f).coerceIn(0f, 1f) * 100f
+            "CHECK" -> if (rawScore < 0.3f) ((0.3f - rawScore)/0.3f).coerceIn(0f, 1f) * 100f else (1.0f - kotlin.math.abs(rawScore - 0.5f) / 0.5f).coerceIn(0f, 1f) * 100f
+            else -> 50f
+        }
+
+        return Recommendation(action, confidence, explanation)
     }
 }
 

@@ -143,7 +143,8 @@ object OpponentScanner {
                 stackSize = stackValue,
                 isActive = detectedAction != PlayerAction.FOLD && detectedAction != PlayerAction.SIT_OUT,
                 isRandom = true,
-                currentAction = detectedAction.name
+                currentAction = detectedAction.name,
+                boundingBox = nameBox
             ))
         }
 

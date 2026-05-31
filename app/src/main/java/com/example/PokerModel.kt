@@ -67,7 +67,9 @@ data class OpponentState(
     val betSize: Int = 0,
     val stackSize: Int = 1000,
     val stats: PlayerStats? = null,
-    val currentAction: String = "NONE"
+    val currentAction: String = "NONE",
+    @Transient
+    val boundingBox: android.graphics.Rect? = null
 )
 
 data class SimulationResult(

@@ -45,9 +45,19 @@ sealed class ExternalAction {
 }
 
 object PokerHudSharedState {
+    val isHudOverlayRunning = MutableStateFlow(false)
     val uiState = MutableStateFlow<PokerUiState>(PokerUiState())
     val triggerPreset = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val externalActions = MutableSharedFlow<ExternalAction>(extraBufferCapacity = 1)
+
+    // Scanner tuning
+    val showScannerBoxes = MutableStateFlow(false)
+    val scannerOffsetX = MutableStateFlow(0f)
+    val scannerOffsetY = MutableStateFlow(0f)
+    
+    // Advisor Filters
+    val useVpipPfrFilter = MutableStateFlow(true)
+    val useWsdWtsdFilter = MutableStateFlow(true)
 
     // Toggles for overlay layout customization
     val winProbToggle = MutableStateFlow(true)
@@ -98,6 +108,7 @@ class PokerHudService : Service() {
     private var floatingProbsOverlay: FrameLayout? = null
     private var probsJob: Job? = null
     private var floatingAdvisorOverlay: FrameLayout? = null
+    private var floatingScannerOverlay: ScannerBoxesView? = null
     private var advisorJob: Job? = null
     private var floatingOpponentsOverlay: FrameLayout? = null
     private var oppJob: Job? = null
@@ -122,6 +133,7 @@ class PokerHudService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        PokerHudSharedState.isHudOverlayRunning.value = true
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
     }
 
@@ -660,6 +672,7 @@ class PokerHudService : Service() {
         serviceScope.launch { PokerHudSharedState.showCommBox.collect { updateBoxOverlays() } }
         serviceScope.launch { PokerHudSharedState.showHoleBox.collect { updateBoxOverlays() } }
         serviceScope.launch { PokerHudSharedState.showProbsBox.collect { updateBoxOverlays() } }
+        serviceScope.launch { PokerHudSharedState.showScannerBoxes.collect { updateBoxOverlays() } }
 
         // 6. OBSERVE PROGRAMMATIC CONTROL COMMANDS VIA BROADCASTS (e.g. from Termux scripts)
         var backgroundSimulationJob: kotlinx.coroutines.Job? = null
@@ -804,6 +817,7 @@ class PokerHudService : Service() {
         if (PokerHudSharedState.showCommBox.value && !gameMode) showCommOverlay() else hideCommOverlay()
         if (PokerHudSharedState.showHoleBox.value && !gameMode) showHoleOverlay() else hideHoleOverlay()
         if (PokerHudSharedState.showProbsBox.value && !gameMode) showProbsOverlay() else hideProbsOverlay()
+        if (PokerHudSharedState.showScannerBoxes.value) showScannerOutlinesOverlay() else hideScannerOutlinesOverlay()
     }
 
     fun getCommRect(): android.graphics.Rect {
@@ -858,6 +872,48 @@ class PokerHudService : Service() {
                 laserLine.layoutParams = lp
             }
         }
+    }
+
+    private fun showScannerOutlinesOverlay() {
+        if (floatingScannerOverlay == null) {
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                android.graphics.PixelFormat.TRANSLUCENT
+            )
+            val view = ScannerBoxesView(this)
+            try {
+                windowManager?.addView(view, params)
+                floatingScannerOverlay = view
+            } catch (e: Exception) {
+                Log.e("PokerHudService", "Failed to add scanner outlines overlay view: ${e.message}", e)
+            }
+            
+            serviceScope.launch {
+                PokerHudSharedState.uiState.collect { state ->
+                    floatingScannerOverlay?.state = state
+                }
+            }
+            serviceScope.launch {
+                PokerHudSharedState.scannerOffsetX.collect { dx ->
+                    floatingScannerOverlay?.offsetX = dx
+                }
+            }
+            serviceScope.launch {
+                PokerHudSharedState.scannerOffsetY.collect { dy ->
+                    floatingScannerOverlay?.offsetY = dy
+                }
+            }
+        }
+        floatingScannerOverlay?.visibility = View.VISIBLE
+    }
+
+    private fun hideScannerOutlinesOverlay() {
+        floatingScannerOverlay?.visibility = View.GONE
     }
 
     private fun showCommOverlay() {
@@ -1000,7 +1056,7 @@ class PokerHudService : Service() {
         if (floatingHoleOverlay != null) return
 
         val params = WindowManager.LayoutParams(
-            dpToPx(120f),
+            dpToPx(85f),
             dpToPx(85f),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -1061,6 +1117,17 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4f))
         }
         content.addView(spacer)
+        
+        val txtCardsInfo = TextView(this).apply {
+            text = "SCANNING"
+            setTextColor(AndroidColor.WHITE)
+            textSize = 10f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            setShadowLayer(4f, 0f, 2f, AndroidColor.BLACK)
+        }
+        content.addView(txtCardsInfo)
 
         val laserLine = View(this).apply {
             setBackgroundColor(AndroidColor.parseColor("#FF00FFCC"))
@@ -1112,7 +1179,13 @@ class PokerHudService : Service() {
             }
             launch {
                 PokerHudSharedState.uiState.collect { state ->
-                    // Removed txtCardsInfo updates
+                    if (state.heroCard1 != null && state.heroCard2 != null) {
+                        txtCardsInfo.text = "${state.heroCard1.rank.symbol}${state.heroCard1.suit.symbol} ${state.heroCard2.rank.symbol}${state.heroCard2.suit.symbol}"
+                        txtCardsInfo.setTextColor(AndroidColor.parseColor("#4CAF50"))
+                    } else {
+                        txtCardsInfo.text = "NOT FOUND"
+                        txtCardsInfo.setTextColor(AndroidColor.GRAY)
+                    }
                 }
             }
         }
@@ -1299,7 +1372,7 @@ class PokerHudService : Service() {
                 val rec = state.recommendation
                 if (rec != null) {
                     val actName = rec.action.uppercase(Locale.US)
-                    txtAdvisor.text = "Advisor Strategy: $actName"
+                    txtAdvisor.text = "Advisor Strategy: $actName (Conf: ${String.format(Locale.US, "%.0f%%", rec.confidence)})"
                     when (actName) {
                         "FOLD" -> {
                             txtAdvisor.setTextColor(AndroidColor.parseColor("#FF90A4AE"))
@@ -1423,7 +1496,12 @@ class PokerHudService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        PokerHudSharedState.isHudOverlayRunning.value = false
         stopFloatingOverlay()
+        floatingScannerOverlay?.let { 
+            try { windowManager?.removeView(it) } catch(e: Exception){} 
+        }
+        floatingScannerOverlay = null
         ScannerConfig.activeProjection?.stop()
         ScannerConfig.activeProjection = null
         ScannerConfig.pendingProjectionData = null

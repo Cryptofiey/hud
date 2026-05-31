@@ -50,8 +50,7 @@ class PokerHudReceiver : BroadcastReceiver() {
                 val x = intent.getFloatExtra("x", -1f)
                 val y = intent.getFloatExtra("y", -1f)
                 if (x >= 0f && y >= 0f) {
-                    val ok = PokerAutomationService.clickAt(x, y)
-                    Log.d("PokerHudReceiver", "Click action dispatched for ($x, $y) result: $ok")
+                    Log.d("PokerHudReceiver", "Click action received for ($x, $y) but MCP integration is pending.")
                 } else {
                     Log.w("PokerHudReceiver", "Invalid or missing coordinates (x, y) for click.")
                 }
@@ -63,8 +62,7 @@ class PokerHudReceiver : BroadcastReceiver() {
                 val endY = intent.getFloatExtra("endY", -1f)
                 val duration = intent.getLongExtra("duration", 300L)
                 if (startX >= 0f && startY >= 0f && endX >= 0f && endY >= 0f) {
-                    val ok = PokerAutomationService.swipe(startX, startY, endX, endY, duration)
-                    Log.d("PokerHudReceiver", "Swipe action dispatched result: $ok")
+                    Log.d("PokerHudReceiver", "Swipe action received but MCP integration is pending.")
                 } else {
                     Log.w("PokerHudReceiver", "Invalid coordinates for swipe action.")
                 }

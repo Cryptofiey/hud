@@ -186,15 +186,6 @@ fun MainOverlayApp(
     // Quick explanations modal dialog
     var moreInfoTopic by remember { mutableStateOf<String?>(null) }
 
-    // Active status of the accessibility automation service
-    var isAccessibilityActive by remember { mutableStateOf(PokerAutomationService.isRunning()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            isAccessibilityActive = PokerAutomationService.isRunning()
-            delay(500)
-        }
-    }
-
     // Removed bridge because ViewModel uses shared state directly
     /* LaunchedEffect(pokerViewModel) removed */
 
@@ -290,7 +281,6 @@ fun MainOverlayApp(
                     onMoreInfoClicked = { moreInfoTopic = it },
                     uiState = uiState,
                     pokerViewModel = pokerViewModel,
-                    isAccessibilityActive = isAccessibilityActive,
                     onPlayClicked = {
                         val activity = context.findActivity() as? MainActivity
                         val ok = activity?.checkAndRequestOverlayPermission(context) ?: true
@@ -403,7 +393,6 @@ fun SettingsLayout(
     onMoreInfoClicked: (String) -> Unit,
     uiState: PokerUiState,
     pokerViewModel: PokerViewModel,
-    isAccessibilityActive: Boolean,
     onPlayClicked: () -> Unit
 ) {
     val context = LocalContext.current
@@ -445,42 +434,6 @@ fun SettingsLayout(
                     onDismissRequest = { optionsMenuExpanded = false },
                     modifier = Modifier.background(Color(0xFF2E2E2E))
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Activate HUD Overlay", color = Color.White, fontSize = 13.sp) },
-                        onClick = {
-                            optionsMenuExpanded = false
-                            val activity = context.findActivity() as? MainActivity
-                            val ok = activity?.checkAndRequestOverlayPermission(context) ?: true
-                            if (ok) {
-                                try {
-                                    val serviceIntent = Intent(context, PokerHudService::class.java)
-                                    ContextCompat.startForegroundService(context, serviceIntent)
-                                    Toast.makeText(context, "HUD Overlay Service Started", Toast.LENGTH_SHORT).show()
-                                } catch (e: Exception) {
-                                    Log.e("MainActivity", "Failed to start PokerHudService from menu: ${e.message}", e)
-                                    Toast.makeText(context, "Error starting HUD: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                            } else {
-                                Toast.makeText(context, "Please grant Overlay Permissions first!", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Stop HUD Overlay", color = Color.White, fontSize = 13.sp) },
-                        onClick = {
-                            optionsMenuExpanded = false
-                            try {
-                                val stopIntent = Intent(context, PokerHudService::class.java).apply {
-                                    action = "STOP_HUD"
-                                }
-                                context.startService(stopIntent)
-                                Toast.makeText(context, "HUD Overlay Service Stopped", Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) {
-                                Log.e("MainActivity", "Failed to stop PokerHudService: ${e.message}", e)
-                            }
-                        }
-                    )
-                    HorizontalDivider(color = Color(0x33FFFFFF))
                     DropdownMenuItem(
                         text = { Text("Accessibility clicker Settings", color = Color.White, fontSize = 13.sp) },
                         onClick = {
@@ -558,6 +511,43 @@ fun SettingsLayout(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    val isHudOverlayRunning by PokerHudSharedState.isHudOverlayRunning.collectAsStateWithLifecycle()
+                    
+                    SettingsToggleCard(
+                        title = "HUD Overlay",
+                        description = "Activate or Stop the floating HUD overlay over other apps.",
+                        checked = isHudOverlayRunning,
+                        onCheckedChange = { start -> 
+                            val activity = context.findActivity() as? MainActivity
+                            if (start) {
+                                val ok = activity?.checkAndRequestOverlayPermission(context) ?: true
+                                if (ok) {
+                                    try {
+                                        val serviceIntent = Intent(context, PokerHudService::class.java)
+                                        ContextCompat.startForegroundService(context, serviceIntent)
+                                        Toast.makeText(context, "HUD Overlay Service Started", Toast.LENGTH_SHORT).show()
+                                    } catch (e: Exception) {
+                                        Log.e("MainActivity", "Failed to start PokerHudService: ${e.message}", e)
+                                        Toast.makeText(context, "Error starting HUD: ${e.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Please grant Overlay Permissions first!", Toast.LENGTH_LONG).show()
+                                }
+                            } else {
+                                try {
+                                    val stopIntent = Intent(context, PokerHudService::class.java).apply {
+                                        action = "STOP_HUD"
+                                    }
+                                    context.startService(stopIntent)
+                                    Toast.makeText(context, "HUD Overlay Service Stopped", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Failed to stop PokerHudService: ${e.message}", e)
+                                }
+                            }
+                        },
+                        onMoreInfo = { onMoreInfoClicked("HUD Overlay controls and permissions") }
+                    )
+
                     // Option Card 1: Winning Probabilities
                     val winProbMaxHands by PokerHudSharedState.winProbMaxHands.collectAsStateWithLifecycle()
                     val winProbScale by PokerHudSharedState.winProbScale.collectAsStateWithLifecycle()
@@ -708,7 +698,7 @@ fun SettingsLayout(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .background(Color(0xFF0F0F0F))
-                            .border(BorderStroke(1.2.dp, Color(0xFF2196F3)), RoundedCornerShape(10.dp))
+                            .border(BorderStroke(1.2.dp, Color(0xFFFFB300)), RoundedCornerShape(10.dp))
                             .padding(14.dp)
                     ) {
                         Column {
@@ -723,15 +713,14 @@ fun SettingsLayout(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp
                                 )
-                                val isRunning = isAccessibilityActive
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(4.dp))
-                                        .background(if (isRunning) Color(0xFF2E7D32) else Color(0xFFC62828))
+                                        .background(Color(0xFF555555))
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = if (isRunning) "ACTIVE" else "DISABLED",
+                                        text = "MCP PLANNED",
                                         color = Color.White,
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold
@@ -740,65 +729,11 @@ fun SettingsLayout(
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Allows the background AI / Termux script to dispatch clicks and swipes on top of external poker tables for automated play.",
+                                text = "Awaiting MCP integration for Android Control. Background AI will dispatch clicks directly to the agent side.",
                                 color = Color(0xFFEEEEEE),
                                 fontSize = 11.sp,
                                 lineHeight = 15.sp
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            
-                            // Restricted Settings Guide
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFFFFB300).copy(alpha = 0.12f))
-                                    .border(BorderStroke(1.dp, Color(0xFFFFB300)), RoundedCornerShape(8.dp))
-                                    .padding(10.dp)
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "⚠️ РЕШЕНИЕ: Доступ ограничен / Restricted Setting",
-                                        color = Color(0xFFFFB300),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Если кнопка включения серая и Android пишет 'Доступ ограничен':\n\n" +
-                                                "1. Откройте системные Настройки ➔ Приложения ➔ Poker Equity HUD.\n" +
-                                                "2. В правом верхнем углу нажмите три точки (меню).\n" +
-                                                "3. Выберите 'Разрешить ограниченные настройки' (Allow restricted settings) и введите PIN.\n" +
-                                                "4. Снова откройте спец. возможности — теперь кнопку можно нажать!",
-                                        color = Color(0xFFE0E0E0),
-                                        fontSize = 11.sp,
-                                        lineHeight = 15.sp
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Button(
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isAccessibilityActive) Color(0xFF37474F) else Color(0xFF2196F3)
-                                ),
-                                shape = RoundedCornerShape(6.dp),
-                                onClick = {
-                                    try {
-                                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, "Could not open Accessibility settings dynamically. Please open settings manually and enable 'Poker HUD Automated Clicker'.", Toast.LENGTH_LONG).show()
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth().height(36.dp)
-                            ) {
-                                Text(
-                                    text = if (isAccessibilityActive) "RECONFIGURE SERVICE" else "ACTIVATE AUTOMATION SERVICE",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
                         }
                     }
 
@@ -852,8 +787,12 @@ fun SettingsLayout(
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(if (opp.nickname.isNotEmpty()) opp.nickname else "Empty Seed", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        val vpip = opp.stats?.histVpip ?: opp.stats?.vpip ?: 0f
+                                        val pfr = opp.stats?.histPfr ?: opp.stats?.pfr ?: 0f
+                                        val wtsd = opp.stats?.histWtsd ?: 0f
+                                        val wsd = opp.stats?.histWsd ?: 0f
                                         Text(
-                                            "VPIP: ${String.format(Locale.US, "%.0f", opp.stats?.vpip ?: 0f)}% | PFR: ${String.format(Locale.US, "%.0f", opp.stats?.pfr ?: 0f)}% | Hands: ${opp.stats?.handsPlayed ?: 0}",
+                                            "General Profile - VPIP: ${String.format(Locale.US, "%.0f", vpip)}% | PFR: ${String.format(Locale.US, "%.0f", pfr)}% | WTSD: ${String.format(Locale.US, "%.0f", wtsd)}% | WSD: ${String.format(Locale.US, "%.0f", wsd)}%",
                                             color = Color.LightGray,
                                             fontSize = 9.sp
                                         )
@@ -864,6 +803,10 @@ fun SettingsLayout(
                     }
 
                     // Sklansky Group distribution preview of current cards
+                    // Scanner Fine-Tuning Box
+                    val showScannerBoxes by PokerHudSharedState.showScannerBoxes.collectAsStateWithLifecycle()
+                    val scannerOffsetX by PokerHudSharedState.scannerOffsetX.collectAsStateWithLifecycle()
+                    val scannerOffsetY by PokerHudSharedState.scannerOffsetY.collectAsStateWithLifecycle()
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -873,53 +816,52 @@ fun SettingsLayout(
                             .padding(12.dp)
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = "Starting cards hand class",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            if (uiState.heroCard1 != null && uiState.heroCard2 != null) {
-                                val groupNum = AdvisorEngine.getSklanskyGroup(uiState.heroCard1!!, uiState.heroCard2!!)
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFD82229)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("G$groupNum", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                    }
-                                    Column {
-                                        Text(
-                                            text = "Sklansky Hold'em Hand Category $groupNum",
-                                            fontSize = 12.sp,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        val tierText = when (groupNum) {
-                                            1, 2 -> "Premium Tier starting card power. Maximizing call and raise equity."
-                                            3, 4, 5 -> "Medium strength holdings. Playable drawing potential from BTN/CO."
-                                            else -> "Marginal category starting combo. Caution requested across early seats."
-                                        }
-                                        Text(tierText, fontSize = 10.sp, color = Color.LightGray)
-                                    }
-                                }
-                            } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = "Assign starting hole cards inside the HUD overlay to trace automatic Sklansky strength classifications.",
-                                    fontSize = 11.sp,
-                                    color = Color.LightGray
+                                    text = "Scanner Fine-Tuning",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Switch(
+                                    checked = showScannerBoxes,
+                                    onCheckedChange = { PokerHudSharedState.showScannerBoxes.value = it },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = Color(0xFFD82229)
+                                    )
                                 )
                             }
+                            Text(
+                                "Toggle colored outlines for detected player profile boxes on-screen.",
+                                fontSize = 11.sp, color = Color.LightGray
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Horizontal Offset (X): ${scannerOffsetX.toInt()}", color = Color.White, fontSize = 11.sp)
+                            Slider(
+                                value = scannerOffsetX,
+                                onValueChange = { PokerHudSharedState.scannerOffsetX.value = it },
+                                valueRange = -100f..100f,
+                                modifier = Modifier.height(24.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Vertical Offset (Y): ${scannerOffsetY.toInt()}", color = Color.White, fontSize = 11.sp)
+                            Slider(
+                                value = scannerOffsetY,
+                                onValueChange = { PokerHudSharedState.scannerOffsetY.value = it },
+                                valueRange = -100f..100f,
+                                modifier = Modifier.height(24.dp)
+                            )
                         }
                     }
 
-                    // Performance & Accuracy configurations
+                    // Advisor Filters configurations
+                    val useVpipPfrFilter by PokerHudSharedState.useVpipPfrFilter.collectAsStateWithLifecycle()
+                    val useWsdWtsdFilter by PokerHudSharedState.useWsdWtsdFilter.collectAsStateWithLifecycle()
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -930,27 +872,38 @@ fun SettingsLayout(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
-                                text = "Solver Monte Carlo fidelity",
+                                text = "Advisor Advanced Filters",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
                             )
+                            Text(
+                                "Toggle historical data streams into Advisor Engine metrics.",
+                                fontSize = 11.sp, color = Color.LightGray
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Incorporate VPIP/PFR Historical Data", color = Color.White, fontSize = 12.sp)
+                                Switch(
+                                    checked = useVpipPfrFilter,
+                                    onCheckedChange = { PokerHudSharedState.useVpipPfrFilter.value = it },
+                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFD82229))
+                                )
+                            }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                listOf(1500, 3000, 5000).forEach { size ->
-                                    val isSelected = uiState.simulationSize == size
-                                    Button(
-                                        modifier = Modifier.weight(1f),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (isSelected) Color(0xFFD82229) else Color(0xFF1E1E1E)
-                                        ),
-                                        onClick = { pokerViewModel.changeSimulationSize(size) }
-                                    ) {
-                                        Text("${size} runs", fontSize = 11.sp, color = Color.White)
-                                    }
-                                }
+                                Text("Incorporate WSD/WTSD Post-flop Data", color = Color.White, fontSize = 12.sp)
+                                Switch(
+                                    checked = useWsdWtsdFilter,
+                                    onCheckedChange = { PokerHudSharedState.useWsdWtsdFilter.value = it },
+                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFD82229))
+                                )
                             }
                         }
                     }
