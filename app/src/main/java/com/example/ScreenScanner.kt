@@ -29,7 +29,8 @@ import kotlinx.coroutines.tasks.await
 class ScreenScanner(
     private val pokerHudService: PokerHudService,
     private val resultData: Intent,
-    private val resultCode: Int
+    private val resultCode: Int,
+    private val stopAfterProfileScan: Boolean = false
 ) {
     private val context: Context = pokerHudService
     private var mediaProjection: MediaProjection? = null
@@ -40,6 +41,7 @@ class ScreenScanner(
     private val scope = CoroutineScope(Dispatchers.Default + Job())
     private var scanJob: Job? = null
     
+    var requestProfileScan = stopAfterProfileScan // if true initially, immediately run profile scan
     val isScanning = MutableStateFlow(false)
     val scanStatus = MutableStateFlow("Scanner idle.")
 
@@ -232,25 +234,41 @@ class ScreenScanner(
                 val scannedOpponents = OpponentScanner.scan(result, cleanBitmap)
                 val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
 
-                val scannedProfile = ProfileScanner.scan(result, cleanBitmap)
-                if (scannedProfile != null && scannedProfile.nickname != "Unknown_Profile") {
-                    val prefsManager = PreferencesManager(pokerHudService)
-                    val existing = prefsManager.loadPlayerStats(scannedProfile.nickname)
-                    val updated = existing.copy(
-                        histVpip = scannedProfile.histVpip ?: existing.histVpip,
-                        histPfr = scannedProfile.histPfr ?: existing.histPfr,
-                        hist3Bet = scannedProfile.hist3Bet ?: existing.hist3Bet,
-                        histFoldTo3Bet = scannedProfile.histFoldTo3Bet ?: existing.histFoldTo3Bet,
-                        histCBet = scannedProfile.histCBet ?: existing.histCBet,
-                        histFoldToCBet = scannedProfile.histFoldToCBet ?: existing.histFoldToCBet,
-                        histSteal = scannedProfile.histSteal ?: existing.histSteal,
-                        histCheckRaise = scannedProfile.histCheckRaise ?: existing.histCheckRaise,
-                        histWtsd = scannedProfile.histWtsd ?: existing.histWtsd,
-                        histWsd = scannedProfile.histWsd ?: existing.histWsd
-                    )
-                    prefsManager.savePlayerStats(updated)
+                if (requestProfileScan) {
+                    val scannedProfile = ProfileScanner.scan(result, cleanBitmap)
+                    if (scannedProfile != null && scannedProfile.nickname != "Unknown_Profile") {
+                        val prefsManager = PreferencesManager(pokerHudService)
+                        val existing = prefsManager.loadPlayerStats(scannedProfile.nickname)
+                        val updated = existing.copy(
+                            histVpip = scannedProfile.histVpip ?: existing.histVpip,
+                            histPfr = scannedProfile.histPfr ?: existing.histPfr,
+                            hist3Bet = scannedProfile.hist3Bet ?: existing.hist3Bet,
+                            histFoldTo3Bet = scannedProfile.histFoldTo3Bet ?: existing.histFoldTo3Bet,
+                            histCBet = scannedProfile.histCBet ?: existing.histCBet,
+                            histFoldToCBet = scannedProfile.histFoldToCBet ?: existing.histFoldToCBet,
+                            histSteal = scannedProfile.histSteal ?: existing.histSteal,
+                            histCheckRaise = scannedProfile.histCheckRaise ?: existing.histCheckRaise,
+                            histWtsd = scannedProfile.histWtsd ?: existing.histWtsd,
+                            histWsd = scannedProfile.histWsd ?: existing.histWsd
+                        )
+                        prefsManager.savePlayerStats(updated)
+                        
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            android.widget.Toast.makeText(context, "Profile parsed for ${scannedProfile.nickname}", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            android.widget.Toast.makeText(context, "Failed to parse Profile", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    requestProfileScan = false
+                    
+                    if (stopAfterProfileScan) {
+                        stop()
+                        return
+                    }
                 }
-                
+
                 scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} (${commW},${holeW})<br>" +
                                    "Opps: ${finalOpponents.size}<br>" +
                                    "Board: ${finalBoard.joinToString("") { it?.toHtmlString() ?: "[?]" }}"

@@ -126,9 +126,11 @@ class PokerHudService : Service() {
 
     // Multi-Data Scanner fields
     private var txtScannerStatus: TextView? = null
-    private var txtScanPhase: TextView? = null
     private var scannerStatusBox: LinearLayout? = null
     private var txtPreText: TextView? = null
+    private var togglesRow1: LinearLayout? = null
+    private var togglesRow2: LinearLayout? = null
+    private var togglesRow3: LinearLayout? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -401,7 +403,7 @@ class PokerHudService : Service() {
         scannerStatusBox = scannerBoxLocal
 
         val scannerTxt = TextView(this).apply {
-            text = "🔍 SCREEN SCANNER: WAITING..."
+            text = "🔍 🔴 Stage/Board: Waiting..."
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
             textSize = 9f
             typeface = Typeface.DEFAULT_BOLD
@@ -410,58 +412,100 @@ class PokerHudService : Service() {
         txtScannerStatus = scannerTxt
         scannerBoxLocal.addView(scannerTxt)
         
-        val scanPhaseTxt = TextView(this).apply {
-            text = "Scan Phase: Idle"
-            setTextColor(AndroidColor.parseColor("#9900FFCC"))
-            textSize = 8f
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        }
-        txtScanPhase = scanPhaseTxt
-        scannerBoxLocal.addView(scanPhaseTxt)
-        
         expanded.addView(scannerBoxLocal)
 
-        // PRESET STAGE INJECTORS
+        // OVERLAY TOGGLES
         val injectorTitleText = TextView(this).apply {
-            text = "INJECT DECK PRESET"
+            text = "OVERLAY TOGGLES"
             setTextColor(AndroidColor.LTGRAY)
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             setPadding(0, dpToPx(4f), 0, dpToPx(4f))
         }
-        txtPreText = injectorTitleText
         expanded.addView(injectorTitleText)
 
-        val presetButtonsRow = LinearLayout(this).apply {
+        val toggles1 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
+        this.togglesRow1 = toggles1
+        val commCheckBox = android.widget.CheckBox(this).apply {
+            text = "Comm"
+            textSize = 8f
+            setTextColor(AndroidColor.WHITE)
+            isChecked = PokerHudSharedState.showCommBox.value
+            setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showCommBox.value = isChecked }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val holeCheckBox = android.widget.CheckBox(this).apply {
+            text = "Hole"
+            textSize = 8f
+            setTextColor(AndroidColor.WHITE)
+            isChecked = PokerHudSharedState.showHoleBox.value
+            setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showHoleBox.value = isChecked }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        toggles1.addView(commCheckBox)
+        toggles1.addView(holeCheckBox)
+        expanded.addView(toggles1)
 
-        val stages = listOf("Pre-flop", "Flop", "Turn", "River")
-        for (stg in stages) {
-            val btn = Button(this, null, 0, android.R.style.Widget_Button).apply {
-                text = stg.split("-")[0].uppercase(Locale.US)
-                textSize = 8f
-                setTextColor(AndroidColor.WHITE)
-                background = createBackgroundDrawable(AndroidColor.parseColor("#FF1976D2"), 4f)
-                setPadding(dpToPx(4f), 0, dpToPx(4f), 0)
-                val params = LinearLayout.LayoutParams(0, dpToPx(28f), 1f).apply {
-                    setMargins(dpToPx(2f), 0, dpToPx(2f), 0)
-                }
-                layoutParams = params
-            }
-            btn.setOnClickListener {
-                serviceScope.launch {
-                    PokerHudSharedState.triggerPreset.emit(stg)
-                }
-            }
-            presetButtonsRow.addView(btn)
+        val toggles2 = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
-        expanded.addView(presetButtonsRow)
+        this.togglesRow2 = toggles2
+        val probsCheckBox = android.widget.CheckBox(this).apply {
+            text = "Probs"
+            textSize = 8f
+            setTextColor(AndroidColor.WHITE)
+            isChecked = PokerHudSharedState.showProbsBox.value
+            setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showProbsBox.value = isChecked }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val scannerCheckBox = android.widget.CheckBox(this).apply {
+            text = "Scan"
+            textSize = 8f
+            setTextColor(AndroidColor.WHITE)
+            isChecked = PokerHudSharedState.showScannerBoxes.value
+            setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showScannerBoxes.value = isChecked }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        toggles2.addView(probsCheckBox)
+        toggles2.addView(scannerCheckBox)
+        expanded.addView(toggles2)
+
+        val toggles3 = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            setPadding(0, dpToPx(4f), 0, dpToPx(4f))
+        }
+        this.togglesRow3 = toggles3
+        val readProfileBtn = Button(this, null, 0, android.R.style.Widget_Button).apply {
+            text = "READ PROFILE STATS"
+            textSize = 8f
+            setTextColor(AndroidColor.WHITE)
+            background = createBackgroundDrawable(AndroidColor.parseColor("#FF1976D2"), 4f)
+            setPadding(dpToPx(4f), 0, dpToPx(4f), 0)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(28f))
+        }
+        readProfileBtn.setOnClickListener {
+            if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
+                if (screenScanner != null) {
+                    screenScanner?.requestProfileScan = true
+                } else {
+                    startForegroundServiceNotification()
+                    val tempScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode, stopAfterProfileScan = true)
+                    tempScanner.start()
+                }
+            } else {
+                android.widget.Toast.makeText(this@PokerHudService, "Enable Screen Projection first", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+        toggles3.addView(readProfileBtn)
+        expanded.addView(toggles3)
 
         parentFrame.addView(expanded)
 
@@ -587,18 +631,15 @@ class PokerHudService : Service() {
                 sendBroadcast(bIntent)
 
                 val oppsCount = state.opponents.count { it.isActive }
-                val activeScannerStr = if (PokerHudSharedState.multiDataScannerToggle.value) "ACTIVE" else "INACTIVE"
+                val activeScannerStr = if (PokerHudSharedState.multiDataScannerToggle.value) "🟢" else "🔴"
                 val boardStr = if (state.board.all { it == null }) "Pre-flop" else bRaw
-                txtScannerStatus?.text = "🔍 SCREEN SCANNER: $activeScannerStr\n" +
-                        "Stage/Board: $boardStr\n" +
+                txtScannerStatus?.text = "🔍 $activeScannerStr Stage/Board: $boardStr\n" +
                         "Opponents: $oppsCount tracked\n" +
                         "Hero: $h1Raw $h2Raw"
             }
         }
 
         // 5b. LISTEN TO COUPLING SETTINGS CHECKBOXES DYNAMIC FLOWS
-        var scannerStatusJob: kotlinx.coroutines.Job? = null
-
         serviceScope.launch {
             PokerHudSharedState.multiDataScannerToggle.collect { checked ->
                 scannerStatusBox?.visibility = if (checked) View.VISIBLE else View.GONE
@@ -606,17 +647,9 @@ class PokerHudService : Service() {
                     startForegroundServiceNotification()
                     screenScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode)
                     screenScanner?.start()
-                    
-                    scannerStatusJob?.cancel()
-                    scannerStatusJob = launch {
-                        screenScanner?.scanStatus?.collect { status ->
-                            txtScanPhase?.text = android.text.Html.fromHtml("Scan Phase: $status", android.text.Html.FROM_HTML_MODE_LEGACY)
-                        }
-                    }
                 } else if (!checked) {
                     screenScanner?.stop()
                     screenScanner = null
-                    scannerStatusJob?.cancel()
                 }
             }
         }
@@ -627,13 +660,6 @@ class PokerHudService : Service() {
                     startForegroundServiceNotification()
                     screenScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode)
                     screenScanner?.start()
-                    
-                    scannerStatusJob?.cancel()
-                    scannerStatusJob = launch {
-                        screenScanner?.scanStatus?.collect { status ->
-                            txtScanPhase?.text = android.text.Html.fromHtml("Scan Phase: $status", android.text.Html.FROM_HTML_MODE_LEGACY)
-                        }
-                    }
                 }
             }
         }
@@ -674,7 +700,9 @@ class PokerHudService : Service() {
                 val visibilityMode = if (gameMode) View.GONE else View.VISIBLE
                 headerRow.visibility = visibilityMode
                 divider1.visibility = visibilityMode
-                presetButtonsRow.visibility = visibilityMode
+                togglesRow1?.visibility = visibilityMode
+                togglesRow2?.visibility = visibilityMode
+                togglesRow3?.visibility = visibilityMode
                 txtPreText?.visibility = visibilityMode
 
                 // Scanner status is completely hidden in game play to not draw any blocks on screen

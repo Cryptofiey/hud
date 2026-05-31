@@ -24,13 +24,7 @@ object ProfileScanner {
         }
         
         // Ensure it looks like a profile screen
-        if (!hasProfile || (!hasVpip && !hasPfr)) return null
-        
-        // Nickname is typically right below "Profile" or has a diamond symbol next to it.
-        // It's tricky to parse. Let's look for "VPIP" and "PFR" and the percentages before them.
-        // Profile text layout often contains: 
-        // 60% VPIP
-        // 25% PFR
+        if (!hasVpip || !hasPfr) return null
         
         // Let's create a map to hold the extracted values
         var vpip: Float? = null
@@ -44,21 +38,32 @@ object ProfileScanner {
         var wtsd: Float? = null
         var wsd: Float? = null
         
-        // The nickname is mostly at the top below "Profile"
+        // The nickname is usually the first or second word on the screen above "Game Stats" or the stack size
         var nickname = ""
+        var gameStatsIdx = -1
         
-        var profileIdx = -1
         for (i in lines.indices) {
             val line = lines[i]
-            if (line.equals("Profile", ignoreCase = true)) {
-                profileIdx = i
+            if (line.contains("Game Stats", ignoreCase = true)) {
+                gameStatsIdx = i
             }
-            if (profileIdx != -1 && i > profileIdx && i < profileIdx + 5) {
-                // Often the nickname is the next substantial word
-                if (line.length > 2 && !line.contains("%") && !line.contains("Game") && nickname.isEmpty()) {
-                    nickname = line
+        }
+        
+        // Try to find the nickname above "Game Stats"
+        if (gameStatsIdx != -1) {
+            for (i in maxOf(0, gameStatsIdx - 5) until gameStatsIdx) {
+                val text = lines[i]
+                // usually nickname is a single word or accompanied by device icon, avoid numbers (like stack)
+                if (text.length >= 3 && !text.contains("%") && !text.contains("BB", ignoreCase=true) && !text.any { it.isDigit() && text.length < 4 }) {
+                    if (nickname.isEmpty()) {
+                        nickname = text.split(" ")[0] // take first part before any other badges
+                    }
                 }
             }
+        }
+        
+        for (i in lines.indices) {
+            val line = lines[i]
             
             // Extract percentages. To be safe, we also extract percentage based on surrounding labels
             if (line.contains("VPIP", ignoreCase = true)) vpip = extractPercentAboveOrNear(lines, i) ?: extractPercentInLine(line)

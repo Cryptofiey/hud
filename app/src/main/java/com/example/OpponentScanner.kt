@@ -11,10 +11,23 @@ enum class PlayerAction {
 
 object OpponentScanner {
 
+    private data class TrackedAnchor(
+        var boundingBox: Rect,
+        var nickname: String,
+        var consecutiveMisses: Int = 0
+    )
+
+    private val trackedAnchors = mutableListOf<TrackedAnchor>()
+
     private fun isValidPlayerName(name: String): Boolean {
         val upper = name.trim().uppercase()
         if (upper.isEmpty()) return false
         if (upper == "UNKNOWN") return false
+        if (upper.length < 2 || upper.length > 20) return false
+        
+        // Ensure it doesn't have too many weird symbols
+        val validCharCount = name.count { it.isLetterOrDigit() || it == '-' || it == '_' || it == ' ' }
+        if (validCharCount < name.length * 0.6) return false
         
         // Skip action keywords and HUD strings
         val actions = setOf(
@@ -22,12 +35,12 @@ object OpponentScanner {
             "DEALER", "PASS", "SIT OUT", "SIT-OUT", "SITOUT", "CHOICE", "CHIPS",
             "FOLDED", "POKER", "EQUITY", "HUD", "OVERLAY", "COMMUNITY", "CARDS", 
             "HOLE", "SCAN", "PHASE", "OUTS", "WINNING", "NLH", "JOIN", "SIMILAR",
-            "PRE", "FLOP", "TURN", "RIVER", "BOARD", "BACK"
+            "PRE", "FLOP", "TURN", "RIVER", "BOARD", "BACK", "MUCK"
         )
         if (upper in actions) return false
         
         for (action in actions) {
-            if (upper.contains(action)) return false
+            if (upper.contains(action) && action.length >= 4) return false
         }
         
         // Skip clocks (e.g. "3:03") and paths / strings with special chars like : or /
@@ -40,7 +53,7 @@ object OpponentScanner {
     }
 
     fun scan(result: Text, cleanBitmap: Bitmap): List<OpponentState> {
-        val opponents = mutableListOf<OpponentState>()
+        val candidates = mutableListOf<OpponentState>()
         val blocks = result.textBlocks
 
         val height = cleanBitmap.height
@@ -145,7 +158,7 @@ object OpponentScanner {
                 }
             }
 
-            opponents.add(OpponentState(
+            candidates.add(OpponentState(
                 id = oppId++,
                 nickname = nameText,
                 stackSize = stackValue, // 0 if not found, still useful to track opponent
@@ -156,6 +169,60 @@ object OpponentScanner {
             ))
         }
 
-        return opponents
+        val finalOpponents = mutableListOf<OpponentState>()
+        val matchedCandidates = mutableSetOf<OpponentState>()
+
+        val iterator = trackedAnchors.iterator()
+        while (iterator.hasNext()) {
+            val anchor = iterator.next()
+            
+            // Allow some movement
+            val anchorRadius = 250.0
+            
+            val bestCandidate = candidates.firstOrNull { 
+                Rect.intersects(it.boundingBox!!, anchor.boundingBox) || 
+                Math.hypot((it.boundingBox!!.centerX() - anchor.boundingBox.centerX()).toDouble(), 
+                           (it.boundingBox!!.centerY() - anchor.boundingBox.centerY()).toDouble()) < anchorRadius
+            }
+
+            if (bestCandidate != null) {
+                matchedCandidates.add(bestCandidate)
+                anchor.consecutiveMisses = 0
+                
+                // Slowly adapt bounding box
+                anchor.boundingBox.union(bestCandidate.boundingBox!!)
+                
+                // Allow name update if the new name is valid, but anchor provides stability
+                anchor.nickname = bestCandidate.nickname
+                
+                finalOpponents.add(bestCandidate.copy(nickname = anchor.nickname, boundingBox = anchor.boundingBox))
+            } else {
+                anchor.consecutiveMisses++
+                if (anchor.consecutiveMisses > 4) {
+                    iterator.remove() // Player left, or we missed them too many times
+                } else {
+                    // Remember them for a few frames
+                    finalOpponents.add(OpponentState(
+                        id = 0,
+                        nickname = anchor.nickname,
+                        stackSize = 0,
+                        isActive = true,
+                        isRandom = true,
+                        currentAction = "NONE",
+                        boundingBox = anchor.boundingBox
+                    ))
+                }
+            }
+        }
+
+        for (candidate in candidates) {
+            if (candidate !in matchedCandidates) {
+                val newAnchor = TrackedAnchor(candidate.boundingBox!!, candidate.nickname, 0)
+                trackedAnchors.add(newAnchor)
+                finalOpponents.add(candidate)
+            }
+        }
+
+        return finalOpponents.mapIndexed { i, opp -> opp.copy(id = i + 1) }
     }
 }
