@@ -11,6 +11,27 @@ enum class PlayerAction {
 
 object OpponentScanner {
 
+    private fun isValidPlayerName(name: String): Boolean {
+        val upper = name.trim().uppercase()
+        if (upper.isEmpty()) return false
+        if (upper == "UNKNOWN") return false
+        
+        // Skip action keywords
+        val actions = setOf(
+            "FOLD", "CALL", "RAISE", "CHECK", "ALL-IN", "ALL IN", "BET", "POT", 
+            "DEALER", "PASS", "SIT OUT", "SIT-OUT", "SITOUT", "CHOICE", "CHIPS"
+        )
+        if (upper in actions) return false
+        
+        // Skip clocks (e.g. "3:03") and paths / strings with special chars like : or /
+        if (name.contains(":") || name.contains("/")) return false
+        
+        // Skip purely numeric names (since those might be bet sizes or blinds)
+        if (upper.all { it.isDigit() || it == ',' || it == '.' || it == '$' || it == 'K' || it == 'M' }) return false
+        
+        return true
+    }
+
     fun scan(result: Text, cleanBitmap: Bitmap): List<OpponentState> {
         val opponents = mutableListOf<OpponentState>()
         val blocks = result.textBlocks
@@ -41,9 +62,9 @@ object OpponentScanner {
                 val isAbove = box.bottom <= chipBox.top + 20 && box.bottom > chipBox.top - 100
                 val isAlignedHorizontally = Math.abs(box.centerX() - chipBox.centerX()) < 100
                 
-                if (isAbove && isAlignedHorizontally) {
+                if (isAbove && isAlignedHorizontally && isValidPlayerName(block.text)) {
                     nameBox = box
-                    nameText = block.text
+                    nameText = block.text.trim()
                     break
                 }
             }
@@ -113,7 +134,8 @@ object OpponentScanner {
                 nickname = nameText,
                 stackSize = stackValue,
                 isActive = detectedAction != PlayerAction.FOLD && detectedAction != PlayerAction.SIT_OUT,
-                isRandom = true
+                isRandom = true,
+                currentAction = detectedAction.name
             ))
         }
 

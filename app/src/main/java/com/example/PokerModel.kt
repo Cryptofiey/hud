@@ -65,7 +65,8 @@ data class OpponentState(
     val nickname: String = "Player $id",
     val betSize: Int = 0,
     val stackSize: Int = 1000,
-    val stats: PlayerStats? = null
+    val stats: PlayerStats? = null,
+    val currentAction: String = "NONE"
 )
 
 data class SimulationResult(

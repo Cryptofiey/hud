@@ -64,8 +64,6 @@ object PokerHudSharedState {
     val showCommBox = MutableStateFlow(true)
     val showHoleBox = MutableStateFlow(true)
     val showProbsBox = MutableStateFlow(true)
-    val showAdvisorBox = MutableStateFlow(true)
-    val showOpponentsBox = MutableStateFlow(true)
     val isScanning = MutableStateFlow(false)
     // Modules basic settings
     val winProbScale = MutableStateFlow(1f)
@@ -104,6 +102,12 @@ class PokerHudService : Service() {
     private var floatingOpponentsOverlay: FrameLayout? = null
     private var oppJob: Job? = null
     private var screenScanner: ScreenScanner? = null
+
+    // Automated VPIP/PFR hand tracking state definitions
+    private var lastHandKey: String? = null
+    private val countedHandPlayers = mutableSetOf<String>()
+    private val countedVpipPlayers = mutableSetOf<String>()
+    private val countedPfrPlayers = mutableSetOf<String>()
 
     // Layout components
     private var expandedLayout: LinearLayout? = null
@@ -171,20 +175,23 @@ class PokerHudService : Service() {
                 
                 if (PokerHudSharedState.multiDataScannerToggle.value && ScannerConfig.pendingProjectionData != null) {
                     type = type or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-                    try {
-                        if (ScannerConfig.activeProjection == null) {
-                            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
-                            ScannerConfig.activeProjection = projectionManager.getMediaProjection(ScannerConfig.pendingProjectionResultCode, ScannerConfig.pendingProjectionData!!)
-                        }
-                    } catch(e: Exception) {
-                        android.util.Log.e("PokerHudService", "Failed to getMediaProjection before startForeground", e)
-                    }
                 }
                 
                 if (type == 0) {
                     startForeground(717, notification)
                 } else {
                     startForeground(717, notification, type)
+                }
+
+                if (PokerHudSharedState.multiDataScannerToggle.value && ScannerConfig.pendingProjectionData != null) {
+                    try {
+                        if (ScannerConfig.activeProjection == null) {
+                            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                            ScannerConfig.activeProjection = projectionManager.getMediaProjection(ScannerConfig.pendingProjectionResultCode, ScannerConfig.pendingProjectionData!!)
+                        }
+                    } catch(e: Exception) {
+                        android.util.Log.e("PokerHudService", "Failed to getMediaProjection", e)
+                    }
                 }
             } else {
                 startForeground(717, notification)
@@ -653,8 +660,6 @@ class PokerHudService : Service() {
         serviceScope.launch { PokerHudSharedState.showCommBox.collect { updateBoxOverlays() } }
         serviceScope.launch { PokerHudSharedState.showHoleBox.collect { updateBoxOverlays() } }
         serviceScope.launch { PokerHudSharedState.showProbsBox.collect { updateBoxOverlays() } }
-        serviceScope.launch { PokerHudSharedState.showAdvisorBox.collect { updateBoxOverlays() } }
-        serviceScope.launch { PokerHudSharedState.showOpponentsBox.collect { updateBoxOverlays() } }
 
         // 6. OBSERVE PROGRAMMATIC CONTROL COMMANDS VIA BROADCASTS (e.g. from Termux scripts)
         var backgroundSimulationJob: kotlinx.coroutines.Job? = null
@@ -663,14 +668,74 @@ class PokerHudService : Service() {
                 if (action is ExternalAction.UpdateCards) {
                     val currentState = PokerHudSharedState.uiState.value
                     val newBoard = action.board.take(5) + List(maxOf(0, 5 - action.board.size)) { null }
-                    if (currentState.heroCard1 == action.hero1 && currentState.heroCard2 == action.hero2 && currentState.board == newBoard && currentState.opponents == action.opponents) {
+                    
+                    val prefs = PreferencesManager(this@PokerHudService)
+
+                    // Automated tracking of hands, VPIP and PFR
+                    val heroCardsString = "${action.hero1?.toString() ?: "Empty"}_${action.hero2?.toString() ?: "Empty"}"
+                    if (heroCardsString != "Empty_Empty" && heroCardsString != lastHandKey) {
+                        lastHandKey = heroCardsString
+                        countedHandPlayers.clear()
+                        countedVpipPlayers.clear()
+                        countedPfrPlayers.clear()
+                    }
+
+                    if (action.opponents.isNotEmpty()) {
+                        val isPreflop = newBoard.all { it == null }
+                        for (opponent in action.opponents) {
+                            val name = opponent.nickname
+                            if (name.isNotEmpty() && name != "Unknown") {
+                                // 1. Increment Hands Played
+                                if (!countedHandPlayers.contains(name)) {
+                                    countedHandPlayers.add(name)
+                                    val stats = prefs.loadPlayerStats(name)
+                                    prefs.savePlayerStats(stats.copy(handsPlayed = stats.handsPlayed + 1))
+                                }
+
+                                // 2. Track Pre-flop Actions (VPIP & PFR)
+                                if (isPreflop) {
+                                    val act = opponent.currentAction
+                                    if (act == "RAISE" || act == "ALL_IN") {
+                                        if (!countedPfrPlayers.contains(name)) {
+                                            countedPfrPlayers.add(name)
+                                            val stats = prefs.loadPlayerStats(name)
+                                            prefs.savePlayerStats(stats.copy(pfrCount = stats.pfrCount + 1))
+                                        }
+                                    }
+                                    if (act == "CALL" || act == "RAISE" || act == "ALL_IN") {
+                                        if (!countedVpipPlayers.contains(name)) {
+                                            countedVpipPlayers.add(name)
+                                            val stats = prefs.loadPlayerStats(name)
+                                            prefs.savePlayerStats(stats.copy(vpipCount = stats.vpipCount + 1))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Dynamically map opponents with real-time up-to-date stats
+                    val finalOpponentsList = if (action.opponents.isNotEmpty()) {
+                        action.opponents.map { opp ->
+                            val dbStats = prefs.loadPlayerStats(opp.nickname)
+                            opp.copy(stats = dbStats)
+                        }
+                    } else {
+                        currentState.opponents.map { opp ->
+                            val dbStats = prefs.loadPlayerStats(opp.nickname)
+                            opp.copy(stats = dbStats)
+                        }
+                    }
+
+                    if (currentState.heroCard1 == action.hero1 && currentState.heroCard2 == action.hero2 && currentState.board == newBoard && currentState.opponents == finalOpponentsList) {
                         return@collect
                     }
+
                     val updatedState = currentState.copy(
                         heroCard1 = action.hero1,
                         heroCard2 = action.hero2,
                         board = newBoard,
-                        opponents = if (action.opponents.isNotEmpty()) action.opponents else currentState.opponents
+                        opponents = finalOpponentsList
                     )
                     PokerHudSharedState.uiState.value = updatedState
                     
@@ -739,8 +804,6 @@ class PokerHudService : Service() {
         if (PokerHudSharedState.showCommBox.value && !gameMode) showCommOverlay() else hideCommOverlay()
         if (PokerHudSharedState.showHoleBox.value && !gameMode) showHoleOverlay() else hideHoleOverlay()
         if (PokerHudSharedState.showProbsBox.value && !gameMode) showProbsOverlay() else hideProbsOverlay()
-        if (PokerHudSharedState.showAdvisorBox.value && !gameMode) showAdvisorOverlay() else hideAdvisorOverlay()
-        if (PokerHudSharedState.showOpponentsBox.value && !gameMode) showOpponentsOverlay() else hideOpponentsOverlay()
     }
 
     fun getCommRect(): android.graphics.Rect {
@@ -1072,7 +1135,7 @@ class PokerHudService : Service() {
     private fun showProbsOverlay() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
-            dpToPx(180f),
+            dpToPx(240f),
             WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -1088,18 +1151,20 @@ class PokerHudService : Service() {
             y = dpToPx(150f)
         }
         val frame = FrameLayout(this).apply {
-            background = createBackgroundDrawable(AndroidColor.parseColor("#33FFD700"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#CCFFD700"))
-            setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
+            background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 10f, dpToPx(1.5f), AndroidColor.parseColor("#FFD82229"))
+            setPadding(dpToPx(10f), dpToPx(10f), dpToPx(10f), dpToPx(10f))
         }
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        
+        // Header Row
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         val title = TextView(this).apply {
-            text = "PROBABILITIES"
+            text = "LIVE HUD DASHBOARD"
             setTextColor(AndroidColor.parseColor("#FFFFD54F"))
-            textSize = 8.5f
+            textSize = 9.5f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
@@ -1111,27 +1176,77 @@ class PokerHudService : Service() {
         header.addView(title)
         header.addView(closeBtn)
         content.addView(header)
-        content.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4f)) })
         
+        // Underline block
+        content.addView(View(this).apply { 
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
+                topMargin = dpToPx(4f)
+                bottomMargin = dpToPx(6f)
+            }
+            setBackgroundColor(AndroidColor.parseColor("#33FFFFFF"))
+        })
+        
+        // 1. PROBABILITIES SECTION
         val txtWin = TextView(this).apply {
             text = "Winning chance: 0.0%"
             setTextColor(AndroidColor.WHITE)
-            textSize = 10f
+            textSize = 10.5f
             typeface = Typeface.DEFAULT_BOLD
         }
         val txtStrength = TextView(this).apply {
             text = "Strength: High"
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
-            textSize = 9f
+            textSize = 9.5f
         }
         val txtSklan = TextView(this).apply {
             text = "Sklansky: Group 1"
             setTextColor(AndroidColor.parseColor("#FFFF7043"))
-            textSize = 9f
+            textSize = 9.5f
         }
         content.addView(txtWin)
         content.addView(txtStrength)
         content.addView(txtSklan)
+        
+        // 2. ACTION ADVISOR SECTION
+        val advDivider = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
+                topMargin = dpToPx(6f)
+                bottomMargin = dpToPx(6f)
+            }
+            setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
+        }
+        val txtAdvisor = TextView(this).apply {
+            text = "Advisor Strategy: FOLD"
+            setTextColor(AndroidColor.parseColor("#FF90CAF9"))
+            textSize = 10f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        content.addView(advDivider)
+        content.addView(txtAdvisor)
+        
+        // 3. LIVE OPPONENTS SECTION
+        val oppDivider = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
+                topMargin = dpToPx(6f)
+                bottomMargin = dpToPx(6f)
+            }
+            setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
+        }
+        val txtOppHeader = TextView(this).apply {
+            text = "LIVE OPPONENT PROFILE"
+            setTextColor(AndroidColor.parseColor("#FF90CAF9"))
+            textSize = 8.5f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        val oppStatsTxt = TextView(this).apply {
+            text = "Loading opponents..."
+            setTextColor(AndroidColor.WHITE)
+            textSize = 9f
+        }
+        content.addView(oppDivider)
+        content.addView(txtOppHeader)
+        content.addView(oppStatsTxt)
+        
         frame.addView(content)
         setupDragListener(frame, params)
         try {
@@ -1145,6 +1260,7 @@ class PokerHudService : Service() {
         
         serviceScope.launch(job) {
             PokerHudSharedState.uiState.collect { state ->
+                // 1. Update Probabilities
                 val res = state.simulationResult
                 if (state.heroCard1 == null || state.heroCard2 == null) {
                     txtWin.text = "Winning chance: 0.0%"
@@ -1169,6 +1285,63 @@ class PokerHudService : Service() {
                     txtSklan.text = "Sklansky: [No starting cards]"
                     txtStrength.text = "Strength: --"
                 }
+
+                // 2. Update Action Advisor Recommendation
+                val rec = state.recommendation
+                if (rec != null) {
+                    val actName = rec.action.uppercase(Locale.US)
+                    txtAdvisor.text = "Advisor Strategy: $actName"
+                    when (actName) {
+                        "FOLD" -> {
+                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FF90A4AE"))
+                        }
+                        "CHECK" -> {
+                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FF81C784"))
+                        }
+                        "CALL" -> {
+                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FF4CAF50"))
+                        }
+                        "RAISE", "ALL-IN", "BET" -> {
+                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FFE57373"))
+                        }
+                        else -> {
+                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FF90CAF9"))
+                        }
+                    }
+                } else {
+                    if (state.heroCard1 != null && state.heroCard2 != null) {
+                        txtAdvisor.text = "Advisor Strategy: Calculating..."
+                        txtAdvisor.setTextColor(AndroidColor.parseColor("#FFFFD54F"))
+                    } else {
+                        txtAdvisor.text = "Advisor Strategy: Enter starter cards"
+                        txtAdvisor.setTextColor(AndroidColor.parseColor("#FF90CAF9"))
+                    }
+                }
+
+                // 3. Update Opponents Section
+                val sb = StringBuilder()
+                val activeOpps = state.opponents.filter { it.isActive }
+                if (activeOpps.isEmpty()) {
+                    sb.append("No active opponents tracked.")
+                } else {
+                    val minHands = PokerHudSharedState.advMinHands.value
+                    activeOpps.forEachIndexed { index, opp ->
+                        val prefix = if (index > 0) "\n" else ""
+                        val hands = opp.stats?.handsPlayed ?: 0
+                        
+                        val vpipVal = opp.stats?.vpip?.toInt() ?: 0
+                        val pfrVal = opp.stats?.pfr?.toInt() ?: 0
+                        val actStr = if (opp.currentAction != "NONE") " (${opp.currentAction})" else ""
+                        val nameToShow = if (opp.nickname.length > 10) opp.nickname.take(9) + ".." else opp.nickname
+                        
+                        if (hands >= minHands) {
+                            sb.append("${prefix}${nameToShow}${actStr}: H:${hands} VPIP:${vpipVal}% PFR:${pfrVal}%")
+                        } else {
+                            sb.append("${prefix}${nameToShow}${actStr}: Need ${minHands - hands} hands")
+                        }
+                    }
+                }
+                oppStatsTxt.text = sb.toString()
             }
         }
         
@@ -1187,21 +1360,34 @@ class PokerHudService : Service() {
                 txtSklan.visibility = if (isVisible) View.VISIBLE else View.GONE
             }
         }
+        serviceScope.launch(job) {
+            PokerHudSharedState.showActionAdvisor.collect { isVisible ->
+                advDivider.visibility = if (isVisible) View.VISIBLE else View.GONE
+                txtAdvisor.visibility = if (isVisible) View.VISIBLE else View.GONE
+            }
+        }
+        serviceScope.launch(job) {
+            PokerHudSharedState.advStatsToggle.collect { isVisible ->
+                oppDivider.visibility = if (isVisible) View.VISIBLE else View.GONE
+                txtOppHeader.visibility = if (isVisible) View.VISIBLE else View.GONE
+                oppStatsTxt.visibility = if (isVisible) View.VISIBLE else View.GONE
+            }
+        }
         
         serviceScope.launch(job) {
-            PokerHudSharedState.winProbScale.collect { scale ->
-                txtWin.textSize = 10f * scale
-            }
+            PokerHudSharedState.winProbScale.collect { scale -> txtWin.textSize = 10.5f * scale }
         }
         serviceScope.launch(job) {
-            PokerHudSharedState.handStrengthScale.collect { scale ->
-                txtStrength.textSize = 9f * scale
-            }
+            PokerHudSharedState.handStrengthScale.collect { scale -> txtStrength.textSize = 9.5f * scale }
         }
         serviceScope.launch(job) {
-            PokerHudSharedState.sklanskyScale.collect { scale ->
-                txtSklan.textSize = 9f * scale
-            }
+            PokerHudSharedState.sklanskyScale.collect { scale -> txtSklan.textSize = 9.5f * scale }
+        }
+        serviceScope.launch(job) {
+            PokerHudSharedState.actionAdvisorScale.collect { scale -> txtAdvisor.textSize = 10f * scale }
+        }
+        serviceScope.launch(job) {
+            PokerHudSharedState.advStatsScale.collect { scale -> oppStatsTxt.textSize = 9f * scale }
         }
     }
 
@@ -1210,214 +1396,6 @@ class PokerHudService : Service() {
         probsJob = null
         floatingProbsOverlay?.let { try { windowManager?.removeView(it) } catch (ignored: Exception) {} }
         floatingProbsOverlay = null
-    }
-
-    private fun showAdvisorOverlay() {
-        if (floatingAdvisorOverlay != null) return
-        val params = WindowManager.LayoutParams(
-            dpToPx(180f),
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            },
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = dpToPx(300f)
-            y = dpToPx(240f)
-        }
-        val frame = FrameLayout(this).apply {
-            background = createBackgroundDrawable(AndroidColor.parseColor("#3300FFCC"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#CC00FFCC"))
-            setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
-        }
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val title = TextView(this).apply {
-            text = "ACTION ADVISOR"
-            setTextColor(AndroidColor.parseColor("#FF00FFCC"))
-            textSize = 8.5f
-            typeface = Typeface.DEFAULT_BOLD
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        val closeBtn = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f))
-            setOnClickListener { PokerHudSharedState.showAdvisorBox.value = false }
-        }
-        header.addView(title)
-        header.addView(closeBtn)
-        content.addView(header)
-        content.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4f)) })
-
-        val advAction = TextView(this).apply {
-            text = "Advisor Strategy: FOLD"
-            setTextColor(AndroidColor.parseColor("#FF00FFCC"))
-            textSize = 10f
-            typeface = Typeface.DEFAULT_BOLD
-        }
-        content.addView(advAction)
-        frame.addView(content)
-        setupDragListener(frame, params)
-        try {
-            windowManager?.addView(frame, params)
-            floatingAdvisorOverlay = frame
-        } catch (e: Exception) {}
-
-        advisorJob?.cancel()
-        val job = Job()
-        advisorJob = job
-        
-        serviceScope.launch(job) {
-            PokerHudSharedState.uiState.collect { state ->
-                val rec = state.recommendation
-                if (rec != null) {
-                    advAction.text = "Advisor Recommendation: ${rec.action.uppercase(Locale.US)}"
-                } else {
-                    if (state.heroCard1 != null && state.heroCard2 != null) {
-                        advAction.text = "Advisor Recommendation: Calculating..."
-                    } else {
-                        advAction.text = "Advisor Recommendation: Enter starter cards"
-                    }
-                }
-            }
-        }
-        
-        serviceScope.launch(job) {
-            PokerHudSharedState.showActionAdvisor.collect { isVisible ->
-                advAction.visibility = if (isVisible) View.VISIBLE else View.GONE
-            }
-        }
-        
-        serviceScope.launch(job) {
-            PokerHudSharedState.actionAdvisorScale.collect { scale ->
-                advAction.textSize = 10f * scale
-            }
-        }
-    }
-
-    private fun hideAdvisorOverlay() {
-        advisorJob?.cancel()
-        advisorJob = null
-        floatingAdvisorOverlay?.let { try { windowManager?.removeView(it) } catch (ignored: Exception) {} }
-        floatingAdvisorOverlay = null
-    }
-
-    private fun showOpponentsOverlay() {
-        if (floatingOpponentsOverlay != null) return
-        val params = WindowManager.LayoutParams(
-            dpToPx(200f),
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            },
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = dpToPx(300f)
-            y = dpToPx(300f)
-        }
-        val frame = FrameLayout(this).apply {
-            background = createBackgroundDrawable(AndroidColor.parseColor("#3390CAF9"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#CC90CAF9"))
-            setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
-        }
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val title = TextView(this).apply {
-            text = "LIVE OPPONENT PROFILE"
-            setTextColor(AndroidColor.parseColor("#FF90CAF9"))
-            textSize = 8.5f
-            typeface = Typeface.DEFAULT_BOLD
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        val closeBtn = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f))
-            setOnClickListener { PokerHudSharedState.showOpponentsBox.value = false }
-        }
-        header.addView(title)
-        header.addView(closeBtn)
-        content.addView(header)
-        content.addView(View(this).apply { layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4f)) })
-
-        val oppStatsTxt = TextView(this).apply {
-            text = "Loading opponents..."
-            setTextColor(AndroidColor.WHITE)
-            textSize = 9.5f
-        }
-        content.addView(oppStatsTxt)
-        frame.addView(content)
-        setupDragListener(frame, params)
-        try {
-            windowManager?.addView(frame, params)
-            floatingOpponentsOverlay = frame
-        } catch (e: Exception) {}
-
-        oppJob?.cancel()
-        val job = Job()
-        oppJob = job
-        
-        serviceScope.launch(job) {
-            PokerHudSharedState.uiState.collect { state ->
-                val sb = StringBuilder()
-                val activeOpps = state.opponents.filter { it.isActive }
-                if (activeOpps.isEmpty()) {
-                    sb.append("No active opponents tracked.")
-                } else {
-                    val minHands = PokerHudSharedState.advMinHands.value
-                    activeOpps.forEachIndexed { index, opp ->
-                        val prefix = if (index > 0) "\n" else ""
-                        val hands = opp.stats?.handsPlayed ?: 0
-                        if (hands >= minHands || opp.nickname.isNotEmpty()) { 
-                            val vpipVal = opp.stats?.vpip?.toInt() ?: 0
-                            val pfrVal = opp.stats?.pfr?.toInt() ?: 0
-                            // Calculate basic AF if we had total aggression stats, otherwise 0.0
-                            val afVal = 0.0
-                            val stackStr = if (opp.stackSize > 0) " (\$${opp.stackSize})" else ""
-                            val betStr = if (opp.betSize > 0) " [Bet: \$${opp.betSize}]" else ""
-                            sb.append("${prefix}${opp.nickname}${stackStr}: VPIP: ${vpipVal}%  PFR: ${pfrVal}%  AF: ${afVal}${betStr}")
-                        } else {
-                            val stackStr = if (opp.stackSize > 0) " (\$${opp.stackSize})" else ""
-                            val betStr = if (opp.betSize > 0) " [Bet: \$${opp.betSize}]" else ""
-                            sb.append("${prefix}${opp.nickname}${stackStr}: Need ${minHands - hands} more hands${betStr}")
-                        }
-                    }
-                }
-                oppStatsTxt.text = sb.toString()
-            }
-        }
-        
-        serviceScope.launch(job) {
-            PokerHudSharedState.advStatsToggle.collect { isVisible ->
-                oppStatsTxt.visibility = if (isVisible) View.VISIBLE else View.GONE
-            }
-        }
-        
-        serviceScope.launch(job) {
-            PokerHudSharedState.advStatsScale.collect { scale ->
-                oppStatsTxt.textSize = 9.5f * scale
-            }
-        }
-    }
-
-    private fun hideOpponentsOverlay() {
-        oppJob?.cancel()
-        oppJob = null
-        floatingOpponentsOverlay?.let { try { windowManager?.removeView(it) } catch (ignored: Exception) {} }
-        floatingOpponentsOverlay = null
     }
 
     private fun stopFloatingOverlay() {
@@ -1431,8 +1409,6 @@ class PokerHudService : Service() {
         hideCommOverlay()
         hideHoleOverlay()
         hideProbsOverlay()
-        hideAdvisorOverlay()
-        hideOpponentsOverlay()
         serviceJob.cancel()
     }
 

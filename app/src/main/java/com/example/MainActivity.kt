@@ -92,6 +92,13 @@ class MainActivity : ComponentActivity() {
                 try {
                     val serviceIntent = Intent(this, PokerHudService::class.java)
                     androidx.core.content.ContextCompat.startForegroundService(this, serviceIntent)
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                            addCategory(Intent.CATEGORY_HOME)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        startActivity(homeIntent)
+                    }, 200)
                 } catch (e: Exception) {
                     android.util.Log.e("MainActivity", "Failed to startForegroundService", e)
                     android.widget.Toast.makeText(this, "Failed to start HUD: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
@@ -301,6 +308,13 @@ fun MainOverlayApp(
                                 try {
                                     val serviceIntent = Intent(context, PokerHudService::class.java)
                                     ContextCompat.startForegroundService(context, serviceIntent)
+                                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                                            addCategory(Intent.CATEGORY_HOME)
+                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                        }
+                                        context.startActivity(homeIntent)
+                                    }, 200)
                                 } catch (e: Exception) {
                                     Log.e("MainActivity", "Failed to start PokerHudService: ${e.message}", e)
                                     Toast.makeText(context, "Error starting HUD service: ${e.message}", Toast.LENGTH_LONG).show()
@@ -835,7 +849,7 @@ fun SettingsLayout(
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = "Real-time statistics tracked for active players at the table. (TODO: Implement automated VPIP/PFR extraction via OCR)",
+                                text = "Real-time statistics tracked for active players at the table.",
                                 color = Color(0xB3FFFFFF),
                                 fontSize = 11.sp
                             )
@@ -1016,35 +1030,7 @@ fun SettingsLayout(
                                     colors = CheckboxDefaults.colors(checkedColor = Color(0xFFD82229), uncheckedColor = Color.Gray)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Probabilities dashboard map location", color = Color.White, fontSize = 12.sp)
-                            }
-
-                            val showAdvisorBox by PokerHudSharedState.showAdvisorBox.collectAsStateWithLifecycle()
-                            Row(
-                                modifier = Modifier.fillMaxWidth().clickable { PokerHudSharedState.showAdvisorBox.value = !showAdvisorBox }.padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = showAdvisorBox,
-                                    onCheckedChange = null,
-                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFFD82229), uncheckedColor = Color.Gray)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Action Advisor panel location", color = Color.White, fontSize = 12.sp)
-                            }
-
-                            val showOppBox by PokerHudSharedState.showOpponentsBox.collectAsStateWithLifecycle()
-                            Row(
-                                modifier = Modifier.fillMaxWidth().clickable { PokerHudSharedState.showOpponentsBox.value = !showOppBox }.padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = showOppBox,
-                                    onCheckedChange = null,
-                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFFD82229), uncheckedColor = Color.Gray)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Opponents advanced stats frame", color = Color.White, fontSize = 12.sp)
+                                Text("Live HUD Dashboard location", color = Color.White, fontSize = 12.sp)
                             }
                         }
                     }
@@ -1227,8 +1213,6 @@ fun OverlaySimulatorLayout(
     val showCommBox by PokerHudSharedState.showCommBox.collectAsStateWithLifecycle()
     val showHoleBox by PokerHudSharedState.showHoleBox.collectAsStateWithLifecycle()
     val showProbsBox by PokerHudSharedState.showProbsBox.collectAsStateWithLifecycle()
-    val showAdvisorBox by PokerHudSharedState.showAdvisorBox.collectAsStateWithLifecycle()
-    val showOpponentsBox by PokerHudSharedState.showOpponentsBox.collectAsStateWithLifecycle()
     
     // Trigger scanning states
     val isScanning by PokerHudSharedState.isScanning.collectAsStateWithLifecycle()
@@ -1467,22 +1451,10 @@ fun OverlaySimulatorLayout(
                         color = Color(0xFFE53935)
                     )
                     PanelVisibilityToggleRow(
-                        label = "Properties HUD",
+                        label = "Live HUD Dashboard",
                         visible = showProbsBox,
                         onChanged = { PokerHudSharedState.showProbsBox.value = it },
                         color = Color(0xFFFFD700)
-                    )
-                    PanelVisibilityToggleRow(
-                        label = "Action Advisor",
-                        visible = showAdvisorBox,
-                        onChanged = { PokerHudSharedState.showAdvisorBox.value = it },
-                        color = Color(0xFF00FFCC)
-                    )
-                    PanelVisibilityToggleRow(
-                        label = "Opponents Profile",
-                        visible = showOpponentsBox,
-                        onChanged = { PokerHudSharedState.showOpponentsBox.value = it },
-                        color = Color(0xFF90CAF9)
                     )
                 }
 
