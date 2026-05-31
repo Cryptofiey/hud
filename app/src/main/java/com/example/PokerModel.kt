@@ -16,7 +16,7 @@ enum class Rank(val value: Int, val symbol: String) {
 }
 
 enum class Suit(val index: Int, val symbol: String, val colorHex: String, val nameStr: String) {
-    SPADES(0, "♠", "#1A1A1A", "Spades"),       // Midnight Black
+    SPADES(0, "♠", "#FFFFFF", "Spades"),       // White for dark UI
     HEARTS(1, "♥", "#E53935", "Hearts"),       // Crimson Red
     DIAMONDS(2, "♦", "#1E88E5", "Diamonds"),   // Royal Blue (4-color deck)
     CLUBS(3, "♣", "#43A047", "Clubs");         // Forest Green (4-color deck)
@@ -24,6 +24,7 @@ enum class Suit(val index: Int, val symbol: String, val colorHex: String, val na
 
 data class Card(val rank: Rank, val suit: Suit) {
     override fun toString(): String = "${rank.symbol}${suit.symbol}"
+    fun toHtmlString(): String = "<font color='${suit.colorHex}'>${rank.symbol}${suit.symbol}</font>"
 }
 
 enum class HandCategory(val value: Int, val displayName: String) {

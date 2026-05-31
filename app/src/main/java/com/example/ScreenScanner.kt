@@ -232,9 +232,9 @@ class ScreenScanner(
                 val scannedOpponents = OpponentScanner.scan(result, cleanBitmap)
                 val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
                 
-                scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} (${commW},${holeW})\n" +
-                                   "Opps: ${finalOpponents.size}\n" +
-                                   "Board: ${finalBoard.joinToString("") { it?.toString() ?: "[?]" }}"
+                scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} (${commW},${holeW})<br>" +
+                                   "Opps: ${finalOpponents.size}<br>" +
+                                   "Board: ${finalBoard.joinToString("") { it?.toHtmlString() ?: "[?]" }}"
                 
                 PokerHudSharedState.externalActions.tryEmit(
                     ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents)

@@ -575,7 +575,7 @@ class PokerHudService : Service() {
                     
                     launch {
                         screenScanner?.scanStatus?.collect { status ->
-                            txtPreText?.text = "Scan Phase: $status"
+                            txtPreText?.text = android.text.Html.fromHtml("Scan Phase: $status", android.text.Html.FROM_HTML_MODE_LEGACY)
                         }
                     }
                 } else if (!checked) {
@@ -593,7 +593,7 @@ class PokerHudService : Service() {
                     
                     launch {
                         screenScanner?.scanStatus?.collect { status ->
-                            txtPreText?.text = "Scan Phase: $status"
+                            txtPreText?.text = android.text.Html.fromHtml("Scan Phase: $status", android.text.Html.FROM_HTML_MODE_LEGACY)
                         }
                     }
                 }
@@ -1000,8 +1000,8 @@ class PokerHudService : Service() {
         if (floatingHoleOverlay != null) return
 
         val params = WindowManager.LayoutParams(
-            dpToPx(180f),
-            dpToPx(90f),
+            dpToPx(120f),
+            dpToPx(85f),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -1193,6 +1193,11 @@ class PokerHudService : Service() {
             textSize = 10.5f
             typeface = Typeface.DEFAULT_BOLD
         }
+        val txtHeroCards = TextView(this).apply {
+            text = "Hero Cards: --"
+            setTextColor(AndroidColor.parseColor("#FFD54F"))
+            textSize = 9.5f
+        }
         val txtStrength = TextView(this).apply {
             text = "Strength: High"
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
@@ -1204,6 +1209,7 @@ class PokerHudService : Service() {
             textSize = 9.5f
         }
         content.addView(txtWin)
+        content.addView(txtHeroCards)
         content.addView(txtStrength)
         content.addView(txtSklan)
         
@@ -1264,11 +1270,14 @@ class PokerHudService : Service() {
                 val res = state.simulationResult
                 if (state.heroCard1 == null || state.heroCard2 == null) {
                     txtWin.text = "Winning chance: 0.0%"
+                    txtHeroCards.text = "Hero Cards: --"
                 } else if (res != null) {
                     val combinedWin = res.heroWinPct + res.heroTiePct
                     txtWin.text = String.format(Locale.US, "Winning chance: %.1f%%", combinedWin)
+                    txtHeroCards.text = android.text.Html.fromHtml("Hero Cards: ${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}", android.text.Html.FROM_HTML_MODE_LEGACY)
                 } else {
                     txtWin.text = "Winning chance: Calculating..."
+                    txtHeroCards.text = android.text.Html.fromHtml("Hero Cards: ${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}", android.text.Html.FROM_HTML_MODE_LEGACY)
                 }
 
                 if (state.heroCard1 != null && state.heroCard2 != null) {

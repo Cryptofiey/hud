@@ -92,13 +92,7 @@ class MainActivity : ComponentActivity() {
                 try {
                     val serviceIntent = Intent(this, PokerHudService::class.java)
                     androidx.core.content.ContextCompat.startForegroundService(this, serviceIntent)
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-                            addCategory(Intent.CATEGORY_HOME)
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
-                        startActivity(homeIntent)
-                    }, 200)
+                    android.widget.Toast.makeText(this, "HUD Started. You can transition to your game now.", android.widget.Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
                     android.util.Log.e("MainActivity", "Failed to startForegroundService", e)
                     android.widget.Toast.makeText(this, "Failed to start HUD: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
@@ -308,13 +302,7 @@ fun MainOverlayApp(
                                 try {
                                     val serviceIntent = Intent(context, PokerHudService::class.java)
                                     ContextCompat.startForegroundService(context, serviceIntent)
-                                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-                                            addCategory(Intent.CATEGORY_HOME)
-                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                        }
-                                        context.startActivity(homeIntent)
-                                    }, 200)
+                                    Toast.makeText(context, "HUD Started. You can transition to your game now.", Toast.LENGTH_SHORT).show()
                                 } catch (e: Exception) {
                                     Log.e("MainActivity", "Failed to start PokerHudService: ${e.message}", e)
                                     Toast.makeText(context, "Error starting HUD service: ${e.message}", Toast.LENGTH_LONG).show()

@@ -43,9 +43,17 @@ object OpponentScanner {
             text.all { it.isDigit() } && text.isNotEmpty() && text.length > 2
         }
 
+        val height = cleanBitmap.height
+        val width = cleanBitmap.width
+        
         var oppId = 1
         for (chipBlock in chipBlocks) {
             val chipBox = chipBlock.boundingBox ?: continue
+            
+            // Ignore the user's own frame at the bottom center of the screen
+            if (chipBox.centerY() > height * 0.70f && chipBox.centerX() > width * 0.25f && chipBox.centerX() < width * 0.75f) {
+                continue
+            }
             val chipText = chipBlock.text
 
             // Ignore likely pot sizes (usually near the center of the screen)
