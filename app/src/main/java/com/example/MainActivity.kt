@@ -335,7 +335,7 @@ fun MainOverlayApp(
             AlertDialog(
                 onDismissRequest = { moreInfoTopic = null },
                 containerColor = Color(0xFF1E1E1E),
-                titleContentColor = Color(0xFFD82229),
+                titleContentColor = Color(0xFF1E88E5),
                 textContentColor = Color(0xFFE0E0E0),
                 title = {
                     Text(
@@ -354,13 +354,13 @@ fun MainOverlayApp(
                             "Termux ADB & Broadcast integration" -> "You can control this HUD app and capture real-time calculated results using custom scripts in Termux:\n\n1. DISPATCH CARDS FROM TERMUX:\nam broadcast -a com.example.UPDATE_CARDS --es hole1 Ah --es hole2 Ad --es flop1 Ks --es flop2 Qd --es flop3 Jc\n\n2. TRIGGER SCREEN INTENT CLICK:\nam broadcast -a com.example.CLICK --ef x 450.0 --ef y 1250.0\n\n3. EXPORT LIVE RESULTS FROM HUD LOGCAT IN REALTIME:\nlogcat -s POKER_HUD_LOG"
                             else -> "Continuous calculation solver monitors active card layout, and updates the floating HUD layout elements periodically."
                         },
-                        fontSize = 13.sp,
+                        fontSize = 9.sp,
                         lineHeight = 18.sp
                     )
                 },
                 confirmButton = {
                     TextButton(
-                        colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFD82229)),
+                        colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF1E88E5)),
                         onClick = { moreInfoTopic = null }
                     ) {
                         Text("UNDERSTOOD", fontWeight = FontWeight.Black)
@@ -399,21 +399,21 @@ fun SettingsLayout(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF1B4D22)) // Bright Lush Casino Felt Green Background
+            .background(Color(0xFF121212)) // Bright Lush Casino Felt Green Background
     ) {
         // --- A. Red Header (Screenshot 2) ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFFD82229)) // Vibrant Crimson Red Header
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .background(Color(0xFF1E88E5)) // Vibrant Crimson Red Header
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "Poker Equity HUD",
                 color = Color.White,
-                fontSize = 20.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 0.5.sp
             )
@@ -435,7 +435,7 @@ fun SettingsLayout(
                     modifier = Modifier.background(Color(0xFF2E2E2E))
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Accessibility clicker Settings", color = Color.White, fontSize = 13.sp) },
+                        text = { Text("Accessibility clicker Settings", color = Color.White, fontSize = 9.sp) },
                         onClick = {
                             optionsMenuExpanded = false
                             try {
@@ -447,7 +447,7 @@ fun SettingsLayout(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Termux API Integration Help", color = Color.White, fontSize = 13.sp) },
+                        text = { Text("Termux API Integration Help", color = Color.White, fontSize = 9.sp) },
                         onClick = {
                             optionsMenuExpanded = false
                             onMoreInfoClicked("Termux ADB & Broadcast integration")
@@ -460,12 +460,12 @@ fun SettingsLayout(
         // --- B. Red Tab Strip (Screenshot 2 layout) ---
         TabRow(
             selectedTabIndex = tabIndex,
-            containerColor = Color(0xFF1B4D22),
-            contentColor = Color(0xFFD82229),
+            containerColor = Color(0xFF121212),
+            contentColor = Color(0xFF1E88E5),
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[tabIndex]),
-                    color = Color(0xFFD82229),
+                    color = Color(0xFF1E88E5),
                     height = 3.dp
                 )
             }
@@ -477,7 +477,7 @@ fun SettingsLayout(
                     Text(
                         text = "Game interpretation",
                         fontWeight = if (tabIndex == 0) FontWeight.Bold else FontWeight.Normal,
-                        fontSize = 13.sp,
+                        fontSize = 9.sp,
                         color = if (tabIndex == 0) Color.White else Color(0x99FFFFFF)
                     )
                 }
@@ -489,7 +489,7 @@ fun SettingsLayout(
                     Text(
                         text = "Visualization of calculations",
                         fontWeight = if (tabIndex == 1) FontWeight.Bold else FontWeight.Normal,
-                        fontSize = 13.sp,
+                        fontSize = 9.sp,
                         color = if (tabIndex == 1) Color.White else Color(0x99FFFFFF)
                     )
                 }
@@ -509,7 +509,7 @@ fun SettingsLayout(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     val isHudOverlayRunning by PokerHudSharedState.isHudOverlayRunning.collectAsStateWithLifecycle()
                     
@@ -559,21 +559,21 @@ fun SettingsLayout(
                         onMoreInfo = { onMoreInfoClicked("Winning probabilities") },
                         settingsContent = {
                             Column {
-                                Text("Max opponents hands to display: $winProbMaxHands", color = Color.LightGray, fontSize = 11.sp)
+                                Text("Max opponents hands to display: $winProbMaxHands", color = Color.LightGray, fontSize = 9.sp)
                                 Slider(
                                     value = winProbMaxHands.toFloat(),
                                     onValueChange = { PokerHudSharedState.winProbMaxHands.value = it.toInt() },
                                     valueRange = 2f..9f,
                                     steps = 6,
-                                    modifier = Modifier.height(24.dp)
+                                    modifier = Modifier.height(18.dp)
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text("Visual UI scaling: ${String.format(Locale.US, "%.2f", winProbScale)}x", color = Color.LightGray, fontSize = 11.sp)
+                                Text("Visual UI scaling: ${String.format(Locale.US, "%.2f", winProbScale)}x", color = Color.LightGray, fontSize = 9.sp)
                                 Slider(
                                     value = winProbScale,
                                     onValueChange = { PokerHudSharedState.winProbScale.value = it },
                                     valueRange = 0.6f..2.0f,
-                                    modifier = Modifier.height(24.dp)
+                                    modifier = Modifier.height(18.dp)
                                 )
                             }
                         }
@@ -589,12 +589,12 @@ fun SettingsLayout(
                         onMoreInfo = { onMoreInfoClicked("Hand strength probability distribution") },
                         settingsContent = {
                             Column {
-                                Text("Visual UI scaling: ${String.format(Locale.US, "%.2f", handStrengthScale)}x", color = Color.LightGray, fontSize = 11.sp)
+                                Text("Visual UI scaling: ${String.format(Locale.US, "%.2f", handStrengthScale)}x", color = Color.LightGray, fontSize = 9.sp)
                                 Slider(
                                     value = handStrengthScale,
                                     onValueChange = { PokerHudSharedState.handStrengthScale.value = it },
                                     valueRange = 0.6f..2.0f,
-                                    modifier = Modifier.height(24.dp)
+                                    modifier = Modifier.height(18.dp)
                                 )
                             }
                         }
@@ -610,12 +610,12 @@ fun SettingsLayout(
                         onMoreInfo = { onMoreInfoClicked("Winning probabilities vs. Sklansky groups") },
                         settingsContent = {
                             Column {
-                                Text("Visual UI scaling: ${String.format(Locale.US, "%.2f", sklanskyScale)}x", color = Color.LightGray, fontSize = 11.sp)
+                                Text("Visual UI scaling: ${String.format(Locale.US, "%.2f", sklanskyScale)}x", color = Color.LightGray, fontSize = 9.sp)
                                 Slider(
                                     value = sklanskyScale,
                                     onValueChange = { PokerHudSharedState.sklanskyScale.value = it },
                                     valueRange = 0.6f..2.0f,
-                                    modifier = Modifier.height(24.dp)
+                                    modifier = Modifier.height(18.dp)
                                 )
                             }
                         }
@@ -632,21 +632,21 @@ fun SettingsLayout(
                         onMoreInfo = { onMoreInfoClicked("Opponent Advanced Stats") },
                         settingsContent = {
                             Column {
-                                Text("Min hands to show stats: $advMinHands", color = Color.LightGray, fontSize = 11.sp)
+                                Text("Min hands to show stats: $advMinHands", color = Color.LightGray, fontSize = 9.sp)
                                 Slider(
                                     value = advMinHands.toFloat(),
                                     onValueChange = { PokerHudSharedState.advMinHands.value = it.toInt() },
                                     valueRange = 0f..500f,
                                     steps = 49,
-                                    modifier = Modifier.height(24.dp)
+                                    modifier = Modifier.height(18.dp)
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text("Visual UI scaling: ${String.format(Locale.US, "%.2f", advStatsScale)}x", color = Color.LightGray, fontSize = 11.sp)
+                                Text("Visual UI scaling: ${String.format(Locale.US, "%.2f", advStatsScale)}x", color = Color.LightGray, fontSize = 9.sp)
                                 Slider(
                                     value = advStatsScale,
                                     onValueChange = { PokerHudSharedState.advStatsScale.value = it },
                                     valueRange = 0.6f..2.0f,
-                                    modifier = Modifier.height(24.dp)
+                                    modifier = Modifier.height(18.dp)
                                 )
                             }
                         }
@@ -663,21 +663,21 @@ fun SettingsLayout(
                         onMoreInfo = { onMoreInfoClicked("Action Advisor Overlay") },
                         settingsContent = {
                             Column {
-                                Text("Advisor Playstyle: ${if(actionAdvisorAggression == 0) "Normal" else if(actionAdvisorAggression == 1) "Aggressive" else "Safe"}", color = Color.LightGray, fontSize = 11.sp)
+                                Text("Advisor Playstyle: ${if(actionAdvisorAggression == 0) "Normal" else if(actionAdvisorAggression == 1) "Aggressive" else "Safe"}", color = Color.LightGray, fontSize = 9.sp)
                                 Slider(
                                     value = actionAdvisorAggression.toFloat(),
                                     onValueChange = { PokerHudSharedState.actionAdvisorAggression.value = it.toInt() },
                                     valueRange = 0f..2f,
                                     steps = 1,
-                                    modifier = Modifier.height(24.dp)
+                                    modifier = Modifier.height(18.dp)
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text("Visual UI scaling: ${String.format(Locale.US, "%.2f", actionAdvisorScale)}x", color = Color.LightGray, fontSize = 11.sp)
+                                Text("Visual UI scaling: ${String.format(Locale.US, "%.2f", actionAdvisorScale)}x", color = Color.LightGray, fontSize = 9.sp)
                                 Slider(
                                     value = actionAdvisorScale,
                                     onValueChange = { PokerHudSharedState.actionAdvisorScale.value = it },
                                     valueRange = 0.6f..2.0f,
-                                    modifier = Modifier.height(24.dp)
+                                    modifier = Modifier.height(18.dp)
                                 )
                             }
                         }
@@ -711,7 +711,7 @@ fun SettingsLayout(
                                     text = "🤖 Auto-Clicker Gestures",
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
+                                    fontSize = 9.sp
                                 )
                                 Box(
                                     modifier = Modifier
@@ -731,13 +731,13 @@ fun SettingsLayout(
                             Text(
                                 text = "Awaiting MCP integration for Android Control. Background AI will dispatch clicks directly to the agent side.",
                                 color = Color(0xFFEEEEEE),
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp
+                                fontSize = 9.sp,
+                                lineHeight = 9.sp
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(30.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
             } else {
                 // Calculations viz and telemetry configs
@@ -745,13 +745,13 @@ fun SettingsLayout(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
                         text = "LIVE DATA TELEMETRY",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
+                        fontSize = 9.sp,
                         letterSpacing = 1.sp
                     )
                     
@@ -761,27 +761,27 @@ fun SettingsLayout(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFF0F0F0F))
-                            .border(BorderStroke(1.dp, Color(0xFFD82229)), RoundedCornerShape(8.dp))
-                            .padding(12.dp)
+                            .border(BorderStroke(1.dp, Color(0xFF1E88E5)), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
                                 text = "Live Opponent Stats",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
+                                fontSize = 9.sp
                             )
                             Text(
                                 text = "Real-time statistics tracked for active players at the table.",
                                 color = Color(0xB3FFFFFF),
-                                fontSize = 11.sp
+                                fontSize = 9.sp
                             )
 
                             HorizontalDivider(color = Color(0x1AFFFFFF), modifier = Modifier.padding(vertical = 4.dp))
 
                             val activeOpps = uiState.opponents.filter { it.isActive }
                             if (activeOpps.isEmpty()) {
-                                Text("No active opponents tracked at the table.", color = Color.Gray, fontSize = 12.sp)
+                                Text("No active opponents tracked at the table.", color = Color.Gray, fontSize = 9.sp)
                             } else {
                                 activeOpps.forEach { opp ->
                                     Row(
@@ -798,7 +798,7 @@ fun SettingsLayout(
                                                 text = "${if (opp.nickname.isNotEmpty()) opp.nickname else "Empty Seed"}$actStr", 
                                                 color = Color.White, 
                                                 fontWeight = FontWeight.Bold, 
-                                                fontSize = 12.sp
+                                                fontSize = 9.sp
                                             )
                                             val vpip = opp.stats?.histVpip ?: opp.stats?.vpip ?: 0f
                                             val pfr = opp.stats?.histPfr ?: opp.stats?.pfr ?: 0f
@@ -826,8 +826,8 @@ fun SettingsLayout(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFF0F0F0F))
-                            .border(BorderStroke(1.dp, Color(0xFFD82229)), RoundedCornerShape(8.dp))
-                            .padding(12.dp)
+                            .border(BorderStroke(1.dp, Color(0xFF1E88E5)), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(
@@ -839,36 +839,36 @@ fun SettingsLayout(
                                     text = "Scanner Fine-Tuning",
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
+                                    fontSize = 9.sp
                                 )
                                 Switch(
                                     checked = showScannerBoxes,
                                     onCheckedChange = { PokerHudSharedState.showScannerBoxes.value = it },
                                     colors = SwitchDefaults.colors(
                                         checkedThumbColor = Color.White,
-                                        checkedTrackColor = Color(0xFFD82229)
+                                        checkedTrackColor = Color(0xFF1E88E5)
                                     )
                                 )
                             }
                             Text(
                                 "Toggle colored outlines for detected player profile boxes on-screen.",
-                                fontSize = 11.sp, color = Color.LightGray
+                                fontSize = 9.sp, color = Color.LightGray
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text("Horizontal Offset (X): ${scannerOffsetX.toInt()}", color = Color.White, fontSize = 11.sp)
+                            Text("Horizontal Offset (X): ${scannerOffsetX.toInt()}", color = Color.White, fontSize = 9.sp)
                             Slider(
                                 value = scannerOffsetX,
                                 onValueChange = { PokerHudSharedState.scannerOffsetX.value = it },
                                 valueRange = -100f..100f,
-                                modifier = Modifier.height(24.dp)
+                                modifier = Modifier.height(18.dp)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text("Vertical Offset (Y): ${scannerOffsetY.toInt()}", color = Color.White, fontSize = 11.sp)
+                            Text("Vertical Offset (Y): ${scannerOffsetY.toInt()}", color = Color.White, fontSize = 9.sp)
                             Slider(
                                 value = scannerOffsetY,
                                 onValueChange = { PokerHudSharedState.scannerOffsetY.value = it },
                                 valueRange = -100f..100f,
-                                modifier = Modifier.height(24.dp)
+                                modifier = Modifier.height(18.dp)
                             )
                         }
                     }
@@ -881,30 +881,30 @@ fun SettingsLayout(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFF0F0F0F))
-                            .border(BorderStroke(1.dp, Color(0xFFD82229)), RoundedCornerShape(8.dp))
-                            .padding(12.dp)
+                            .border(BorderStroke(1.dp, Color(0xFF1E88E5)), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
                                 text = "Advisor Advanced Filters",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
+                                fontSize = 9.sp
                             )
                             Text(
                                 "Toggle historical data streams into Advisor Engine metrics.",
-                                fontSize = 11.sp, color = Color.LightGray
+                                fontSize = 9.sp, color = Color.LightGray
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Incorporate VPIP/PFR Historical Data", color = Color.White, fontSize = 12.sp)
+                                Text("Incorporate VPIP/PFR Historical Data", color = Color.White, fontSize = 9.sp)
                                 Switch(
                                     checked = useVpipPfrFilter,
                                     onCheckedChange = { PokerHudSharedState.useVpipPfrFilter.value = it },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFD82229))
+                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF1E88E5))
                                 )
                             }
                             Row(
@@ -912,11 +912,11 @@ fun SettingsLayout(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Incorporate WSD/WTSD Post-flop Data", color = Color.White, fontSize = 12.sp)
+                                Text("Incorporate WSD/WTSD Post-flop Data", color = Color.White, fontSize = 9.sp)
                                 Switch(
                                     checked = useWsdWtsdFilter,
                                     onCheckedChange = { PokerHudSharedState.useWsdWtsdFilter.value = it },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFFD82229))
+                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF1E88E5))
                                 )
                             }
                         }
@@ -928,20 +928,20 @@ fun SettingsLayout(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFF0F0F0F))
-                            .border(BorderStroke(1.dp, Color(0xFFD82229)), RoundedCornerShape(8.dp))
-                            .padding(12.dp)
+                            .border(BorderStroke(1.dp, Color(0xFF1E88E5)), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
                                 text = "Calibration bounding boxes map layout",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
+                                fontSize = 9.sp
                             )
                             Text(
                                 text = "Disable boxes after setting their coordinates over the poker table to leave only probabilities and statistics visually on screen during actual play.",
                                 color = Color(0xB3FFFFFF),
-                                fontSize = 11.sp
+                                fontSize = 9.sp
                             )
 
                             HorizontalDivider(color = Color(0x1AFFFFFF), modifier = Modifier.padding(vertical = 4.dp))
@@ -954,10 +954,10 @@ fun SettingsLayout(
                                 Checkbox(
                                     checked = showCommBox,
                                     onCheckedChange = null,
-                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFFD82229), uncheckedColor = Color.Gray)
+                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF1E88E5), uncheckedColor = Color.Gray)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Community Cards scanning box", color = Color.White, fontSize = 12.sp)
+                                Text("Community Cards scanning box", color = Color.White, fontSize = 9.sp)
                             }
 
                             val showHoleBox by PokerHudSharedState.showHoleBox.collectAsStateWithLifecycle()
@@ -968,10 +968,10 @@ fun SettingsLayout(
                                 Checkbox(
                                     checked = showHoleBox,
                                     onCheckedChange = null,
-                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFFD82229), uncheckedColor = Color.Gray)
+                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF1E88E5), uncheckedColor = Color.Gray)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Hole Cards scanning box", color = Color.White, fontSize = 12.sp)
+                                Text("Hole Cards scanning box", color = Color.White, fontSize = 9.sp)
                             }
 
                             val showProbsBox by PokerHudSharedState.showProbsBox.collectAsStateWithLifecycle()
@@ -982,15 +982,15 @@ fun SettingsLayout(
                                 Checkbox(
                                     checked = showProbsBox,
                                     onCheckedChange = null,
-                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFFD82229), uncheckedColor = Color.Gray)
+                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF1E88E5), uncheckedColor = Color.Gray)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Live HUD Dashboard location", color = Color.White, fontSize = 12.sp)
+                                Text("Live HUD Dashboard location", color = Color.White, fontSize = 9.sp)
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(30.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
             }
         }
@@ -1006,7 +1006,7 @@ fun SettingsLayout(
                 modifier = Modifier
                     .size(64.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFD82229)) // Glowing Crimson Red Circular Button
+                    .background(Color(0xFF1E88E5)) // Glowing Crimson Red Circular Button
                     .border(BorderStroke(2.dp, Color.White), CircleShape)
                     .shadow(elevation = 10.dp, shape = CircleShape)
                     .clickable { onPlayClicked() },
@@ -1041,7 +1041,7 @@ fun SettingsToggleCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF0F0F0F)) // Dark charcoal background
-            .border(BorderStroke(1.2.dp, Color(0xFFD82229)), RoundedCornerShape(10.dp)) // Vibrant red neon outline
+            .border(BorderStroke(1.2.dp, Color(0xFF1E88E5)), RoundedCornerShape(10.dp)) // Vibrant red neon outline
             .padding(14.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -1055,22 +1055,22 @@ fun SettingsToggleCard(
                         text = title,
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
+                        fontSize = 9.sp,
                         lineHeight = 18.sp
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = description,
                         color = Color(0xFFEEEEEE),
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp
+                        fontSize = 9.sp,
+                        lineHeight = 9.sp
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "More information",
-                            color = Color(0xFFD82229),
-                            fontSize = 12.sp,
+                            color = Color(0xFF1E88E5),
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Black,
                             modifier = Modifier
                                 .clickable { onMoreInfo() }
@@ -1095,7 +1095,7 @@ fun SettingsToggleCard(
                                 Text(
                                     text = "Settings",
                                     color = if (showSettings) Color.White else Color.Gray,
-                                    fontSize = 12.sp,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -1111,7 +1111,7 @@ fun SettingsToggleCard(
                     onCheckedChange = onCheckedChange,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
-                        checkedTrackColor = Color(0xFFD82229),
+                        checkedTrackColor = Color(0xFF1E88E5),
                         uncheckedThumbColor = Color.Gray,
                         uncheckedTrackColor = Color(0xFF222222)
                     ),
@@ -1243,7 +1243,7 @@ fun OverlaySimulatorLayout(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(12.dp)
+                            .padding(8.dp)
                             .border(BorderStroke(1.dp, Color(0x33FFFFFF)), shape = RoundedCornerShape(113.dp))
                     )
                 }
@@ -1344,7 +1344,7 @@ fun OverlaySimulatorLayout(
                                 text = "HUD CONTROL PANEL",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp
+                                fontSize = 9.sp
                             )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1357,7 +1357,7 @@ fun OverlaySimulatorLayout(
                                 Text("HIDE", fontSize = 8.sp, color = Color.White, fontWeight = FontWeight.Bold)
                             }
                             Button(
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD82229)),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
                                 onClick = { onCloseHUD() },
                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
                                 modifier = Modifier.height(22.dp)
@@ -1381,7 +1381,7 @@ fun OverlaySimulatorLayout(
                         text = scanLoggedStep,
                         color = if (isScanning) Color(0xFF00FFCC) else Color.LightGray,
                         fontSize = 8.sp,
-                        lineHeight = 11.sp,
+                        lineHeight = 9.sp,
                         fontFamily = FontFamily.Monospace
                     )
                 }
@@ -1442,7 +1442,7 @@ fun OverlaySimulatorLayout(
                     text = "Tip: Drag frames around with finger. Assign cards from table.",
                     color = Color.Gray,
                     fontSize = 8.sp,
-                    lineHeight = 10.sp
+                    lineHeight = 9.sp
                 )
             }
         }
@@ -1523,7 +1523,7 @@ fun PanelVisibilityToggleRow(
                     .background(color)
             )
             Spacer(modifier = Modifier.width(6.dp))
-            Text(label, color = Color.White, fontSize = 10.sp)
+            Text(label, color = Color.White, fontSize = 9.sp)
         }
         // Small custom radio/switch box
         Box(
@@ -1577,7 +1577,7 @@ fun OpponentAvatarWidget(
                     text = betText,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp
+                    fontSize = 9.sp
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
@@ -1611,7 +1611,7 @@ fun OpponentAvatarWidget(
                     text = avatarChar.take(3),
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp
+                    fontSize = 9.sp
                 )
             }
 
@@ -1627,7 +1627,7 @@ fun OpponentAvatarWidget(
                         .offset(x = (-2).dp, y = (2).dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("D", color = Color.Red, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    Text("D", color = Color.Red, fontSize = 9.sp, fontWeight = FontWeight.Black)
                 }
             }
         }
@@ -1764,14 +1764,14 @@ fun CardPickerDialog(
                     colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFFF9800)),
                     onClick = { onCleared() }
                 ) {
-                    Text("CLEAR SLOT", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                    Text("CLEAR SLOT", fontSize = 9.sp, fontWeight = FontWeight.Black)
                 }
             }
         },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Render card matrix categories
                 val suits = Suit.values()
@@ -1782,7 +1782,7 @@ fun CardPickerDialog(
                         .fillMaxWidth()
                         .height(350.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     suits.forEach { suit ->
                         Row(
@@ -1828,7 +1828,7 @@ fun CardPickerDialog(
                                         Text(
                                             text = rank.symbol,
                                             color = if (isUsed) Color.DarkGray else specColor,
-                                            fontSize = 11.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = FontWeight.Black
                                         )
                                     }

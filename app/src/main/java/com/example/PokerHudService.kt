@@ -285,7 +285,7 @@ class PokerHudService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = dpToPx(30f)
+            x = dpToPx(2f)
             y = dpToPx(120f)
         }
 
@@ -297,7 +297,7 @@ class PokerHudService : Service() {
         val mini = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dpToPx(12f), dpToPx(8f), dpToPx(12f), dpToPx(8f))
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
             background = createBackgroundDrawable(
                 AndroidColor.parseColor("#EE121A24"), // Slate blue semitransparent
                 16f,
@@ -315,9 +315,9 @@ class PokerHudService : Service() {
         val txtMiniLabel = TextView(this).apply {
             text = " POKER HUD"
             setTextColor(AndroidColor.WHITE)
-            textSize = 10f
+            textSize = 4.5f
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(dpToPx(4f), 0, 0, 0)
+            setPadding(dpToPx(2f), 0, 0, 0)
         }
         mini.addView(txtMiniIcon)
         mini.addView(txtMiniLabel)
@@ -326,7 +326,7 @@ class PokerHudService : Service() {
         // 2. EXPANDED HUD LAYOUT
         val expanded = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(12f), dpToPx(12f), dpToPx(12f), dpToPx(12f))
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
             background = createBackgroundDrawable(
                 AndroidColor.parseColor("#F50D151D"), // Dark blue/grey high contrast
                 10f,
@@ -358,22 +358,22 @@ class PokerHudService : Service() {
 
         val btnMinimize = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "HIDE"
-            textSize = 9f
+            textSize = 5f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF37474F"), 4f)
-            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
             val btnParams = LinearLayout.LayoutParams(dpToPx(48f), dpToPx(26f)).apply {
-                setMargins(0, 0, dpToPx(4f), 0)
+                setMargins(0, 0, dpToPx(2f), 0)
             }
             layoutParams = btnParams
         }
 
         val btnExit = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "EXIT"
-            textSize = 9f
+            textSize = 5f
             setTextColor(AndroidColor.WHITE)
-            background = createBackgroundDrawable(AndroidColor.parseColor("#FFD82229"), 4f)
-            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
+            background = createBackgroundDrawable(AndroidColor.parseColor("#FF1E88E5"), 4f)
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
             layoutParams = LinearLayout.LayoutParams(dpToPx(44f), dpToPx(26f))
         }
 
@@ -386,7 +386,7 @@ class PokerHudService : Service() {
         val divider1 = View(this).apply {
             setBackgroundColor(AndroidColor.parseColor("#33FFFFFF"))
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
-                setMargins(0, dpToPx(6f), 0, dpToPx(6f))
+                setMargins(0, dpToPx(2f), 0, dpToPx(2f))
             }
         }
         expanded.addView(divider1)
@@ -394,10 +394,10 @@ class PokerHudService : Service() {
         // MULTI-DATA SCANNER STATUS BOX
         val scannerBoxLocal = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
             background = createBackgroundDrawable(AndroidColor.parseColor("#1500FFCC"), 4f, dpToPx(1f), AndroidColor.parseColor("#3300FFCC"))
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                setMargins(0, 0, 0, dpToPx(6f))
+                setMargins(0, 0, 0, dpToPx(2f))
             }
         }
         scannerStatusBox = scannerBoxLocal
@@ -405,7 +405,7 @@ class PokerHudService : Service() {
         val scannerTxt = TextView(this).apply {
             text = "🔍 🔴 Stage/Board: Waiting..."
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
-            textSize = 9f
+            textSize = 5f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
@@ -418,9 +418,9 @@ class PokerHudService : Service() {
         val injectorTitleText = TextView(this).apply {
             text = "OVERLAY TOGGLES"
             setTextColor(AndroidColor.LTGRAY)
-            textSize = 8f
+            textSize = 4.5f
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, dpToPx(4f), 0, dpToPx(4f))
+            setPadding(0, dpToPx(2f), 0, dpToPx(2f))
         }
         expanded.addView(injectorTitleText)
 
@@ -433,7 +433,7 @@ class PokerHudService : Service() {
 
         val commCheckBox = android.widget.CheckBox(this).apply {
             text = "Comm"
-            textSize = 8f
+            textSize = 4.5f
             setTextColor(AndroidColor.WHITE)
             isChecked = PokerHudSharedState.showCommBox.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showCommBox.value = isChecked }
@@ -442,7 +442,7 @@ class PokerHudService : Service() {
         }
         val holeCheckBox = android.widget.CheckBox(this).apply {
             text = "Hole"
-            textSize = 8f
+            textSize = 4.5f
             setTextColor(AndroidColor.WHITE)
             isChecked = PokerHudSharedState.showHoleBox.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showHoleBox.value = isChecked }
@@ -451,7 +451,7 @@ class PokerHudService : Service() {
         }
         val probsCheckBox = android.widget.CheckBox(this).apply {
             text = "Probs"
-            textSize = 8f
+            textSize = 4.5f
             setTextColor(AndroidColor.WHITE)
             isChecked = PokerHudSharedState.showProbsBox.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showProbsBox.value = isChecked }
@@ -460,7 +460,7 @@ class PokerHudService : Service() {
         }
         val scannerCheckBox = android.widget.CheckBox(this).apply {
             text = "Scan"
-            textSize = 8f
+            textSize = 4.5f
             setTextColor(AndroidColor.WHITE)
             isChecked = PokerHudSharedState.showScannerBoxes.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showScannerBoxes.value = isChecked }
@@ -478,15 +478,15 @@ class PokerHudService : Service() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            setPadding(0, dpToPx(4f), 0, dpToPx(4f))
+            setPadding(0, dpToPx(2f), 0, dpToPx(2f))
         }
         this.togglesRow3 = toggles3
         val readProfileBtn = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "READ PROFILE STATS"
-            textSize = 8f
+            textSize = 4.5f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF1976D2"), 4f)
-            setPadding(dpToPx(4f), 0, dpToPx(4f), 0)
+            setPadding(dpToPx(2f), 0, dpToPx(2f), 0)
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(28f))
         }
         readProfileBtn.setOnClickListener {
@@ -899,23 +899,26 @@ class PokerHudService : Service() {
         val rects = mutableListOf<android.graphics.Rect>()
         floatingOverlayView?.let { v ->
             if (v.visibility == View.VISIBLE || v.visibility == View.INVISIBLE) {
-                val loc = IntArray(2)
-                v.getLocationOnScreen(loc)
-                rects.add(android.graphics.Rect(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height))
+                val params = v.layoutParams as? WindowManager.LayoutParams
+                if (params != null) {
+                    rects.add(android.graphics.Rect(params.x, params.y, params.x + v.width, params.y + v.height))
+                }
             }
         }
         floatingProbsOverlay?.let { v ->
             if (v.visibility == View.VISIBLE || v.visibility == View.INVISIBLE) {
-                val loc = IntArray(2)
-                v.getLocationOnScreen(loc)
-                rects.add(android.graphics.Rect(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height))
+                val params = v.layoutParams as? WindowManager.LayoutParams
+                if (params != null) {
+                    rects.add(android.graphics.Rect(params.x, params.y, params.x + v.width, params.y + v.height))
+                }
             }
         }
         floatingAdvisorOverlay?.let { v ->
             if (v.visibility == View.VISIBLE || v.visibility == View.INVISIBLE) {
-                val loc = IntArray(2)
-                v.getLocationOnScreen(loc)
-                rects.add(android.graphics.Rect(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height))
+                val params = v.layoutParams as? WindowManager.LayoutParams
+                if (params != null) {
+                    rects.add(android.graphics.Rect(params.x, params.y, params.x + v.width, params.y + v.height))
+                }
             }
         }
         return rects
@@ -996,7 +999,7 @@ class PokerHudService : Service() {
                     val dy = (event.rawY - initialTouchY).toInt()
 
                     val newWidth = maxOf(dpToPx(100f), initialWidth + dx)
-                    val newHeight = maxOf(dpToPx(60f), initialHeight + dy)
+                    val newHeight = maxOf(dpToPx(48f), initialHeight + dy)
 
                     params.width = newWidth
                     params.height = newHeight
@@ -1099,7 +1102,7 @@ class PokerHudService : Service() {
                 dpToPx(1.5f),
                 AndroidColor.parseColor("#FF2196F3") // Visible border
             )
-            setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
         }
 
         val content = LinearLayout(this).apply {
@@ -1116,14 +1119,14 @@ class PokerHudService : Service() {
         val title = TextView(this).apply {
             text = "COMMUNITY CARDS CROP BOX"
             setTextColor(AndroidColor.parseColor("#FF2196F3"))
-            textSize = 8f
+            textSize = 4.5f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
         val closeBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f))
+            layoutParams = LinearLayout.LayoutParams(dpToPx(2f), dpToPx(2f))
             setOnClickListener {
                 PokerHudSharedState.showCommBox.value = false
             }
@@ -1134,7 +1137,7 @@ class PokerHudService : Service() {
         content.addView(header)
 
         val spacer = View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(2f))
         }
         content.addView(spacer)
 
@@ -1148,7 +1151,7 @@ class PokerHudService : Service() {
 
         val resizeHandle = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_crop)
-            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
+            layoutParams = FrameLayout.LayoutParams(dpToPx(2f), dpToPx(2f)).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
             }
             setColorFilter(AndroidColor.parseColor("#FF2196F3"))
@@ -1246,7 +1249,7 @@ class PokerHudService : Service() {
                 dpToPx(1.5f),
                 AndroidColor.parseColor("#FFE53935") // Visible border
             )
-            setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
         }
 
         val content = LinearLayout(this).apply {
@@ -1263,14 +1266,14 @@ class PokerHudService : Service() {
         val title = TextView(this).apply {
             text = "HOLE CARDS CROP BOX"
             setTextColor(AndroidColor.parseColor("#FFE53935"))
-            textSize = 8f
+            textSize = 4.5f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
         val closeBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f))
+            layoutParams = LinearLayout.LayoutParams(dpToPx(2f), dpToPx(2f))
             setOnClickListener {
                 PokerHudSharedState.showHoleBox.value = false
             }
@@ -1281,14 +1284,14 @@ class PokerHudService : Service() {
         content.addView(header)
 
         val spacer = View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(4f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(2f))
         }
         content.addView(spacer)
         
         val txtCardsInfo = TextView(this).apply {
             text = "SCANNING"
             setTextColor(AndroidColor.WHITE)
-            textSize = 10f
+            textSize = 4.5f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -1306,7 +1309,7 @@ class PokerHudService : Service() {
 
         val resizeHandle = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_crop)
-            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
+            layoutParams = FrameLayout.LayoutParams(dpToPx(2f), dpToPx(2f)).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
             }
             setColorFilter(AndroidColor.parseColor("#FFE53935"))
@@ -1402,8 +1405,8 @@ class PokerHudService : Service() {
             y = dpToPx(150f)
         }
         val frame = FrameLayout(this).apply {
-            background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 10f, dpToPx(1.5f), AndroidColor.parseColor("#FFD82229"))
-            setPadding(dpToPx(10f), dpToPx(10f), dpToPx(10f), dpToPx(10f))
+            background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 10f, dpToPx(1.5f), AndroidColor.parseColor("#FF1E88E5"))
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
         }
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         
@@ -1415,13 +1418,13 @@ class PokerHudService : Service() {
         val title = TextView(this).apply {
             text = "LIVE HUD DASHBOARD"
             setTextColor(AndroidColor.parseColor("#FFFFD54F"))
-            textSize = 9.5f
+            textSize = 4.5f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         val closeBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f))
+            layoutParams = LinearLayout.LayoutParams(dpToPx(2f), dpToPx(2f))
             setOnClickListener { PokerHudSharedState.showProbsBox.value = false }
         }
         header.addView(title)
@@ -1431,8 +1434,8 @@ class PokerHudService : Service() {
         // Underline block
         content.addView(View(this).apply { 
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
-                topMargin = dpToPx(4f)
-                bottomMargin = dpToPx(6f)
+                topMargin = dpToPx(2f)
+                bottomMargin = dpToPx(2f)
             }
             setBackgroundColor(AndroidColor.parseColor("#33FFFFFF"))
         })
@@ -1441,23 +1444,23 @@ class PokerHudService : Service() {
         val txtWin = TextView(this).apply {
             text = "Winning chance: 0.0%"
             setTextColor(AndroidColor.WHITE)
-            textSize = 10.5f
+            textSize = 4.5f
             typeface = Typeface.DEFAULT_BOLD
         }
         val txtHeroCards = TextView(this).apply {
             text = "Hero Cards: --"
             setTextColor(AndroidColor.parseColor("#FFD54F"))
-            textSize = 9.5f
+            textSize = 4.5f
         }
         val txtStrength = TextView(this).apply {
             text = "Strength: High"
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
-            textSize = 9.5f
+            textSize = 4.5f
         }
         val txtSklan = TextView(this).apply {
             text = "Sklansky: Group 1"
             setTextColor(AndroidColor.parseColor("#FFFF7043"))
-            textSize = 9.5f
+            textSize = 4.5f
         }
         content.addView(txtWin)
         content.addView(txtHeroCards)
@@ -1467,15 +1470,15 @@ class PokerHudService : Service() {
         // 2. ACTION ADVISOR SECTION
         val advDivider = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
-                topMargin = dpToPx(6f)
-                bottomMargin = dpToPx(6f)
+                topMargin = dpToPx(2f)
+                bottomMargin = dpToPx(2f)
             }
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
         }
         val txtAdvisor = TextView(this).apply {
             text = "Advisor Strategy: FOLD"
             setTextColor(AndroidColor.parseColor("#FF90CAF9"))
-            textSize = 10f
+            textSize = 4.5f
             typeface = Typeface.DEFAULT_BOLD
         }
         content.addView(advDivider)
@@ -1484,21 +1487,21 @@ class PokerHudService : Service() {
         // 3. LIVE OPPONENTS SECTION
         val oppDivider = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
-                topMargin = dpToPx(6f)
-                bottomMargin = dpToPx(6f)
+                topMargin = dpToPx(2f)
+                bottomMargin = dpToPx(2f)
             }
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
         }
         val txtOppHeader = TextView(this).apply {
             text = "LIVE OPPONENT PROFILE"
             setTextColor(AndroidColor.parseColor("#FF90CAF9"))
-            textSize = 8.5f
+            textSize = 4.5f
             typeface = Typeface.DEFAULT_BOLD
         }
         val oppStatsTxt = TextView(this).apply {
             text = "Loading opponents..."
             setTextColor(AndroidColor.WHITE)
-            textSize = 9f
+            textSize = 5f
         }
         content.addView(oppDivider)
         content.addView(txtOppHeader)
@@ -1636,19 +1639,19 @@ class PokerHudService : Service() {
         }
         
         serviceScope.launch(job) {
-            PokerHudSharedState.winProbScale.collect { scale -> txtWin.textSize = 10.5f * scale }
+            PokerHudSharedState.winProbScale.collect { scale -> txtWin.textSize = 4.5f * scale }
         }
         serviceScope.launch(job) {
-            PokerHudSharedState.handStrengthScale.collect { scale -> txtStrength.textSize = 9.5f * scale }
+            PokerHudSharedState.handStrengthScale.collect { scale -> txtStrength.textSize = 4.5f * scale }
         }
         serviceScope.launch(job) {
-            PokerHudSharedState.sklanskyScale.collect { scale -> txtSklan.textSize = 9.5f * scale }
+            PokerHudSharedState.sklanskyScale.collect { scale -> txtSklan.textSize = 4.5f * scale }
         }
         serviceScope.launch(job) {
-            PokerHudSharedState.actionAdvisorScale.collect { scale -> txtAdvisor.textSize = 10f * scale }
+            PokerHudSharedState.actionAdvisorScale.collect { scale -> txtAdvisor.textSize = 4.5f * scale }
         }
         serviceScope.launch(job) {
-            PokerHudSharedState.advStatsScale.collect { scale -> oppStatsTxt.textSize = 9f * scale }
+            PokerHudSharedState.advStatsScale.collect { scale -> oppStatsTxt.textSize = 5f * scale }
         }
     }
 

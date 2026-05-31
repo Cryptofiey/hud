@@ -29,13 +29,25 @@ object OpponentScanner {
         val validCharCount = name.count { it.isLetterOrDigit() || it == '-' || it == '_' || it == ' ' }
         if (validCharCount < name.length * 0.6) return false
         
-        // Skip action keywords
+        // Skip action keywords and internal UI text
         val actions = setOf(
             "FOLD", "CALL", "RAISE", "CHECK", "ALL-IN", "ALL IN", "BET", "POT", 
             "DEALER", "PASS", "SIT OUT", "SIT-OUT", "SITOUT", "CHOICE", "CHIPS",
-            "FOLDED", "JOIN", "SIMILAR", "NLH"
+            "FOLDED", "JOIN", "SIMILAR", "NLH", "VPIP", "PFR", "WTSD", "WSD",
+            "BALANCE", "PROFILE", "HUD", "MONITOR", "MONIT", "RUNS", "GAME", "INTERPRETATION",
+            "EQUITY", "OPPONENT", "LIVE", "STATS", "TELEMETRY", "ADVISOR", "STRATEGY"
         )
         if (upper in actions) return false
+        
+        // Exclude specific UI titles that OCR might catch
+        if (upper.contains("GAME INTERPRETATION") || 
+            upper.contains("VISUALIZATION OF") ||
+            upper.contains("CALCULATIONS") ||
+            upper.contains("POKER EQUITY") ||
+            upper.contains("HUD MONITOR") ||
+            upper.contains("OPPONENT PROFILE") ||
+            upper.contains("LIVE DATA TELEMETRY") ||
+            upper.contains("OZZIE 128") || upper.contains("CAPA25")) return false
         
         for (action in actions) {
             if (upper.contains(action) && action.length >= 4) return false
@@ -173,6 +185,8 @@ object OpponentScanner {
             ))
         }
 
+        val uniqueCandidates = candidates.distinctBy { it.nickname }
+
         val finalOpponents = mutableListOf<OpponentState>()
         val matchedCandidates = mutableSetOf<OpponentState>()
 
@@ -184,7 +198,7 @@ object OpponentScanner {
                 // Allow some movement
                 val anchorRadius = 250.0
                 
-                val bestCandidate = candidates.firstOrNull { 
+                val bestCandidate = uniqueCandidates.firstOrNull { 
                     Rect.intersects(it.boundingBox!!, anchor.boundingBox) || 
                     Math.hypot((it.boundingBox!!.centerX() - anchor.boundingBox.centerX()).toDouble(), 
                                (it.boundingBox!!.centerY() - anchor.boundingBox.centerY()).toDouble()) < anchorRadius
@@ -220,7 +234,7 @@ object OpponentScanner {
                 }
             }
 
-            for (candidate in candidates) {
+            for (candidate in uniqueCandidates) {
                 if (candidate !in matchedCandidates) {
                     val newAnchor = TrackedAnchor(candidate.boundingBox!!, candidate.nickname, 0)
                     trackedAnchors.add(newAnchor)
@@ -229,6 +243,9 @@ object OpponentScanner {
             }
         }
 
-        return finalOpponents.mapIndexed { i, opp -> opp.copy(id = i + 1) }
+        // Deduplicate opponents by nickname to prevent OCR feedback loops from UI renders
+        val dedupedOpponents = finalOpponents.distinctBy { it.nickname }
+
+        return dedupedOpponents.mapIndexed { i, opp -> opp.copy(id = i + 1) }
     }
 }
