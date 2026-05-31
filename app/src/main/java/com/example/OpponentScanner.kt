@@ -35,7 +35,9 @@ object OpponentScanner {
             "DEALER", "PASS", "SIT OUT", "SIT-OUT", "SITOUT", "CHOICE", "CHIPS",
             "FOLDED", "POKER", "EQUITY", "HUD", "OVERLAY", "COMMUNITY", "CARDS", 
             "HOLE", "SCAN", "PHASE", "OUTS", "WINNING", "NLH", "JOIN", "SIMILAR",
-            "PRE", "FLOP", "TURN", "RIVER", "BOARD", "BACK", "MUCK"
+            "PRE", "FLOP", "TURN", "RIVER", "BOARD", "BACK", "MUCK", "MONIT",
+            "RUNS", "OPPONENT", "LIVE", "PROFILE", "SOLVER", "MONTE", "CARLO", 
+            "FIDELITY", "ADVISOR", "STRATEGY", "HERO", "CHANCE", "STRENGTH", "SKLANSKY"
         )
         if (upper in actions) return false
         

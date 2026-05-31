@@ -129,7 +129,6 @@ class PokerHudService : Service() {
     private var scannerStatusBox: LinearLayout? = null
     private var txtPreText: TextView? = null
     private var togglesRow1: LinearLayout? = null
-    private var togglesRow2: LinearLayout? = null
     private var togglesRow3: LinearLayout? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -412,7 +411,7 @@ class PokerHudService : Service() {
         txtScannerStatus = scannerTxt
         scannerBoxLocal.addView(scannerTxt)
         
-        expanded.addView(scannerBoxLocal)
+        // Hide scanner logs from HUD: expanded.addView(scannerBoxLocal)
 
         // OVERLAY TOGGLES
         val injectorTitleText = TextView(this).apply {
@@ -430,6 +429,7 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         this.togglesRow1 = toggles1
+
         val commCheckBox = android.widget.CheckBox(this).apply {
             text = "Comm"
             textSize = 8f
@@ -437,6 +437,7 @@ class PokerHudService : Service() {
             isChecked = PokerHudSharedState.showCommBox.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showCommBox.value = isChecked }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
         }
         val holeCheckBox = android.widget.CheckBox(this).apply {
             text = "Hole"
@@ -445,17 +446,8 @@ class PokerHudService : Service() {
             isChecked = PokerHudSharedState.showHoleBox.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showHoleBox.value = isChecked }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
         }
-        toggles1.addView(commCheckBox)
-        toggles1.addView(holeCheckBox)
-        expanded.addView(toggles1)
-
-        val toggles2 = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        }
-        this.togglesRow2 = toggles2
         val probsCheckBox = android.widget.CheckBox(this).apply {
             text = "Probs"
             textSize = 8f
@@ -463,6 +455,7 @@ class PokerHudService : Service() {
             isChecked = PokerHudSharedState.showProbsBox.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showProbsBox.value = isChecked }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
         }
         val scannerCheckBox = android.widget.CheckBox(this).apply {
             text = "Scan"
@@ -471,10 +464,14 @@ class PokerHudService : Service() {
             isChecked = PokerHudSharedState.showScannerBoxes.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showScannerBoxes.value = isChecked }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
         }
-        toggles2.addView(probsCheckBox)
-        toggles2.addView(scannerCheckBox)
-        expanded.addView(toggles2)
+        
+        toggles1.addView(commCheckBox)
+        toggles1.addView(holeCheckBox)
+        toggles1.addView(probsCheckBox)
+        toggles1.addView(scannerCheckBox)
+        expanded.addView(toggles1)
 
         val toggles3 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -701,7 +698,6 @@ class PokerHudService : Service() {
                 headerRow.visibility = visibilityMode
                 divider1.visibility = visibilityMode
                 togglesRow1?.visibility = visibilityMode
-                togglesRow2?.visibility = visibilityMode
                 togglesRow3?.visibility = visibilityMode
                 txtPreText?.visibility = visibilityMode
 
@@ -1468,17 +1464,18 @@ class PokerHudService : Service() {
                     val minHands = PokerHudSharedState.advMinHands.value
                     activeOpps.forEachIndexed { index, opp ->
                         val prefix = if (index > 0) "\n" else ""
-                        val hands = opp.stats?.handsPlayed ?: 0
+                        val nameToShow = if (opp.nickname.length > 10) opp.nickname.take(9) + ".." else opp.nickname
+                        val actStr = if (opp.currentAction != "NONE") " (${opp.currentAction})" else ""
+                        val balanceStr = if (opp.stackSize > 0) " \$${opp.stackSize}" else ""
+                        val betStr = if (opp.betSize > 0) " Bet: \$${opp.betSize}" else ""
                         
                         val vpipVal = opp.stats?.vpip?.toInt() ?: 0
                         val pfrVal = opp.stats?.pfr?.toInt() ?: 0
-                        val actStr = if (opp.currentAction != "NONE") " (${opp.currentAction})" else ""
-                        val nameToShow = if (opp.nickname.length > 10) opp.nickname.take(9) + ".." else opp.nickname
+                        val hands = opp.stats?.handsPlayed ?: 0
                         
-                        if (hands >= minHands) {
-                            sb.append("${prefix}${nameToShow}${actStr}: H:${hands} VPIP:${vpipVal}% PFR:${pfrVal}%")
-                        } else {
-                            sb.append("${prefix}${nameToShow}${actStr}: Need ${minHands - hands} hands")
+                        sb.append("${prefix}${nameToShow}${actStr}${balanceStr}${betStr}")
+                        if (hands > 0 || vpipVal > 0 || pfrVal > 0) {
+                             sb.append(" | VPIP:${vpipVal}% PFR:${pfrVal}%")
                         }
                     }
                 }

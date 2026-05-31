@@ -118,16 +118,125 @@ class ScreenScanner(
             val inputImage = InputImage.fromBitmap(cleanBitmap, 0)
             
             try {
-                val result = recognizer.process(inputImage).await()
+                    val result = recognizer.process(inputImage).await()
                 
                 val commRect = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { pokerHudService.getCommRect() }
                 val holeRect = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { pokerHudService.getHoleRect() }
                 
                 val foundCommCardsRaw = mutableListOf<Pair<Card, Int>>()
-                val foundHoleCardsRaw = mutableListOf<Pair<Card, Int>>()
+                var foundHoleCardsRaw = mutableListOf<Pair<Card, Int>>()
                 
                 val cardPattern = Regex("^(10|T|[AKQJ]|[2-9])$")
                 val debugLogs = mutableListOf<String>()
+                
+                // --- TARGETED HOLE CARD SCAN ---
+                // Due to overlapping cards inside the hole rectangle, we split it into left and right halves,
+                // space them out, and scale them up for much better OCR accuracy on the ranks.
+                if (holeRect.width() > 0 && holeRect.height() > 0) {
+                    val safeHole = android.graphics.Rect(
+                        maxOf(0, holeRect.left - 10),
+                        maxOf(0, holeRect.top - 10),
+                        minOf(cleanBitmap.width, holeRect.right + 10),
+                        minOf(cleanBitmap.height, holeRect.bottom + 10)
+                    )
+                    if (safeHole.width() > 10 && safeHole.height() > 10) {
+                        try {
+                            val croppedHole = Bitmap.createBitmap(cleanBitmap, safeHole.left, safeHole.top, safeHole.width(), safeHole.height())
+                            val halfW = croppedHole.width / 2
+                            val leftHalf = Bitmap.createBitmap(croppedHole, 0, 0, halfW, croppedHole.height)
+                            val rightHalf = Bitmap.createBitmap(croppedHole, halfW, 0, croppedHole.width - halfW, croppedHole.height)
+                            
+                            val scale = 2
+                            val leftScaled = Bitmap.createScaledBitmap(leftHalf, leftHalf.width * scale, leftHalf.height * scale, true)
+                            val rightScaled = Bitmap.createScaledBitmap(rightHalf, rightHalf.width * scale, rightHalf.height * scale, true)
+                            
+                            val combinedW = leftScaled.width + rightScaled.width + 60
+                            val combinedH = maxOf(leftScaled.height, rightScaled.height)
+                            val combinedScaled = Bitmap.createBitmap(combinedW, combinedH, Bitmap.Config.ARGB_8888)
+                            val canvas = android.graphics.Canvas(combinedScaled)
+                            canvas.drawColor(android.graphics.Color.BLACK)
+                            canvas.drawBitmap(leftScaled, 0f, 0f, null)
+                            canvas.drawBitmap(rightScaled, leftScaled.width.toFloat() + 60f, 0f, null)
+                            
+                            val holeInputImage = InputImage.fromBitmap(combinedScaled, 0)
+                            val holeResult = recognizer.process(holeInputImage).await()
+                            
+                            val rankPatternRegex = Regex("(10|1|T|[AKQJ]|[2-9])")
+                            for (block in holeResult.textBlocks) {
+                                for (line in block.lines) {
+                                    for (element in line.elements) {
+                                        var rawText = element.text.uppercase(java.util.Locale.US)
+                                        rawText = rawText.replace("1O", "10").replace("I0", "10").replace("IO", "10").replace("L0", "10")
+                                        val matches = rankPatternRegex.findAll(rawText).toList()
+                                        for (match in matches) {
+                                            val text = match.value
+                                            val rank = parseRank(text) ?: continue
+                                            val box = element.boundingBox ?: continue
+                                            
+                                            // Determine if it came from left or right half
+                                            val isLeftHalf = box.centerX() < leftScaled.width + 30
+                                            val approxCenterBoxX = if (isLeftHalf) {
+                                                safeHole.left + (box.centerX() / scale)
+                                            } else {
+                                                safeHole.left + halfW + ((box.centerX() - leftScaled.width - 60) / scale)
+                                            }
+                                            
+                                            var redCount = 0
+                                            var greenCount = 0
+                                            var blueCount = 0
+                                            var blackCount = 0
+                                            
+                                            val startX = maxOf(0, approxCenterBoxX - (box.width() / scale))
+                                            val endX = minOf(cleanBitmap.width - 1, approxCenterBoxX + (box.width() / scale / 4))
+                                            val startY = maxOf(0, safeHole.top + (box.top / scale) - 5)
+                                            val endY = minOf(cleanBitmap.height - 1, safeHole.top + (box.bottom / scale) + 20)
+                                            
+                                            if (startX <= endX && startY <= endY) {
+                                                for (px in startX..endX step 2) {
+                                                    for (py in startY..endY step 2) {
+                                                        val pixel = cleanBitmap.getPixel(px, py)
+                                                        val r = android.graphics.Color.red(pixel)
+                                                        val g = android.graphics.Color.green(pixel)
+                                                        val b = android.graphics.Color.blue(pixel)
+                                                        
+                                                        if (r - g > 40 && r - b > 40 && r > 100) redCount++
+                                                        else if (g - r > 30 && g - b > 20 && g > 90) greenCount++
+                                                        else if ((b - r > 30 && b > 90) || (b > 120 && g > 100 && r < 100)) blueCount++
+                                                        else if (r < 90 && g < 90 && b < 90) blackCount++
+                                                    }
+                                                }
+                                            }
+                                            
+                                            var suit = Suit.SPADES 
+                                            if (redCount > greenCount && redCount > blueCount && redCount > blackCount && redCount > 5) suit = Suit.HEARTS 
+                                            else if (greenCount > redCount && greenCount > blueCount && greenCount > blackCount && greenCount > 5) suit = Suit.CLUBS
+                                            else if (blueCount > redCount && blueCount > greenCount && blueCount > blackCount && blueCount > 5) suit = Suit.DIAMONDS
+                                            else if (blackCount > redCount && blackCount > greenCount && blackCount > blueCount && blackCount > 5) suit = Suit.SPADES
+                                            else {
+                                                if (redCount > 0) suit = Suit.HEARTS
+                                                else if (greenCount > 0) suit = Suit.CLUBS
+                                                else if (blueCount > 0) suit = Suit.DIAMONDS
+                                            }
+                                            
+                                            val card = Card(rank, suit)
+                                            foundHoleCardsRaw.add(Pair(card, approxCenterBoxX))
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            leftHalf.recycle()
+                            rightHalf.recycle()
+                            leftScaled.recycle()
+                            rightScaled.recycle()
+                            combinedScaled.recycle()
+                            croppedHole.recycle()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+                // --- END TARGETED HOLE CARD SCAN ---
                 
                 for (block in result.textBlocks) {
                     for (line in block.lines) {
@@ -197,7 +306,8 @@ class ScreenScanner(
                                 
                                 if (inComm) {
                                     foundCommCardsRaw.add(Pair(card, approxCenterBoxX))
-                                } else if (inHole) {
+                                } else if (inHole && foundHoleCardsRaw.isEmpty()) {
+                                    // only fallback to full-screen hole card parsing if the targeted approach found nothing
                                     foundHoleCardsRaw.add(Pair(card, approxCenterBoxX))
                                 }
                             }

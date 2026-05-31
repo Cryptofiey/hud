@@ -779,23 +779,37 @@ fun SettingsLayout(
 
                             HorizontalDivider(color = Color(0x1AFFFFFF), modifier = Modifier.padding(vertical = 4.dp))
 
-                            uiState.opponents.forEach { opp ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(if (opp.nickname.isNotEmpty()) opp.nickname else "Empty Seed", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                        val vpip = opp.stats?.histVpip ?: opp.stats?.vpip ?: 0f
-                                        val pfr = opp.stats?.histPfr ?: opp.stats?.pfr ?: 0f
-                                        val wtsd = opp.stats?.histWtsd ?: 0f
-                                        val wsd = opp.stats?.histWsd ?: 0f
-                                        Text(
-                                            "General Profile - VPIP: ${String.format(Locale.US, "%.0f", vpip)}% | PFR: ${String.format(Locale.US, "%.0f", pfr)}% | WTSD: ${String.format(Locale.US, "%.0f", wtsd)}% | WSD: ${String.format(Locale.US, "%.0f", wsd)}%",
-                                            color = Color.LightGray,
-                                            fontSize = 9.sp
-                                        )
+                            val activeOpps = uiState.opponents.filter { it.isActive }
+                            if (activeOpps.isEmpty()) {
+                                Text("No active opponents tracked at the table.", color = Color.Gray, fontSize = 12.sp)
+                            } else {
+                                activeOpps.forEach { opp ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            val actStr = if (opp.currentAction != "NONE") " (${opp.currentAction})" else ""
+                                            val balanceStr = if (opp.stackSize > 0) " \$${opp.stackSize}" else ""
+                                            val betStr = if (opp.betSize > 0) " Bet: \$${opp.betSize}" else ""
+                                            
+                                            Text(
+                                                text = "${if (opp.nickname.isNotEmpty()) opp.nickname else "Empty Seed"}$actStr", 
+                                                color = Color.White, 
+                                                fontWeight = FontWeight.Bold, 
+                                                fontSize = 12.sp
+                                            )
+                                            val vpip = opp.stats?.histVpip ?: opp.stats?.vpip ?: 0f
+                                            val pfr = opp.stats?.histPfr ?: opp.stats?.pfr ?: 0f
+                                            val wtsd = opp.stats?.histWtsd ?: 0f
+                                            val wsd = opp.stats?.histWsd ?: 0f
+                                            Text(
+                                                "Balance:$balanceStr$betStr | Profile: VPIP: ${String.format(java.util.Locale.US, "%.0f", vpip)}% | PFR: ${String.format(java.util.Locale.US, "%.0f", pfr)}% | WTSD: ${String.format(java.util.Locale.US, "%.0f", wtsd)}% | WSD: ${String.format(java.util.Locale.US, "%.0f", wsd)}%",
+                                                color = Color.LightGray,
+                                                fontSize = 9.sp
+                                            )
+                                        }
                                     }
                                 }
                             }
