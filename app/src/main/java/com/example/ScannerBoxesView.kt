@@ -90,41 +90,43 @@ class ScannerBoxesView(context: Context) : View(context) {
         val h = height.toFloat()
 
         // Draw the search zone (Horseshoe)
-        val path = Path()
-        path.moveTo(0f, h)
-        path.lineTo(0f, 0f)
-        path.lineTo(w, 0f)
-        path.lineTo(w, h)
-        // Inner cutout (matching the parameters in OpponentScanner)
-        path.lineTo(w * 0.65f, h)
-        path.lineTo(w * 0.65f, h * 0.35f)
-        path.lineTo(w * 0.35f, h * 0.35f)
-        path.lineTo(w * 0.35f, h)
-        path.close()
+        if (state.profileBoxes == null || PokerHudSharedState.showScannerBoxes.value) {
+            val path = Path()
+            path.moveTo(0f, h)
+            path.lineTo(0f, 0f)
+            path.lineTo(w, 0f)
+            path.lineTo(w, h)
+            // Inner cutout (matching the parameters in OpponentScanner)
+            path.lineTo(w * 0.65f, h)
+            path.lineTo(w * 0.65f, h * 0.35f)
+            path.lineTo(w * 0.35f, h * 0.35f)
+            path.lineTo(w * 0.35f, h)
+            path.close()
 
-        canvas.drawPath(path, zoneFillPaint)
-        canvas.drawPath(path, zoneOutlinePaint)
+            canvas.drawPath(path, zoneFillPaint)
+            canvas.drawPath(path, zoneOutlinePaint)
 
-        for (opp in state.opponents) {
-            val box = opp.boundingBox
-            if (box != null) {
-                val actualBox = Rect(
-                    box.left + offsetX.toInt(),
-                    box.top + offsetY.toInt(),
-                    box.right + offsetX.toInt(),
-                    box.bottom + offsetY.toInt()
-                )
-                
-                if (opp.isActive) {
-                    canvas.drawRect(actualBox, fillPaint)
-                    canvas.drawRect(actualBox, boxPaint)
+            for (opp in state.opponents) {
+                val box = opp.boundingBox
+                if (box != null) {
+                    val actualBox = Rect(
+                        box.left + offsetX.toInt(),
+                        box.top + offsetY.toInt(),
+                        box.right + offsetX.toInt(),
+                        box.bottom + offsetY.toInt()
+                    )
                     
-                    val label = opp.nickname
-                    canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
-                } else {
-                    // Draw dim grey box if folded/inactive so user knows scanner didn't lose track of the frame
-                    canvas.drawRect(actualBox, inactiveBoxPaint)
-                    canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
+                    if (opp.isActive) {
+                        canvas.drawRect(actualBox, fillPaint)
+                        canvas.drawRect(actualBox, boxPaint)
+                        
+                        val label = opp.nickname
+                        canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
+                    } else {
+                        // Draw dim grey box if folded/inactive so user knows scanner didn't lose track of the frame
+                        canvas.drawRect(actualBox, inactiveBoxPaint)
+                        canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
+                    }
                 }
             }
         }
