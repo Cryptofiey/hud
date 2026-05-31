@@ -85,6 +85,9 @@ class ScreenScanner(
         }
     }
 
+    private var consecutiveEmptyHole = 0
+    private var consecutiveEmptyComm = 0
+
     private suspend fun processLatestImage() {
         var image: Image? = null
         try {
@@ -166,25 +169,30 @@ class ScreenScanner(
                                         val g = android.graphics.Color.green(pixel)
                                         val b = android.graphics.Color.blue(pixel)
                                         
-                                        if (r > 150 && g < 100 && b < 100) redCount++
-                                        if (g > 120 && r < 100 && b < 100) greenCount++
-                                        if (b > 120 && r < 100 && g < 100) blueCount++
-                                        if (r < 80 && g < 80 && b < 80 && (r+g+b) < 150) blackCount++
+                                        // Hearts / Red
+                                        if (r - g > 40 && r - b > 40 && r > 100) redCount++
+                                        // Clubs / Green
+                                        else if (g - r > 30 && g - b > 20 && g > 90) greenCount++
+                                        // Diamonds / Blue
+                                        else if ((b - r > 30 && b > 90) || (b > 120 && g > 100 && r < 100)) blueCount++
+                                        // Spades / Black/Dark Gray
+                                        else if (r < 90 && g < 90 && b < 90) blackCount++
                                     }
                                 }
-                                
-                                if (redCount > 5) isRed = true
-                                if (greenCount > 5) isGreen = true
-                                if (blueCount > 5) isBlue = true
-                                if (blackCount > 10) isBlack = true
                                 
                                 val rank = parseRank(text) ?: continue
                                 var suit = Suit.SPADES 
                                 
-                                if (isRed) suit = Suit.HEARTS 
-                                else if (isGreen) suit = Suit.CLUBS
-                                else if (isBlue) suit = Suit.DIAMONDS
-                                else if (isBlack) suit = Suit.SPADES
+                                if (redCount > greenCount && redCount > blueCount && redCount > blackCount && redCount > 5) suit = Suit.HEARTS 
+                                else if (greenCount > redCount && greenCount > blueCount && greenCount > blackCount && greenCount > 5) suit = Suit.CLUBS
+                                else if (blueCount > redCount && blueCount > greenCount && blueCount > blackCount && blueCount > 5) suit = Suit.DIAMONDS
+                                else if (blackCount > redCount && blackCount > greenCount && blackCount > blueCount && blackCount > 5) suit = Suit.SPADES
+                                else {
+                                    // Fallback if no prominent color
+                                    if (redCount > 0) suit = Suit.HEARTS
+                                    else if (greenCount > 0) suit = Suit.CLUBS
+                                    else if (blueCount > 0) suit = Suit.DIAMONDS
+                                }
                                 
                                 val card = Card(rank, suit)
                                 
@@ -200,18 +208,37 @@ class ScreenScanner(
                 
                 val commW = commRect.width()
                 val holeW = holeRect.width()
-                val paddedBoard = foundCommCards.take(5) + List(maxOf(0, 5 - foundCommCards.size)) { null }
                 val h1 = foundHoleCards.getOrNull(0)
                 val h2 = foundHoleCards.getOrNull(1)
-                scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} (${commW},${holeW})\n" +
-                                   "Box: ${debugLogs.joinToString(", ")}\n" + 
-                                   "Board: ${paddedBoard.joinToString("") { it?.toString() ?: "[?]" }}"
                 
-                if (foundHoleCards.isNotEmpty() || foundCommCards.isNotEmpty()) {
-                    PokerHudSharedState.externalActions.tryEmit(
-                        ExternalAction.UpdateCards(h1, h2, paddedBoard)
-                    )
+                val currentState = PokerHudSharedState.uiState.value
+                
+                if (foundHoleCards.isEmpty()) {
+                    consecutiveEmptyHole++
+                } else {
+                    consecutiveEmptyHole = 0
                 }
+                
+                if (foundCommCards.isEmpty()) {
+                    consecutiveEmptyComm++
+                } else {
+                    consecutiveEmptyComm = 0
+                }
+                
+                val finalH1 = if (foundHoleCards.isNotEmpty()) h1 else if (consecutiveEmptyHole < 3) currentState.heroCard1 else null
+                val finalH2 = if (foundHoleCards.isNotEmpty()) h2 else if (consecutiveEmptyHole < 3) currentState.heroCard2 else null
+                val finalBoard = if (foundCommCards.isNotEmpty()) foundCommCards.take(5) + List(maxOf(0, 5 - foundCommCards.size)) { null } else if (consecutiveEmptyComm < 3) currentState.board else List(5) { null }
+                
+                val scannedOpponents = OpponentScanner.scan(result, cleanBitmap)
+                val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
+                
+                scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} (${commW},${holeW})\n" +
+                                   "Opps: ${finalOpponents.size}\n" +
+                                   "Board: ${finalBoard.joinToString("") { it?.toString() ?: "[?]" }}"
+                
+                PokerHudSharedState.externalActions.tryEmit(
+                    ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents)
+                )
                 
             } catch (e: Exception) {
                 scanStatus.value = "OCR Failed: ${e.message}"

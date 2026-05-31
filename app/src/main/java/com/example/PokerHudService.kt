@@ -38,7 +38,8 @@ sealed class ExternalAction {
     data class UpdateCards(
         val hero1: Card?,
         val hero2: Card?,
-        val board: List<Card?>
+        val board: List<Card?>,
+        val opponents: List<OpponentState> = emptyList()
     ) : ExternalAction()
     data class ControlHud(val command: String) : ExternalAction()
 }
@@ -656,18 +657,25 @@ class PokerHudService : Service() {
         serviceScope.launch { PokerHudSharedState.showOpponentsBox.collect { updateBoxOverlays() } }
 
         // 6. OBSERVE PROGRAMMATIC CONTROL COMMANDS VIA BROADCASTS (e.g. from Termux scripts)
+        var backgroundSimulationJob: kotlinx.coroutines.Job? = null
         serviceScope.launch {
             PokerHudSharedState.externalActions.collect { action ->
                 if (action is ExternalAction.UpdateCards) {
                     val currentState = PokerHudSharedState.uiState.value
+                    val newBoard = action.board.take(5) + List(maxOf(0, 5 - action.board.size)) { null }
+                    if (currentState.heroCard1 == action.hero1 && currentState.heroCard2 == action.hero2 && currentState.board == newBoard && currentState.opponents == action.opponents) {
+                        return@collect
+                    }
                     val updatedState = currentState.copy(
                         heroCard1 = action.hero1,
                         heroCard2 = action.hero2,
-                        board = action.board.take(5) + List(maxOf(0, 5 - action.board.size)) { null }
+                        board = newBoard,
+                        opponents = if (action.opponents.isNotEmpty()) action.opponents else currentState.opponents
                     )
                     PokerHudSharedState.uiState.value = updatedState
                     
-                    serviceScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                    backgroundSimulationJob?.cancel()
+                    backgroundSimulationJob = serviceScope.launch(kotlinx.coroutines.Dispatchers.Default) {
                         try {
                             val result = com.example.SimulationEngine.runHoldemSimulation(
                                 heroCard1 = updatedState.heroCard1,
@@ -737,16 +745,14 @@ class PokerHudService : Service() {
 
     fun getCommRect(): android.graphics.Rect {
         val view = floatingCommOverlay ?: return android.graphics.Rect(0, 0, 0, 0)
-        val loc = IntArray(2)
-        view.getLocationOnScreen(loc)
-        return android.graphics.Rect(loc[0], loc[1], loc[0] + view.width, loc[1] + view.height)
+        val params = view.layoutParams as? WindowManager.LayoutParams ?: return android.graphics.Rect(0, 0, 0, 0)
+        return android.graphics.Rect(params.x, params.y, params.x + view.width, params.y + view.height)
     }
 
     fun getHoleRect(): android.graphics.Rect {
         val view = floatingHoleOverlay ?: return android.graphics.Rect(0, 0, 0, 0)
-        val loc = IntArray(2)
-        view.getLocationOnScreen(loc)
-        return android.graphics.Rect(loc[0], loc[1], loc[0] + view.width, loc[1] + view.height)
+        val params = view.layoutParams as? WindowManager.LayoutParams ?: return android.graphics.Rect(0, 0, 0, 0)
+        return android.graphics.Rect(params.x, params.y, params.x + view.width, params.y + view.height)
     }
 
     private fun setupDragListener(view: View, params: WindowManager.LayoutParams) {
@@ -857,22 +863,6 @@ class PokerHudService : Service() {
         }
         content.addView(spacer)
 
-        val cardsRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        }
-
-        val txtCardsInfo = TextView(this).apply {
-            text = "Board Cards: Empty"
-            setTextColor(AndroidColor.LTGRAY)
-            textSize = 10f
-            typeface = Typeface.MONOSPACE
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        }
-        cardsRow.addView(txtCardsInfo)
-        content.addView(cardsRow)
-
         val laserLine = View(this).apply {
             setBackgroundColor(AndroidColor.parseColor("#FF00FFCC"))
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(3f)).apply {
@@ -923,12 +913,7 @@ class PokerHudService : Service() {
             }
             launch {
                 PokerHudSharedState.uiState.collect { state ->
-                    val b1 = formatCardRaw(state.board.getOrNull(0))
-                    val b2 = formatCardRaw(state.board.getOrNull(1))
-                    val b3 = formatCardRaw(state.board.getOrNull(2))
-                    val b4 = formatCardRaw(state.board.getOrNull(3))
-                    val b5 = formatCardRaw(state.board.getOrNull(4))
-                    txtCardsInfo.text = "Board: [$b1][$b2][$b3][$b4][$b5]\nFlop       Turn River"
+                    // Removed txtCardsInfo updates
                 }
             }
         }
@@ -1014,22 +999,6 @@ class PokerHudService : Service() {
         }
         content.addView(spacer)
 
-        val cardsRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        }
-
-        val txtCardsInfo = TextView(this).apply {
-            text = "Hole: [ ? ] [ ? ]"
-            setTextColor(AndroidColor.LTGRAY)
-            textSize = 10f
-            typeface = Typeface.MONOSPACE
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        }
-        cardsRow.addView(txtCardsInfo)
-        content.addView(cardsRow)
-
         val laserLine = View(this).apply {
             setBackgroundColor(AndroidColor.parseColor("#FF00FFCC"))
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dpToPx(3f)).apply {
@@ -1080,9 +1049,7 @@ class PokerHudService : Service() {
             }
             launch {
                 PokerHudSharedState.uiState.collect { state ->
-                    val h1 = formatCardRaw(state.heroCard1)
-                    val h2 = formatCardRaw(state.heroCard2)
-                    txtCardsInfo.text = "Hole 1: [$h1]\nHole 2: [$h2]"
+                    // Removed txtCardsInfo updates
                 }
             }
         }
