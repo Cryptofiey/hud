@@ -123,8 +123,8 @@ class ScreenScanner(
                 val commRect = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { pokerHudService.getCommRect() }
                 val holeRect = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { pokerHudService.getHoleRect() }
                 
-                val foundCommCards = mutableListOf<Card>()
-                val foundHoleCards = mutableListOf<Card>()
+                val foundCommCardsRaw = mutableListOf<Pair<Card, Int>>()
+                val foundHoleCardsRaw = mutableListOf<Pair<Card, Int>>()
                 
                 val cardPattern = Regex("^(10|T|[AKQJ]|[2-9])$")
                 val debugLogs = mutableListOf<String>()
@@ -143,7 +143,11 @@ class ScreenScanner(
                                 debugLogs.add(element.text)
                             }
                             
-                            val rawText = element.text.uppercase(java.util.Locale.US)
+                            var rawText = element.text.uppercase(java.util.Locale.US)
+                            rawText = rawText.replace("1O", "10").replace("I0", "10").replace("IO", "10").replace("L0", "10")
+                            if (rawText.contains("10")) {
+                                rawText = "10"
+                            }
                             val text = rawText.replace(Regex("[^10AKQJT2-9]"), "")
                             if (cardPattern.matches(text) && rawText.length <= 4) { 
                                 val checkX = box.centerX()
@@ -199,14 +203,17 @@ class ScreenScanner(
                                 val card = Card(rank, suit)
                                 
                                 if (inComm) {
-                                    foundCommCards.add(card)
+                                    foundCommCardsRaw.add(Pair(card, box.centerX()))
                                 } else if (inHole) {
-                                    foundHoleCards.add(card)
+                                    foundHoleCardsRaw.add(Pair(card, box.centerX()))
                                 }
                             }
                         }
                     }
                 }
+                
+                val foundCommCards = foundCommCardsRaw.sortedBy { it.second }.map { it.first }.distinct().toMutableList()
+                val foundHoleCards = foundHoleCardsRaw.sortedBy { it.second }.map { it.first }.distinct().toMutableList()
                 
                 val commW = commRect.width()
                 val holeW = holeRect.width()

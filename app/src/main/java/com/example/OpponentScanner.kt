@@ -172,54 +172,56 @@ object OpponentScanner {
         val finalOpponents = mutableListOf<OpponentState>()
         val matchedCandidates = mutableSetOf<OpponentState>()
 
-        val iterator = trackedAnchors.iterator()
-        while (iterator.hasNext()) {
-            val anchor = iterator.next()
-            
-            // Allow some movement
-            val anchorRadius = 250.0
-            
-            val bestCandidate = candidates.firstOrNull { 
-                Rect.intersects(it.boundingBox!!, anchor.boundingBox) || 
-                Math.hypot((it.boundingBox!!.centerX() - anchor.boundingBox.centerX()).toDouble(), 
-                           (it.boundingBox!!.centerY() - anchor.boundingBox.centerY()).toDouble()) < anchorRadius
-            }
+        synchronized(trackedAnchors) {
+            val iterator = trackedAnchors.iterator()
+            while (iterator.hasNext()) {
+                val anchor = iterator.next()
+                
+                // Allow some movement
+                val anchorRadius = 250.0
+                
+                val bestCandidate = candidates.firstOrNull { 
+                    Rect.intersects(it.boundingBox!!, anchor.boundingBox) || 
+                    Math.hypot((it.boundingBox!!.centerX() - anchor.boundingBox.centerX()).toDouble(), 
+                               (it.boundingBox!!.centerY() - anchor.boundingBox.centerY()).toDouble()) < anchorRadius
+                }
 
-            if (bestCandidate != null) {
-                matchedCandidates.add(bestCandidate)
-                anchor.consecutiveMisses = 0
-                
-                // Slowly adapt bounding box
-                anchor.boundingBox.union(bestCandidate.boundingBox!!)
-                
-                // Allow name update if the new name is valid, but anchor provides stability
-                anchor.nickname = bestCandidate.nickname
-                
-                finalOpponents.add(bestCandidate.copy(nickname = anchor.nickname, boundingBox = anchor.boundingBox))
-            } else {
-                anchor.consecutiveMisses++
-                if (anchor.consecutiveMisses > 4) {
-                    iterator.remove() // Player left, or we missed them too many times
+                if (bestCandidate != null) {
+                    matchedCandidates.add(bestCandidate)
+                    anchor.consecutiveMisses = 0
+                    
+                    // Slowly adapt bounding box
+                    anchor.boundingBox.union(bestCandidate.boundingBox!!)
+                    
+                    // Allow name update if the new name is valid, but anchor provides stability
+                    anchor.nickname = bestCandidate.nickname
+                    
+                    finalOpponents.add(bestCandidate.copy(nickname = anchor.nickname, boundingBox = anchor.boundingBox))
                 } else {
-                    // Remember them for a few frames
-                    finalOpponents.add(OpponentState(
-                        id = 0,
-                        nickname = anchor.nickname,
-                        stackSize = 0,
-                        isActive = true,
-                        isRandom = true,
-                        currentAction = "NONE",
-                        boundingBox = anchor.boundingBox
-                    ))
+                    anchor.consecutiveMisses++
+                    if (anchor.consecutiveMisses > 4) {
+                        iterator.remove() // Player left, or we missed them too many times
+                    } else {
+                        // Remember them for a few frames
+                        finalOpponents.add(OpponentState(
+                            id = 0,
+                            nickname = anchor.nickname,
+                            stackSize = 0,
+                            isActive = true,
+                            isRandom = true,
+                            currentAction = "NONE",
+                            boundingBox = anchor.boundingBox
+                        ))
+                    }
                 }
             }
-        }
 
-        for (candidate in candidates) {
-            if (candidate !in matchedCandidates) {
-                val newAnchor = TrackedAnchor(candidate.boundingBox!!, candidate.nickname, 0)
-                trackedAnchors.add(newAnchor)
-                finalOpponents.add(candidate)
+            for (candidate in candidates) {
+                if (candidate !in matchedCandidates) {
+                    val newAnchor = TrackedAnchor(candidate.boundingBox!!, candidate.nickname, 0)
+                    trackedAnchors.add(newAnchor)
+                    finalOpponents.add(candidate)
+                }
             }
         }
 
