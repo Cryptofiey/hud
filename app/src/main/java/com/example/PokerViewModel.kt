@@ -45,7 +45,8 @@ data class PokerUiState(
     val position: TablePosition = TablePosition.BTN,
     val stage: TournamentStage = TournamentStage.EARLY,
     val settings: AdvisorSettings = AdvisorSettings(),
-    val recommendation: Recommendation? = null
+    val recommendation: Recommendation? = null,
+    val profileBoxes: List<android.graphics.Rect>? = null
 ) {
     // Collect all selected cards on the table to dim them in the card picker grid
     fun getAllSelectedCards(): Set<Card> {

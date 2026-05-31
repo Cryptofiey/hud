@@ -35,7 +35,8 @@ data class PlayerStats(
     val histSteal: Float? = null,
     val histCheckRaise: Float? = null,
     val histWtsd: Float? = null,
-    val histWsd: Float? = null
+    val histWsd: Float? = null,
+    @Transient var profileBoundingBoxes: List<android.graphics.Rect>? = null
 ) {
     val vpip: Float get() = if (handsPlayed > 0) (vpipCount.toFloat() / handsPlayed * 100f) else 0f
     val pfr: Float get() = if (handsPlayed > 0) (pfrCount.toFloat() / handsPlayed * 100f) else 0f

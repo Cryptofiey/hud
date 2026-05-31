@@ -359,9 +359,11 @@ class ScreenScanner(
                 val scannedOpponents = OpponentScanner.scan(result, cleanBitmap, hudRects)
                 val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
 
+                var profileBoxesToHighlight: List<android.graphics.Rect>? = null
                 if (requestProfileScan) {
                     val scannedProfile = ProfileScanner.scan(result, cleanBitmap, hudRects)
                     if (scannedProfile != null && scannedProfile.nickname != "Unknown_Profile") {
+                        profileBoxesToHighlight = scannedProfile.profileBoundingBoxes
                         val prefsManager = PreferencesManager(pokerHudService)
                         val existing = prefsManager.loadPlayerStats(scannedProfile.nickname)
                         val updated = existing.copy(
@@ -389,6 +391,9 @@ class ScreenScanner(
                     requestProfileScan = false
                     
                     if (stopAfterProfileScan) {
+                        PokerHudSharedState.externalActions.tryEmit(
+                            ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight)
+                        )
                         stop()
                         return
                     }
@@ -399,7 +404,7 @@ class ScreenScanner(
                                    "Board: ${finalBoard.joinToString("") { it?.toHtmlString() ?: "[?]" }}"
                 
                 PokerHudSharedState.externalActions.tryEmit(
-                    ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents)
+                    ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight)
                 )
                 
             } catch (e: Exception) {

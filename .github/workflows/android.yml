@@ -34,7 +34,7 @@ jobs:
           validate-wrappers: false
 
       - name: Build APK
-        run: gradle assembleDebug
+        run: gradle assembleDebug --build-cache --parallel --no-daemon -Porg.gradle.caching=true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

@@ -39,7 +39,8 @@ sealed class ExternalAction {
         val hero1: Card?,
         val hero2: Card?,
         val board: List<Card?>,
-        val opponents: List<OpponentState> = emptyList()
+        val opponents: List<OpponentState> = emptyList(),
+        val profileBoxes: List<android.graphics.Rect>? = null
     ) : ExternalAction()
     data class ControlHud(val command: String) : ExternalAction()
 }
@@ -490,6 +491,7 @@ class PokerHudService : Service() {
         }
         readProfileBtn.setOnClickListener {
             if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
+                PokerHudSharedState.showScannerBoxes.value = true
                 if (screenScanner != null) {
                     screenScanner?.requestProfileScan = true
                 } else {
@@ -790,7 +792,7 @@ class PokerHudService : Service() {
                         }
                     }
 
-                    if (currentState.heroCard1 == action.hero1 && currentState.heroCard2 == action.hero2 && currentState.board == newBoard && currentState.opponents == finalOpponentsList) {
+                    if (currentState.heroCard1 == action.hero1 && currentState.heroCard2 == action.hero2 && currentState.board == newBoard && currentState.opponents == finalOpponentsList && currentState.profileBoxes == action.profileBoxes) {
                         return@collect
                     }
 
@@ -798,9 +800,17 @@ class PokerHudService : Service() {
                         heroCard1 = action.hero1,
                         heroCard2 = action.hero2,
                         board = newBoard,
-                        opponents = finalOpponentsList
+                        opponents = finalOpponentsList,
+                        profileBoxes = action.profileBoxes 
                     )
                     PokerHudSharedState.uiState.value = updatedState
+                    
+                    if (action.profileBoxes != null) {
+                        serviceScope.launch {
+                            kotlinx.coroutines.delay(2500)
+                            PokerHudSharedState.uiState.value = PokerHudSharedState.uiState.value.copy(profileBoxes = null)
+                        }
+                    }
                     
                     backgroundSimulationJob?.cancel()
                     backgroundSimulationJob = serviceScope.launch(kotlinx.coroutines.Dispatchers.Default) {

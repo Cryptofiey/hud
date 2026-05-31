@@ -52,6 +52,19 @@ class ScannerBoxesView(context: Context) : View(context) {
         isAntiAlias = true
     }
 
+    private val profileBoxPaint = Paint().apply {
+        style = Paint.Style.STROKE
+        color = Color.parseColor("#FFFFEB3B") // Yellow for profile highlights
+        strokeWidth = 4f
+        isAntiAlias = true
+    }
+
+    private val profileFillPaint = Paint().apply {
+        style = Paint.Style.FILL
+        color = Color.parseColor("#44FFEB3B") // Semi-transparent yellow
+        isAntiAlias = true
+    }
+
     var state: PokerUiState = PokerUiState()
         set(value) {
             field = value
@@ -114,6 +127,18 @@ class ScannerBoxesView(context: Context) : View(context) {
                     canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
                 }
             }
+        }
+
+        // Draw profile stat highlights if any
+        state.profileBoxes?.forEach { box ->
+            val actualBox = Rect(
+                box.left + offsetX.toInt(),
+                box.top + offsetY.toInt(),
+                box.right + offsetX.toInt(),
+                box.bottom + offsetY.toInt()
+            )
+            canvas.drawRect(actualBox, profileFillPaint)
+            canvas.drawRect(actualBox, profileBoxPaint)
         }
     }
 }

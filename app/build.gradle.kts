@@ -55,6 +55,11 @@ android {
     compose = true
     buildConfig = true
   }
+  
+  ksp {
+    arg("room.incremental", "true")
+  }
+  
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
