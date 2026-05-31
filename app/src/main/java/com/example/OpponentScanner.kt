@@ -36,62 +36,57 @@ object OpponentScanner {
         val opponents = mutableListOf<OpponentState>()
         val blocks = result.textBlocks
 
-        // 1. Find all possible chips/stack texts to locate opponent frames.
-        // A player frame generally has a name and a stack. Stack is numbers + commas.
-        val chipBlocks = blocks.filter { block ->
-            val text = block.text.replace(",", "").trim()
-            text.all { it.isDigit() } && text.isNotEmpty() && text.length > 2
-        }
-
         val height = cleanBitmap.height
         val width = cleanBitmap.width
         
-        var oppId = 1
-        for (chipBlock in chipBlocks) {
-            val chipBox = chipBlock.boundingBox ?: continue
+        // 1. Find potential player names in the horseshoe boundary
+        val nameBlocks = blocks.filter { block ->
+            val box = block.boundingBox ?: return@filter false
+            val x = box.centerX().toFloat()
+            val y = box.centerY().toFloat()
             
-            // Ignore the user's own frame at the bottom center of the screen
-            if (chipBox.centerY() > height * 0.70f && chipBox.centerX() > width * 0.25f && chipBox.centerX() < width * 0.75f) {
-                continue
-            }
-            val chipText = chipBlock.text
+            // Widen the edge zones to 35% from left and right to ensure we capture all names.
+            val inSearchZone = (x < width * 0.36f || x > width * 0.64f || y < height * 0.40f)
+            inSearchZone && isValidPlayerName(block.text)
+        }
 
-            // Ignore likely pot sizes (usually near the center of the screen)
-            // But let's keep it simple for now, as we verify by checking name above.
-
-            var nameBox: Rect? = null
-            var nameText = "Unknown"
+        var oppId = 1
+        for (nameBlock in nameBlocks) {
+            val nameBox = nameBlock.boundingBox ?: continue
+            val nameText = nameBlock.text.trim()
+            
+            // 2. Find stack size below the name
+            var chipBox: Rect? = null
+            var stackValue = 0
             
             for (block in blocks) {
-                if (block == chipBlock) continue
+                if (block == nameBlock) continue
                 val box = block.boundingBox ?: continue
                 
-                // Checking if the block is visually above the chipBox
-                val isAbove = box.bottom <= chipBox.top + 20 && box.bottom > chipBox.top - 100
-                val isAlignedHorizontally = Math.abs(box.centerX() - chipBox.centerX()) < 100
+                // Stack is usually directly below the name
+                val isBelow = box.top >= nameBox.bottom - 20 && box.top < nameBox.bottom + 120
+                val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < 150
                 
-                if (isAbove && isAlignedHorizontally && isValidPlayerName(block.text)) {
-                    nameBox = box
-                    nameText = block.text.trim()
-                    break
+                if (isBelow && isAlignedHorizontally) {
+                    val rawText = block.text.replace(Regex("[,.$]"), "").trim()
+                    if (rawText.all { it.isDigit() } && rawText.isNotEmpty()) {
+                        stackValue = rawText.toIntOrNull() ?: 0
+                        chipBox = box
+                        break
+                    }
                 }
             }
-            
-            // If we didn't find a name, it might be the pot. Skip.
-            if (nameBox == null) continue
 
-            // 3. Action (Fold, Call, Raise, etc.) is slightly above Name/Chips or overlapping avatar.
-            val referenceTop = nameBox.top
+            // 3. Find Action (near the name, often above or overlapping)
             val actionRegion = Rect(
-                chipBox.left - 50,
-                referenceTop - 150,
-                chipBox.right + 50,
-                referenceTop
+                nameBox.left - 150,
+                nameBox.top - 300,
+                nameBox.right + 150,
+                nameBox.bottom + 100
             )
 
             var detectedAction = PlayerAction.NONE
             
-            // Check text blocks inside actionRegion
             for (block in blocks) {
                 val box = block.boundingBox ?: continue
                 if (actionRegion.contains(box.centerX(), box.centerY())) {
@@ -106,7 +101,7 @@ object OpponentScanner {
                 }
             }
             
-            // Fallback: Check pixel colors in the actionRegion.
+            // Fallback color check for fold/call
             if (detectedAction == PlayerAction.NONE) {
                 var greenPixels = 0
                 var slatePixels = 0
@@ -124,23 +119,22 @@ object OpponentScanner {
                            val g = Color.green(px)
                            val b = Color.blue(px)
                            
-                           // Call (Green): ~ #1D995F (r < 80, g > 100, b < 120 and g > r)
-                           if (g > 100 && r < 80 && b < 120 && g > r) greenPixels++
-                           // Fold (Slate): ~ #416062
-                           if (r in 40..80 && g in 70..110 && b in 70..110) slatePixels++
+                           // Strict check for Call/Check (Bright Green)
+                           if (g > 120 && r < 80 && b < 100 && g > r + 30) greenPixels++
+                           
+                           // Strict check for Fold (Slate/Grayish-blue background on labels)
+                           if (r in 30..90 && g in 60..120 && b in 70..130 && Math.abs(g - b) < 20) slatePixels++
                        }
                    }
-                   if (greenPixels > 20) detectedAction = PlayerAction.CALL
-                   else if (slatePixels > 20) detectedAction = PlayerAction.FOLD
+                   if (greenPixels > 40) detectedAction = PlayerAction.CALL
+                   else if (slatePixels > 60) detectedAction = PlayerAction.FOLD
                 }
             }
-            
-            val stackValue = chipText.replace(",", "").toIntOrNull() ?: 0
 
             opponents.add(OpponentState(
                 id = oppId++,
                 nickname = nameText,
-                stackSize = stackValue,
+                stackSize = stackValue, // 0 if not found, still useful to track opponent
                 isActive = detectedAction != PlayerAction.FOLD && detectedAction != PlayerAction.SIT_OUT,
                 isRandom = true,
                 currentAction = detectedAction.name,

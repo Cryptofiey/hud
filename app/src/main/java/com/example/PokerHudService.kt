@@ -126,6 +126,7 @@ class PokerHudService : Service() {
 
     // Multi-Data Scanner fields
     private var txtScannerStatus: TextView? = null
+    private var txtScanPhase: TextView? = null
     private var scannerStatusBox: LinearLayout? = null
     private var txtPreText: TextView? = null
 
@@ -400,7 +401,7 @@ class PokerHudService : Service() {
         scannerStatusBox = scannerBoxLocal
 
         val scannerTxt = TextView(this).apply {
-            text = "🔍 SCANNER (CoinPoker): ACTIVE\n- Autotracking: 6 seats\n- Fail-safe fallback enabled"
+            text = "🔍 SCREEN SCANNER: WAITING..."
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
             textSize = 9f
             typeface = Typeface.DEFAULT_BOLD
@@ -408,6 +409,16 @@ class PokerHudService : Service() {
         }
         txtScannerStatus = scannerTxt
         scannerBoxLocal.addView(scannerTxt)
+        
+        val scanPhaseTxt = TextView(this).apply {
+            text = "Scan Phase: Idle"
+            setTextColor(AndroidColor.parseColor("#9900FFCC"))
+            textSize = 8f
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        txtScanPhase = scanPhaseTxt
+        scannerBoxLocal.addView(scanPhaseTxt)
+        
         expanded.addView(scannerBoxLocal)
 
         // PRESET STAGE INJECTORS
@@ -574,25 +585,38 @@ class PokerHudService : Service() {
                     putExtra("board", bRaw)
                 }
                 sendBroadcast(bIntent)
+
+                val oppsCount = state.opponents.count { it.isActive }
+                val activeScannerStr = if (PokerHudSharedState.multiDataScannerToggle.value) "ACTIVE" else "INACTIVE"
+                val boardStr = if (state.board.all { it == null }) "Pre-flop" else bRaw
+                txtScannerStatus?.text = "🔍 SCREEN SCANNER: $activeScannerStr\n" +
+                        "Stage/Board: $boardStr\n" +
+                        "Opponents: $oppsCount tracked\n" +
+                        "Hero: $h1Raw $h2Raw"
             }
         }
 
         // 5b. LISTEN TO COUPLING SETTINGS CHECKBOXES DYNAMIC FLOWS
+        var scannerStatusJob: kotlinx.coroutines.Job? = null
+
         serviceScope.launch {
             PokerHudSharedState.multiDataScannerToggle.collect { checked ->
                 scannerStatusBox?.visibility = if (checked) View.VISIBLE else View.GONE
                 if (checked && ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null && screenScanner == null) {
+                    startForegroundServiceNotification()
                     screenScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode)
                     screenScanner?.start()
                     
-                    launch {
+                    scannerStatusJob?.cancel()
+                    scannerStatusJob = launch {
                         screenScanner?.scanStatus?.collect { status ->
-                            txtPreText?.text = android.text.Html.fromHtml("Scan Phase: $status", android.text.Html.FROM_HTML_MODE_LEGACY)
+                            txtScanPhase?.text = android.text.Html.fromHtml("Scan Phase: $status", android.text.Html.FROM_HTML_MODE_LEGACY)
                         }
                     }
                 } else if (!checked) {
                     screenScanner?.stop()
                     screenScanner = null
+                    scannerStatusJob?.cancel()
                 }
             }
         }
@@ -600,12 +624,14 @@ class PokerHudService : Service() {
         serviceScope.launch {
             ScannerConfig.isProjectionGranted.collect { granted ->
                 if (granted && PokerHudSharedState.multiDataScannerToggle.value && ScannerConfig.pendingProjectionData != null && screenScanner == null) {
+                    startForegroundServiceNotification()
                     screenScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode)
                     screenScanner?.start()
                     
-                    launch {
+                    scannerStatusJob?.cancel()
+                    scannerStatusJob = launch {
                         screenScanner?.scanStatus?.collect { status ->
-                            txtPreText?.text = android.text.Html.fromHtml("Scan Phase: $status", android.text.Html.FROM_HTML_MODE_LEGACY)
+                            txtScanPhase?.text = android.text.Html.fromHtml("Scan Phase: $status", android.text.Html.FROM_HTML_MODE_LEGACY)
                         }
                     }
                 }
@@ -879,7 +905,12 @@ class PokerHudService : Service() {
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE
+                },
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
