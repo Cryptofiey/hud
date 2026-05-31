@@ -29,15 +29,11 @@ object OpponentScanner {
         val validCharCount = name.count { it.isLetterOrDigit() || it == '-' || it == '_' || it == ' ' }
         if (validCharCount < name.length * 0.6) return false
         
-        // Skip action keywords and HUD strings
+        // Skip action keywords
         val actions = setOf(
             "FOLD", "CALL", "RAISE", "CHECK", "ALL-IN", "ALL IN", "BET", "POT", 
             "DEALER", "PASS", "SIT OUT", "SIT-OUT", "SITOUT", "CHOICE", "CHIPS",
-            "FOLDED", "POKER", "EQUITY", "HUD", "OVERLAY", "COMMUNITY", "CARDS", 
-            "HOLE", "SCAN", "PHASE", "OUTS", "WINNING", "NLH", "JOIN", "SIMILAR",
-            "PRE", "FLOP", "TURN", "RIVER", "BOARD", "BACK", "MUCK", "MONIT",
-            "RUNS", "OPPONENT", "LIVE", "PROFILE", "SOLVER", "MONTE", "CARLO", 
-            "FIDELITY", "ADVISOR", "STRATEGY", "HERO", "CHANCE", "STRENGTH", "SKLANSKY"
+            "FOLDED", "JOIN", "SIMILAR", "NLH"
         )
         if (upper in actions) return false
         
@@ -54,9 +50,15 @@ object OpponentScanner {
         return true
     }
 
-    fun scan(result: Text, cleanBitmap: Bitmap): List<OpponentState> {
+    fun scan(result: Text, cleanBitmap: Bitmap, hudRects: List<Rect> = listOf()): List<OpponentState> {
         val candidates = mutableListOf<OpponentState>()
-        val blocks = result.textBlocks
+        
+        // Filter out text blocks that intersect with HUD rectangles
+        val blocks = result.textBlocks.filter { block ->
+            val boundingBox = block.boundingBox
+            if (boundingBox == null) true
+            else !hudRects.any { android.graphics.Rect.intersects(it, boundingBox) || it.contains(boundingBox) }
+        }
 
         val height = cleanBitmap.height
         val width = cleanBitmap.width

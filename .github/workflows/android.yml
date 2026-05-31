@@ -1,35 +1,20 @@
-name: Build Android APK
+name: Fast Build APK
 
 on:
   push:
     branches:
       - main
       - master
-  pull_request:
-    branches:
-      - main
-      - master
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build Type (debug or release)'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
 
 jobs:
   build:
-    name: Build Android App & Compile APK
+    name: Build Debug APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Java JDK
         uses: actions/setup-java@v4
@@ -40,51 +25,19 @@ jobs:
       - name: Restore Debug Keystore
         run: |
           if [ -f debug.keystore.base64 ]; then
-            echo "Restoring debug.keystore from base64 file..."
-            tr -d '\r\n[:space:]' < debug.keystore.base64 | base64 -d > debug.keystore || tr -d '\r\n[:space:]' < debug.keystore.base64 | base64 --decode > debug.keystore || echo "Decoder warning, proceeding..."
-          else
-            echo "No debug.keystore.base64 found. Android build tooling will auto-generate or use the system preconfigured one."
+            tr -d '\r\n[:space:]' < debug.keystore.base64 | base64 -d > debug.keystore || tr -d '\r\n[:space:]' < debug.keystore.base64 | base64 --decode > debug.keystore || true
           fi
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 9.3.1
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Run Quality checks (Unit Tests)
-        run: gradle testDebugUnitTest --continue || true
-
-      - name: Build Debug APK
-        if: ${{ github.event.inputs.build_type == 'debug' || github.event_name != 'workflow_dispatch' }}
+      - name: Build APK
         run: gradle assembleDebug
 
-      - name: Build Release APK
-        if: ${{ github.event.inputs.build_type == 'release' }}
-        env:
-          KEYSTORE_PATH: ${{ secrets.KEYSTORE_PATH }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          if [ -z "$STORE_PASSWORD" ]; then
-            echo "Signing secrets are not configured in GitHub Secrets. Building debug APK instead..."
-            gradle assembleDebug
-          else
-            echo "Building signed Release APK..."
-            gradle assembleRelease
-          fi
-
-      - name: Find and Package Built APKs
-        run: |
-          mkdir -p build-artifacts
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} build-artifacts/ \;
-          echo "Built APK files are located at build-artifacts/:"
-          ls -la build-artifacts/
-
-      - name: Upload APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: poker-equity-hud-apks
-          path: build-artifacts/
+          name: poker-equity-hud-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

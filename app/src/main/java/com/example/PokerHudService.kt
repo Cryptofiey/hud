@@ -861,6 +861,56 @@ class PokerHudService : Service() {
         }
     }
 
+    private fun bringHudsToFront() {
+        floatingOverlayView?.let { v ->
+            try {
+                val params = v.layoutParams
+                windowManager?.removeView(v)
+                windowManager?.addView(v, params)
+            } catch (e: Exception) {}
+        }
+        floatingProbsOverlay?.let { v ->
+            try {
+                val params = v.layoutParams
+                windowManager?.removeView(v)
+                windowManager?.addView(v, params)
+            } catch (e: Exception) {}
+        }
+        floatingAdvisorOverlay?.let { v ->
+            try {
+                val params = v.layoutParams
+                windowManager?.removeView(v)
+                windowManager?.addView(v, params)
+            } catch (e: Exception) {}
+        }
+    }
+
+    fun getHudRects(): List<android.graphics.Rect> {
+        val rects = mutableListOf<android.graphics.Rect>()
+        floatingOverlayView?.let { v ->
+            if (v.visibility == View.VISIBLE || v.visibility == View.INVISIBLE) {
+                val loc = IntArray(2)
+                v.getLocationOnScreen(loc)
+                rects.add(android.graphics.Rect(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height))
+            }
+        }
+        floatingProbsOverlay?.let { v ->
+            if (v.visibility == View.VISIBLE || v.visibility == View.INVISIBLE) {
+                val loc = IntArray(2)
+                v.getLocationOnScreen(loc)
+                rects.add(android.graphics.Rect(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height))
+            }
+        }
+        floatingAdvisorOverlay?.let { v ->
+            if (v.visibility == View.VISIBLE || v.visibility == View.INVISIBLE) {
+                val loc = IntArray(2)
+                v.getLocationOnScreen(loc)
+                rects.add(android.graphics.Rect(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height))
+            }
+        }
+        return rects
+    }
+
     private fun updateBoxOverlays() {
         val gameMode = PokerHudSharedState.isGameMode.value
         
@@ -868,6 +918,8 @@ class PokerHudService : Service() {
         if (PokerHudSharedState.showHoleBox.value && !gameMode) showHoleOverlay() else hideHoleOverlay()
         if (PokerHudSharedState.showProbsBox.value && !gameMode) showProbsOverlay() else hideProbsOverlay()
         if (PokerHudSharedState.showScannerBoxes.value) showScannerOutlinesOverlay() else hideScannerOutlinesOverlay()
+        
+        bringHudsToFront()
     }
 
     fun getCommRect(): android.graphics.Rect {

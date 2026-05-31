@@ -122,6 +122,7 @@ class ScreenScanner(
                 
                 val commRect = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { pokerHudService.getCommRect() }
                 val holeRect = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { pokerHudService.getHoleRect() }
+                val hudRects = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { pokerHudService.getHudRects() }
                 
                 val foundCommCardsRaw = mutableListOf<Pair<Card, Int>>()
                 var foundHoleCardsRaw = mutableListOf<Pair<Card, Int>>()
@@ -244,7 +245,13 @@ class ScreenScanner(
                 }
                 // --- END TARGETED HOLE CARD SCAN ---
                 
-                for (block in result.textBlocks) {
+                val filteredBlocks = result.textBlocks.filter { block ->
+                    val boundingBox = block.boundingBox
+                    if (boundingBox == null) true
+                    else !hudRects.any { android.graphics.Rect.intersects(it, boundingBox) || it.contains(boundingBox) }
+                }
+                
+                for (block in filteredBlocks) {
                     for (line in block.lines) {
                         for (element in line.elements) {
                             val box = element.boundingBox ?: continue
@@ -349,11 +356,11 @@ class ScreenScanner(
                     foundCommCards.getOrNull(i) ?: if (consecutiveEmptyComm < 3) currentState.board.getOrNull(i) else null
                 }
                 
-                val scannedOpponents = OpponentScanner.scan(result, cleanBitmap)
+                val scannedOpponents = OpponentScanner.scan(result, cleanBitmap, hudRects)
                 val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
 
                 if (requestProfileScan) {
-                    val scannedProfile = ProfileScanner.scan(result, cleanBitmap)
+                    val scannedProfile = ProfileScanner.scan(result, cleanBitmap, hudRects)
                     if (scannedProfile != null && scannedProfile.nickname != "Unknown_Profile") {
                         val prefsManager = PreferencesManager(pokerHudService)
                         val existing = prefsManager.loadPlayerStats(scannedProfile.nickname)
