@@ -140,19 +140,25 @@ class ScreenScanner(
                         minOf(cleanBitmap.height, holeRect.bottom + 10)
                     )
                     if (safeHole.width() > 10 && safeHole.height() > 10) {
+                                var leftHalf: Bitmap? = null
+                                var rightHalf: Bitmap? = null
+                                var leftScaled: Bitmap? = null
+                                var rightScaled: Bitmap? = null
+                                var combinedScaled: Bitmap? = null
+                                var croppedHole: Bitmap? = null
                         try {
-                            val croppedHole = Bitmap.createBitmap(cleanBitmap, safeHole.left, safeHole.top, safeHole.width(), safeHole.height())
+                            croppedHole = Bitmap.createBitmap(cleanBitmap, safeHole.left, safeHole.top, safeHole.width(), safeHole.height())
                             val halfW = croppedHole.width / 2
-                            val leftHalf = Bitmap.createBitmap(croppedHole, 0, 0, halfW, croppedHole.height)
-                            val rightHalf = Bitmap.createBitmap(croppedHole, halfW, 0, croppedHole.width - halfW, croppedHole.height)
+                            leftHalf = Bitmap.createBitmap(croppedHole, 0, 0, halfW, croppedHole.height)
+                            rightHalf = Bitmap.createBitmap(croppedHole, halfW, 0, croppedHole.width - halfW, croppedHole.height)
                             
                             val scale = 2
-                            val leftScaled = Bitmap.createScaledBitmap(leftHalf, leftHalf.width * scale, leftHalf.height * scale, true)
-                            val rightScaled = Bitmap.createScaledBitmap(rightHalf, rightHalf.width * scale, rightHalf.height * scale, true)
+                            leftScaled = Bitmap.createScaledBitmap(leftHalf, leftHalf.width * scale, leftHalf.height * scale, true)
+                            rightScaled = Bitmap.createScaledBitmap(rightHalf, rightHalf.width * scale, rightHalf.height * scale, true)
                             
                             val combinedW = leftScaled.width + rightScaled.width + 60
                             val combinedH = maxOf(leftScaled.height, rightScaled.height)
-                            val combinedScaled = Bitmap.createBitmap(combinedW, combinedH, Bitmap.Config.ARGB_8888)
+                            combinedScaled = Bitmap.createBitmap(combinedW, combinedH, Bitmap.Config.ARGB_8888)
                             val canvas = android.graphics.Canvas(combinedScaled)
                             canvas.drawColor(android.graphics.Color.BLACK)
                             canvas.drawBitmap(leftScaled, 0f, 0f, null)
@@ -224,15 +230,15 @@ class ScreenScanner(
                                     }
                                 }
                             }
-                            
-                            leftHalf.recycle()
-                            rightHalf.recycle()
-                            leftScaled.recycle()
-                            rightScaled.recycle()
-                            combinedScaled.recycle()
-                            croppedHole.recycle()
-                        } catch (e: Exception) {
+                        } catch (e: Throwable) {
                             e.printStackTrace()
+                        } finally {
+                            leftHalf?.recycle()
+                            rightHalf?.recycle()
+                            leftScaled?.recycle()
+                            rightScaled?.recycle()
+                            combinedScaled?.recycle()
+                            croppedHole?.recycle()
                         }
                     }
                 }

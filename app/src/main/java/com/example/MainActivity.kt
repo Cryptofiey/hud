@@ -805,7 +805,7 @@ fun SettingsLayout(
                                             val wtsd = opp.stats?.histWtsd ?: 0f
                                             val wsd = opp.stats?.histWsd ?: 0f
                                             Text(
-                                                "Balance:$balanceStr$betStr | Profile: VPIP: ${String.format(java.util.Locale.US, "%.0f", vpip)}% | PFR: ${String.format(java.util.Locale.US, "%.0f", pfr)}% | WTSD: ${String.format(java.util.Locale.US, "%.0f", wtsd)}% | WSD: ${String.format(java.util.Locale.US, "%.0f", wsd)}%",
+                                                "Balance:$balanceStr$betStr | Profile: VPIP: ${vpip.toInt()}% | PFR: ${pfr.toInt()}% | WTSD: ${wtsd.toInt()}% | WSD: ${wsd.toInt()}%",
                                                 color = Color.LightGray,
                                                 fontSize = 9.sp
                                             )
@@ -1261,7 +1261,7 @@ fun OverlaySimulatorLayout(
                 uiState.opponents.forEachIndexed { idx, opp ->
                     if (idx < coordsMap.size) {
                         SeatScannerFrame(
-                            label = "[Seat ${idx + 1}: ${opp.nickname}]\nVPIP: ${String.format(Locale.US, "%.0f", opp.stats?.vpip ?: 0f)}% | Bet: $${opp.betSize}",
+                            label = "[Seat ${idx + 1}: ${opp.nickname}]\nVPIP: ${(opp.stats?.vpip ?: 0f).toInt()}% | Bet: $${opp.betSize}",
                             x = coordsMap[idx].first,
                             y = coordsMap[idx].second,
                             width = 105.dp,

@@ -910,6 +910,45 @@ class PokerHudService : Service() {
         }
     }
 
+    private fun setupResizeListener(
+        resizeHandle: View,
+        containerFrame: View,
+        params: WindowManager.LayoutParams
+    ) {
+        var initialWidth = 0
+        var initialHeight = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+
+        resizeHandle.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialWidth = containerFrame.width
+                    initialHeight = containerFrame.height
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - initialTouchX).toInt()
+                    val dy = (event.rawY - initialTouchY).toInt()
+
+                    val newWidth = maxOf(dpToPx(100f), initialWidth + dx)
+                    val newHeight = maxOf(dpToPx(60f), initialHeight + dy)
+
+                    params.width = newWidth
+                    params.height = newHeight
+
+                    try {
+                        windowManager?.updateViewLayout(containerFrame, params)
+                    } catch (ignored: Exception) {}
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
     private fun animScanLaser(laserLine: View, heightPx: Int): ValueAnimator {
         return ValueAnimator.ofInt(0, heightPx - dpToPx(3f)).apply {
             duration = 1500
@@ -1045,10 +1084,21 @@ class PokerHudService : Service() {
             visibility = View.GONE
         }
 
+        val resizeHandle = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_crop)
+            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
+                gravity = Gravity.BOTTOM or Gravity.END
+            }
+            setColorFilter(AndroidColor.parseColor("#FF2196F3"))
+            setPadding(0, 0, dpToPx(2f), dpToPx(2f)) 
+        }
+
         frame.addView(content)
         frame.addView(laserLine)
+        frame.addView(resizeHandle)
 
         setupDragListener(frame, params)
+        setupResizeListener(resizeHandle, frame, params)
 
         try {
             windowManager?.addView(frame, params)
@@ -1192,10 +1242,21 @@ class PokerHudService : Service() {
             visibility = View.GONE
         }
 
+        val resizeHandle = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_crop)
+            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
+                gravity = Gravity.BOTTOM or Gravity.END
+            }
+            setColorFilter(AndroidColor.parseColor("#FFE53935"))
+            setPadding(0, 0, dpToPx(2f), dpToPx(2f)) 
+        }
+
         frame.addView(content)
         frame.addView(laserLine)
+        frame.addView(resizeHandle)
 
         setupDragListener(frame, params)
+        setupResizeListener(resizeHandle, frame, params)
 
         try {
             windowManager?.addView(frame, params)
