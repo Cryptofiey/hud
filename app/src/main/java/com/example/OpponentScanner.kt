@@ -16,12 +16,19 @@ object OpponentScanner {
         if (upper.isEmpty()) return false
         if (upper == "UNKNOWN") return false
         
-        // Skip action keywords
+        // Skip action keywords and HUD strings
         val actions = setOf(
             "FOLD", "CALL", "RAISE", "CHECK", "ALL-IN", "ALL IN", "BET", "POT", 
-            "DEALER", "PASS", "SIT OUT", "SIT-OUT", "SITOUT", "CHOICE", "CHIPS"
+            "DEALER", "PASS", "SIT OUT", "SIT-OUT", "SITOUT", "CHOICE", "CHIPS",
+            "FOLDED", "POKER", "EQUITY", "HUD", "OVERLAY", "COMMUNITY", "CARDS", 
+            "HOLE", "SCAN", "PHASE", "OUTS", "WINNING", "NLH", "JOIN", "SIMILAR",
+            "PRE", "FLOP", "TURN", "RIVER", "BOARD", "BACK"
         )
         if (upper in actions) return false
+        
+        for (action in actions) {
+            if (upper.contains(action)) return false
+        }
         
         // Skip clocks (e.g. "3:03") and paths / strings with special chars like : or /
         if (name.contains(":") || name.contains("/")) return false
@@ -46,7 +53,7 @@ object OpponentScanner {
             val y = box.centerY().toFloat()
             
             // Widen the edge zones to 35% from left and right to ensure we capture all names.
-            val inSearchZone = (x < width * 0.36f || x > width * 0.64f || y < height * 0.40f)
+            val inSearchZone = (x < width * 0.35f || x > width * 0.65f || y < height * 0.35f)
             inSearchZone && isValidPlayerName(block.text)
         }
 
@@ -68,14 +75,21 @@ object OpponentScanner {
                 val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < 150
                 
                 if (isBelow && isAlignedHorizontally) {
-                    val rawText = block.text.replace(Regex("[,.$]"), "").trim()
-                    if (rawText.all { it.isDigit() } && rawText.isNotEmpty()) {
+                    val rawText = block.text.replace(Regex("[^0-9]"), "").trim()
+                    if (rawText.isNotEmpty()) {
                         stackValue = rawText.toIntOrNull() ?: 0
                         chipBox = box
                         break
                     }
                 }
             }
+
+            // Require a stack element to confirm this is a player profile
+            if (chipBox == null) continue
+
+            // Create unified bounding box for the player combining their name and stack
+            val playerBox = Rect(nameBox)
+            playerBox.union(chipBox)
 
             // 3. Find Action (near the name, often above or overlapping)
             val actionRegion = Rect(
@@ -138,7 +152,7 @@ object OpponentScanner {
                 isActive = detectedAction != PlayerAction.FOLD && detectedAction != PlayerAction.SIT_OUT,
                 isRandom = true,
                 currentAction = detectedAction.name,
-                boundingBox = nameBox
+                boundingBox = playerBox
             ))
         }
 

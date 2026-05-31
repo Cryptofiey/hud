@@ -292,9 +292,21 @@ class ScreenScanner(
 
     fun stop() {
         isScanning.value = false
-        scanJob?.cancel()
-        virtualDisplay?.release()
-        imageReader?.close()
         scanStatus.value = "Scanner stopped."
+        
+        scope.launch(Dispatchers.Main) {
+            scanJob?.cancel()
+            scanJob?.join()
+            scanJob = null
+            
+            try {
+                virtualDisplay?.release()
+                virtualDisplay = null
+                imageReader?.close()
+                imageReader = null
+            } catch (e: Exception) {
+                android.util.Log.e("ScreenScanner", "Error stopping scanner", e)
+            }
+        }
     }
 }
