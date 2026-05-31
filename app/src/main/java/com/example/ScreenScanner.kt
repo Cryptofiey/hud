@@ -145,56 +145,49 @@ class ScreenScanner(
                             
                             var rawText = element.text.uppercase(java.util.Locale.US)
                             rawText = rawText.replace("1O", "10").replace("I0", "10").replace("IO", "10").replace("L0", "10")
-                            if (rawText.contains("10")) {
-                                rawText = "10"
-                            }
-                            val text = rawText.replace(Regex("[^10AKQJT2-9]"), "")
-                            if (cardPattern.matches(text) && rawText.length <= 4) { 
-                                val checkX = box.centerX()
-                                val checkY = box.centerY()
-                                
-                                var isRed = false
-                                var isGreen = false
-                                var isBlue = false
-                                var isBlack = false
-                                
+                            
+                            val rankPatternRegex = Regex("(10|1|T|[AKQJ]|[2-9])")
+                            val matches = rankPatternRegex.findAll(rawText).toList()
+
+                            for (match in matches) {
+                                val text = match.value
+                                val rank = parseRank(text) ?: continue
+
+                                val matchRatio = if (rawText.isNotEmpty()) (match.range.first + match.range.last) / 2.0 / rawText.length else 0.5
+                                val approxCenterBoxX = box.left + (box.width() * matchRatio).toInt()
+
                                 var redCount = 0
                                 var greenCount = 0
                                 var blueCount = 0
                                 var blackCount = 0
                                 
-                                val startX = maxOf(0, box.left - box.width())
-                                val endX = minOf(cleanBitmap.width - 1, box.right + (box.width() / 4))
+                                val startX = maxOf(0, approxCenterBoxX - box.width())
+                                val endX = minOf(cleanBitmap.width - 1, approxCenterBoxX + (box.width() / 4))
                                 val startY = maxOf(0, box.top - (box.height() / 4))
                                 val endY = minOf(cleanBitmap.height - 1, box.bottom + (box.height() / 2))
                                 
-                                for (px in startX..endX step 3) {
-                                    for (py in startY..endY step 3) {
-                                        val pixel = cleanBitmap.getPixel(px, py)
-                                        val r = android.graphics.Color.red(pixel)
-                                        val g = android.graphics.Color.green(pixel)
-                                        val b = android.graphics.Color.blue(pixel)
-                                        
-                                        // Hearts / Red
-                                        if (r - g > 40 && r - b > 40 && r > 100) redCount++
-                                        // Clubs / Green
-                                        else if (g - r > 30 && g - b > 20 && g > 90) greenCount++
-                                        // Diamonds / Blue
-                                        else if ((b - r > 30 && b > 90) || (b > 120 && g > 100 && r < 100)) blueCount++
-                                        // Spades / Black/Dark Gray
-                                        else if (r < 90 && g < 90 && b < 90) blackCount++
+                                if (startX <= endX && startY <= endY) {
+                                    for (px in startX..endX step 3) {
+                                        for (py in startY..endY step 3) {
+                                            val pixel = cleanBitmap.getPixel(px, py)
+                                            val r = android.graphics.Color.red(pixel)
+                                            val g = android.graphics.Color.green(pixel)
+                                            val b = android.graphics.Color.blue(pixel)
+                                            
+                                            if (r - g > 40 && r - b > 40 && r > 100) redCount++
+                                            else if (g - r > 30 && g - b > 20 && g > 90) greenCount++
+                                            else if ((b - r > 30 && b > 90) || (b > 120 && g > 100 && r < 100)) blueCount++
+                                            else if (r < 90 && g < 90 && b < 90) blackCount++
+                                        }
                                     }
                                 }
                                 
-                                val rank = parseRank(text) ?: continue
                                 var suit = Suit.SPADES 
-                                
                                 if (redCount > greenCount && redCount > blueCount && redCount > blackCount && redCount > 5) suit = Suit.HEARTS 
                                 else if (greenCount > redCount && greenCount > blueCount && greenCount > blackCount && greenCount > 5) suit = Suit.CLUBS
                                 else if (blueCount > redCount && blueCount > greenCount && blueCount > blackCount && blueCount > 5) suit = Suit.DIAMONDS
                                 else if (blackCount > redCount && blackCount > greenCount && blackCount > blueCount && blackCount > 5) suit = Suit.SPADES
                                 else {
-                                    // Fallback if no prominent color
                                     if (redCount > 0) suit = Suit.HEARTS
                                     else if (greenCount > 0) suit = Suit.CLUBS
                                     else if (blueCount > 0) suit = Suit.DIAMONDS
@@ -203,9 +196,9 @@ class ScreenScanner(
                                 val card = Card(rank, suit)
                                 
                                 if (inComm) {
-                                    foundCommCardsRaw.add(Pair(card, box.centerX()))
+                                    foundCommCardsRaw.add(Pair(card, approxCenterBoxX))
                                 } else if (inHole) {
-                                    foundHoleCardsRaw.add(Pair(card, box.centerX()))
+                                    foundHoleCardsRaw.add(Pair(card, approxCenterBoxX))
                                 }
                             }
                         }
@@ -234,9 +227,11 @@ class ScreenScanner(
                     consecutiveEmptyComm = 0
                 }
                 
-                val finalH1 = if (foundHoleCards.isNotEmpty()) h1 else if (consecutiveEmptyHole < 3) currentState.heroCard1 else null
-                val finalH2 = if (foundHoleCards.isNotEmpty()) h2 else if (consecutiveEmptyHole < 3) currentState.heroCard2 else null
-                val finalBoard = if (foundCommCards.isNotEmpty()) foundCommCards.take(5) + List(maxOf(0, 5 - foundCommCards.size)) { null } else if (consecutiveEmptyComm < 3) currentState.board else List(5) { null }
+                val finalH1 = h1 ?: if (consecutiveEmptyHole < 3) currentState.heroCard1 else null
+                val finalH2 = h2 ?: if (consecutiveEmptyHole < 3) currentState.heroCard2 else null
+                val finalBoard = List(5) { i ->
+                    foundCommCards.getOrNull(i) ?: if (consecutiveEmptyComm < 3) currentState.board.getOrNull(i) else null
+                }
                 
                 val scannedOpponents = OpponentScanner.scan(result, cleanBitmap)
                 val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
@@ -302,7 +297,7 @@ class ScreenScanner(
             "K" -> Rank.KING
             "Q" -> Rank.QUEEN
             "J" -> Rank.JACK
-            "10", "T" -> Rank.TEN
+            "10", "T", "1" -> Rank.TEN
             "9" -> Rank.NINE
             "8" -> Rank.EIGHT
             "7" -> Rank.SEVEN
