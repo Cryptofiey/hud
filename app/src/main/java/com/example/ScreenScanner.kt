@@ -96,15 +96,7 @@ class ScreenScanner(
         var image: Image? = null
         var cleanBitmap: Bitmap? = null
         try {
-            // ONLY hide if user is not touching anything
-            val interacting = withContext(Dispatchers.Main) { PokerHudSharedState.isUserInteracting.value }
-            
-            if (!interacting) {
-                withContext(Dispatchers.Main) { PokerHudSharedState.isScanning.value = true }
-                delay(350) // More time for clean hide
-            }
-            
-            // Empty the ImageReader queue to get a NEW frame without overlays
+            // Empty the ImageReader queue to get a NEW frame
             while (true) {
                 val img = try { imageReader?.acquireLatestImage() } catch(e: Exception) { null } ?: break
                 img.close()
@@ -114,10 +106,6 @@ class ScreenScanner(
             delay(60)
             image = imageReader?.acquireLatestImage()
 
-            if (!interacting) {
-                withContext(Dispatchers.Main) { PokerHudSharedState.isScanning.value = false }
-            }
-            
             if (image == null) return
             
             val width = image.width

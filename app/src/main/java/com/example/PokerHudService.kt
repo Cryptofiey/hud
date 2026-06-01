@@ -1138,13 +1138,6 @@ class PokerHudService : Service() {
                     floatingScannerOverlay?.offsetY = dy
                 }
             }
-            launch {
-                combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
-                    scanning && !interacting
-                }.collect { hide ->
-                    floatingScannerOverlay?.isHidden = hide
-                }
-            }
         }
         floatingScannerOverlay?.isHidden = false
     }
@@ -1275,13 +1268,6 @@ class PokerHudService : Service() {
 
         commJob?.cancel()
         commJob = serviceScope.launch {
-            launch {
-                combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
-                    scanning && !interacting
-                }.collect { hide ->
-                    frame.alpha = if (hide) 0f else 1f
-                }
-            }
             launch {
                 PokerHudSharedState.uiState.collect { state ->
                     try {
@@ -1432,13 +1418,6 @@ class PokerHudService : Service() {
 
         holeJob?.cancel()
         holeJob = serviceScope.launch {
-            launch {
-                combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
-                    scanning && !interacting
-                }.collect { hide ->
-                    frame.alpha = if (hide) 0f else 1f
-                }
-            }
             launch {
                 PokerHudSharedState.uiState.collect { state ->
                     try {
@@ -1636,13 +1615,6 @@ class PokerHudService : Service() {
 
         probsJob?.cancel()
         probsJob = serviceScope.launch {
-            launch {
-                combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
-                    scanning && !interacting
-                }.collect { hide ->
-                    frame.alpha = if (hide) 0f else 1f
-                }
-            }
             var lastHero1: Card? = null
             var lastHero2: Card? = null
             var lastBoard: List<Card?> = emptyList()
