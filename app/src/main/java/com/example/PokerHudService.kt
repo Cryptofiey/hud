@@ -1011,18 +1011,20 @@ class PokerHudService : Service() {
 
     fun getCommRect(): android.graphics.Rect {
         val view = floatingCommOverlay ?: return android.graphics.Rect(0, 0, 0, 0)
-        val params = view.layoutParams as? WindowManager.LayoutParams ?: return android.graphics.Rect(0, 0, 0, 0)
-        val w = if (view.width > 0) view.width else (if (params.width > 0) params.width else dpToPx(200f))
-        val h = if (view.height > 0) view.height else (if (params.height > 0) params.height else dpToPx(120f))
-        return android.graphics.Rect(params.x, params.y, params.x + w, params.y + h)
+        val pos = IntArray(2)
+        view.getLocationOnScreen(pos)
+        val w = if (view.width > 30) view.width else (view.layoutParams.width.takeIf { it > 30 } ?: dpToPx(200f))
+        val h = if (view.height > 30) view.height else (view.layoutParams.height.takeIf { it > 30 } ?: dpToPx(120f))
+        return android.graphics.Rect(pos[0], pos[1], pos[0] + w, pos[1] + h)
     }
 
     fun getHoleRect(): android.graphics.Rect {
         val view = floatingHoleOverlay ?: return android.graphics.Rect(0, 0, 0, 0)
-        val params = view.layoutParams as? WindowManager.LayoutParams ?: return android.graphics.Rect(0, 0, 0, 0)
-        val w = if (view.width > 0) view.width else (if (params.width > 0) params.width else dpToPx(150f))
-        val h = if (view.height > 0) view.height else (if (params.height > 0) params.height else dpToPx(100f))
-        return android.graphics.Rect(params.x, params.y, params.x + w, params.y + h)
+        val pos = IntArray(2)
+        view.getLocationOnScreen(pos)
+        val w = if (view.width > 30) view.width else (view.layoutParams.width.takeIf { it > 30 } ?: dpToPx(150f))
+        val h = if (view.height > 30) view.height else (view.layoutParams.height.takeIf { it > 30 } ?: dpToPx(100f))
+        return android.graphics.Rect(pos[0], pos[1], pos[0] + w, pos[1] + h)
     }
 
     private fun setupDragListener(view: View, params: WindowManager.LayoutParams) {
@@ -1287,7 +1289,7 @@ class PokerHudService : Service() {
                 combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
                     scanning && !interacting
                 }.collect { hide ->
-                    frame.visibility = if (hide) View.GONE else View.VISIBLE
+                    frame.visibility = if (hide) View.INVISIBLE else View.VISIBLE
                     if (hide) {
                         try { anim.start() } catch (ignored: Exception) {}
                     } else {
@@ -1444,7 +1446,7 @@ class PokerHudService : Service() {
                 combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
                     scanning && !interacting
                 }.collect { hide ->
-                    frame.visibility = if (hide) View.GONE else View.VISIBLE
+                    frame.visibility = if (hide) View.INVISIBLE else View.VISIBLE
                     if (hide) {
                         try { anim.start() } catch (ignored: Exception) {}
                     } else {

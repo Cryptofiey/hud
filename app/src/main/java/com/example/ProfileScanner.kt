@@ -7,10 +7,15 @@ object ProfileScanner {
     // Looks through the recognized text to find a profile screen.
     // We detect a profile if we see the words "Profile", "VPIP", "PFR", etc.
     fun scan(result: Text, cleanBitmap: Bitmap, hudRects: List<android.graphics.Rect> = listOf()): PlayerStats? {
+        val screenH = cleanBitmap.height
         val blocks = result.textBlocks.filter { block ->
-            val boundingBox = block.boundingBox
-            if (boundingBox == null) true
-            else !hudRects.any { android.graphics.Rect.intersects(it, boundingBox) || it.contains(boundingBox) }
+            val b = block.boundingBox
+            if (b == null) true
+            else {
+                // Ignore blocks in the top 12% of screen (usually table header) to avoid false profile detections
+                if (b.top < screenH * 0.12) return@filter false
+                !hudRects.any { android.graphics.Rect.intersects(it, b) || it.contains(b) }
+            }
         }
         
         var hasProfile = false
@@ -33,16 +38,19 @@ object ProfileScanner {
             }
         }
         
-        // Ensure it looks like a profile screen
+        // Ensure it looks like a profile screen - stricter check
         if (!hasVpip || !hasPfr) return null
         
-        val extractPercentAboveOrNearWithBox: (Int, String) -> Float? = { index, label ->
+        val extractPercentNearWithBox: (Int, String) -> Float? = { index, label ->
             var res: Float? = null
-            for (i in maxOf(0, index - 2)..index) {
+            // Look 2 lines above, the current line, and 1 line below
+            for (i in (index - 2)..(index + 1)) {
+                if (i < 0 || i >= lines.size) continue
                 val p = extractPercentInLine(lines[i])
                 if (p != null) {
                     res = p
                     lineBoxes[i]?.let { matchedBoxes.add(ScannedBox(it, "$label: ${p.toInt()}%")) }
+                    // Also underline the label itself for visual confirmation
                     if (i != index) lineBoxes[index]?.let { matchedBoxes.add(ScannedBox(it, label)) }
                     break
                 }
@@ -98,22 +106,22 @@ object ProfileScanner {
         for (i in lines.indices) {
             val line = lines[i]
             
-            // Extract percentages. To be safe, we also extract percentage based on surrounding labels
-            if (line.contains("VPIP", ignoreCase = true)) vpip = extractPercentAboveOrNearWithBox(i, "VPIP") ?: extractPercentInLineWithBox(line, i, 0, "VPIP")
-            if (line.contains("PFR", ignoreCase = true)) pfr = extractPercentAboveOrNearWithBox(i, "PFR") ?: extractPercentInLineWithBox(line, i, 0, "PFR")
-            if (line.contains("3-Bet", ignoreCase = true) && !line.contains("Fold", ignoreCase = true)) bet3 = extractPercentAboveOrNearWithBox(i, "3Bet") ?: extractPercentInLineWithBox(line, i, 0, "3Bet")
-            if (line.contains("Fold to 3-Bet", ignoreCase = true)) fold3Bet = extractPercentAboveOrNearWithBox(i, "F3B") ?: extractPercentInLineWithBox(line, i, 0, "F3B")
-            if (line.contains("C-Bet", ignoreCase = true) && !line.contains("Fold", ignoreCase = true)) cBet = extractPercentAboveOrNearWithBox(i, "CBet") ?: extractPercentInLineWithBox(line, i, 0, "CBet")
-            if (line.contains("Fold to C-Bet", ignoreCase = true)) foldCBet = extractPercentAboveOrNearWithBox(i, "FCBet") ?: extractPercentInLineWithBox(line, i, 0, "FCBet")
-            if (line.contains("Steal", ignoreCase = true)) steal = extractPercentAboveOrNearWithBox(i, "Steal") ?: extractPercentInLineWithBox(line, i, 0, "Steal")
-            if (line.contains("Check/Raise", ignoreCase = true)) checkRaise = extractPercentAboveOrNearWithBox(i, "C/R") ?: extractPercentInLineWithBox(line, i, 0, "C/R")
+            // Extract percentages.
+            if (line.contains("VPIP", ignoreCase = true)) vpip = extractPercentNearWithBox(i, "VPIP") ?: extractPercentInLineWithBox(line, i, 0, "VPIP")
+            if (line.contains("PFR", ignoreCase = true)) pfr = extractPercentNearWithBox(i, "PFR") ?: extractPercentInLineWithBox(line, i, 0, "PFR")
+            if (line.contains("3-Bet", ignoreCase = true) && !line.contains("Fold", ignoreCase = true)) bet3 = extractPercentNearWithBox(i, "3Bet") ?: extractPercentInLineWithBox(line, i, 0, "3Bet")
+            if (line.contains("Fold to 3-Bet", ignoreCase = true)) fold3Bet = extractPercentNearWithBox(i, "F3B") ?: extractPercentInLineWithBox(line, i, 0, "F3B")
+            if (line.contains("C-Bet", ignoreCase = true) && !line.contains("Fold", ignoreCase = true)) cBet = extractPercentNearWithBox(i, "CBet") ?: extractPercentInLineWithBox(line, i, 0, "CBet")
+            if (line.contains("Fold to C-Bet", ignoreCase = true)) foldCBet = extractPercentNearWithBox(i, "FCBet") ?: extractPercentInLineWithBox(line, i, 0, "FCBet")
+            if (line.contains("Steal", ignoreCase = true)) steal = extractPercentNearWithBox(i, "Steal") ?: extractPercentInLineWithBox(line, i, 0, "Steal")
+            if (line.contains("Check/Raise", ignoreCase = true)) checkRaise = extractPercentNearWithBox(i, "C/R") ?: extractPercentInLineWithBox(line, i, 0, "C/R")
             
             // WTSD and WSD are sometimes on the same line "34% WTSD WSD 41%"
             if (line.contains("WTSD", ignoreCase = true)) {
-                wtsd = extractPercentInLineWithBox(line, i, 0, "WTSD") ?: extractPercentAboveOrNearWithBox(i, "WTSD")
+                wtsd = extractPercentInLineWithBox(line, i, 0, "WTSD") ?: extractPercentNearWithBox(i, "WTSD")
             }
             if (line.contains("WSD", ignoreCase = true) && !line.contains("WTSD", ignoreCase = true)) {
-                wsd = extractPercentInLineWithBox(line, i, 0, "WSD") ?: extractPercentAboveOrNearWithBox(i, "WSD")
+                wsd = extractPercentInLineWithBox(line, i, 0, "WSD") ?: extractPercentNearWithBox(i, "WSD")
             }
             if (line.contains("WTSD") && line.contains("WSD")) {
                 val matches = Regex("(\\d+)[%]?").findAll(line).toList()

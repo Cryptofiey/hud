@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
+import android.graphics.Typeface
 import android.view.View
 
 class ScannerBoxesView(context: Context) : View(context) {
@@ -14,6 +15,19 @@ class ScannerBoxesView(context: Context) : View(context) {
         style = Paint.Style.STROKE
         color = Color.parseColor("#E91E63") // Pinkish / bright color
         strokeWidth = 5f
+        isAntiAlias = true
+    }
+
+    private val fillPaint = Paint().apply {
+        style = Paint.Style.FILL
+        color = Color.parseColor("#44E91E63") // semi-transparent pink
+    }
+
+    private val inactiveBoxPaint = Paint().apply {
+        style = Paint.Style.STROKE
+        color = Color.parseColor("#808080") // Grey for folded
+        strokeWidth = 3f
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 10f), 0f)
         isAntiAlias = true
     }
 
@@ -32,36 +46,34 @@ class ScannerBoxesView(context: Context) : View(context) {
     }
 
     private val textPaint = Paint().apply {
-        color = Color.WHITE
-        textSize = 36f
+        color = Color.parseColor("#00FFC8") // Bright Neon Teal/Cyan
+        textSize = 34f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         style = Paint.Style.FILL
-        setShadowLayer(4f, 0f, 2f, Color.BLACK)
+        setShadowLayer(10f, 0f, 0f, Color.parseColor("#FF00FFC8")) // Neon glow
         isAntiAlias = true
     }
 
-    private val fillPaint = Paint().apply {
-        style = Paint.Style.FILL
-        color = Color.parseColor("#44E91E63") // semi-transparent pink
-    }
-
-    private val inactiveBoxPaint = Paint().apply {
+    private val textOutlinePaint = Paint().apply {
+        color = Color.BLACK
+        textSize = 34f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         style = Paint.Style.STROKE
-        color = Color.parseColor("#808080") // Grey for folded
-        strokeWidth = 3f
-        pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 10f), 0f)
+        strokeWidth = 2f
         isAntiAlias = true
     }
 
     private val profileBoxPaint = Paint().apply {
         style = Paint.Style.STROKE
-        color = Color.parseColor("#FFFFEB3B") // Yellow for profile highlights
-        strokeWidth = 4f
+        color = Color.parseColor("#FFEB3B") // Bright Yellow
+        strokeWidth = 3f
+        setShadowLayer(8f, 0f, 0f, Color.parseColor("#88FFEB3B")) // Glow
         isAntiAlias = true
     }
 
     private val profileFillPaint = Paint().apply {
         style = Paint.Style.FILL
-        color = Color.parseColor("#44FFEB3B") // Semi-transparent yellow
+        color = Color.parseColor("#15FFEB3B") // Very transparent yellow
         isAntiAlias = true
     }
 
@@ -89,8 +101,8 @@ class ScannerBoxesView(context: Context) : View(context) {
         val w = width.toFloat()
         val h = height.toFloat()
 
-        // Draw the search zone (Horseshoe)
-        if (state.profileBoxes == null || PokerHudSharedState.showScannerBoxes.value) {
+        // Draw the search zone (Horseshoe) - only if not specifically drawing profile boxes
+        if (state.profileBoxes == null && PokerHudSharedState.showScannerBoxes.value) {
             val path = Path()
             path.moveTo(0f, h)
             path.lineTo(0f, 0f)
@@ -121,10 +133,11 @@ class ScannerBoxesView(context: Context) : View(context) {
                         canvas.drawRect(actualBox, boxPaint)
                         
                         val label = opp.nickname
+                        canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textOutlinePaint)
                         canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
                     } else {
-                        // Draw dim grey box if folded/inactive so user knows scanner didn't lose track of the frame
                         canvas.drawRect(actualBox, inactiveBoxPaint)
+                        canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textOutlinePaint)
                         canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
                     }
                 }
@@ -143,6 +156,7 @@ class ScannerBoxesView(context: Context) : View(context) {
             canvas.drawRect(actualBox, profileBoxPaint)
             
             // Draw parsed value above the box
+            canvas.drawText(box.label, actualBox.left.toFloat(), actualBox.top.toFloat() - 5f, textOutlinePaint)
             canvas.drawText(box.label, actualBox.left.toFloat(), actualBox.top.toFloat() - 5f, textPaint)
         }
     }
