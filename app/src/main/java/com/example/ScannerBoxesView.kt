@@ -47,19 +47,19 @@ class ScannerBoxesView(context: Context) : View(context) {
 
     private val textPaint = Paint().apply {
         color = Color.parseColor("#00FFC8") // Bright Neon Teal/Cyan
-        textSize = 34f
+        textSize = 36f
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         style = Paint.Style.FILL
-        setShadowLayer(10f, 0f, 0f, Color.parseColor("#FF00FFC8")) // Neon glow
+        setShadowLayer(15f, 0f, 0f, Color.parseColor("#CC00FFC8")) // Strong neon glow
         isAntiAlias = true
     }
 
     private val textOutlinePaint = Paint().apply {
         color = Color.BLACK
-        textSize = 34f
+        textSize = 36f
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         style = Paint.Style.STROKE
-        strokeWidth = 2f
+        strokeWidth = 4f
         isAntiAlias = true
     }
 
@@ -133,12 +133,13 @@ class ScannerBoxesView(context: Context) : View(context) {
                         canvas.drawRect(actualBox, boxPaint)
                         
                         val label = opp.nickname
-                        canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textOutlinePaint)
-                        canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
+                        // Align text baseline to the bottom of the bounding box for perfect overlay
+                        canvas.drawText(label, actualBox.left.toFloat(), actualBox.bottom.toFloat(), textOutlinePaint)
+                        canvas.drawText(label, actualBox.left.toFloat(), actualBox.bottom.toFloat(), textPaint)
                     } else {
                         canvas.drawRect(actualBox, inactiveBoxPaint)
-                        canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textOutlinePaint)
-                        canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
+                        canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.bottom.toFloat(), textOutlinePaint)
+                        canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.bottom.toFloat(), textPaint)
                     }
                 }
             }
@@ -155,9 +156,9 @@ class ScannerBoxesView(context: Context) : View(context) {
             canvas.drawRect(actualBox, profileFillPaint)
             canvas.drawRect(actualBox, profileBoxPaint)
             
-            // Draw parsed value above the box
-            canvas.drawText(box.label, actualBox.left.toFloat(), actualBox.top.toFloat() - 5f, textOutlinePaint)
-            canvas.drawText(box.label, actualBox.left.toFloat(), actualBox.top.toFloat() - 5f, textPaint)
+            // Draw parsed value overlaying the box for precision
+            canvas.drawText(box.label, actualBox.left.toFloat(), actualBox.bottom.toFloat(), textOutlinePaint)
+            canvas.drawText(box.label, actualBox.left.toFloat(), actualBox.bottom.toFloat(), textPaint)
         }
     }
 }

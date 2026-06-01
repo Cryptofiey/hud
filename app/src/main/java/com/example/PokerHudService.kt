@@ -1549,7 +1549,7 @@ class PokerHudService : Service() {
             setTextColor(AndroidColor.parseColor("#FF00FFCC")) // Neon Greenish Cyan
             textSize = 9f
             typeface = Typeface.DEFAULT_BOLD
-            setShadowLayer(12f, 0f, 0f, AndroidColor.parseColor("#BBFF00FFCC"))
+            setShadowLayer(12f, 0f, 0f, AndroidColor.parseColor("#BB00FFCC"))
         }
         val txtHeroCards = TextView(this).apply {
             text = "Карты: --"

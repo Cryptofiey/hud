@@ -12,8 +12,13 @@ object ProfileScanner {
             val b = block.boundingBox
             if (b == null) true
             else {
-                // Ignore blocks in the top 12% of screen (usually table header) to avoid false profile detections
-                if (b.top < screenH * 0.12) return@filter false
+                // Ignore blocks in the top 15% of screen (table header/info area)
+                if (b.top < screenH * 0.15) return@filter false
+                // Ignore blocks in the very top-left corner
+                if (b.top < screenH * 0.25 && b.left < cleanBitmap.width * 0.15) return@filter false
+                // Ignore very small blocks that are likely noise
+                if (b.width() < 20 || b.height() < 15) return@filter false
+                
                 !hudRects.any { android.graphics.Rect.intersects(it, b) || it.contains(b) }
             }
         }
@@ -29,6 +34,7 @@ object ProfileScanner {
         for (block in blocks) {
             for (line in block.lines) {
                 val text = line.text.trim()
+                if (text.length < 2) continue // Skip noise
                 lines.add(text)
                 lineBoxes.add(line.boundingBox)
                 
@@ -38,8 +44,8 @@ object ProfileScanner {
             }
         }
         
-        // Ensure it looks like a profile screen - stricter check
-        if (!hasVpip || !hasPfr) return null
+        // Stricter check: profile usually has many lines of info
+        if (!hasVpip || !hasPfr || lines.size < 6) return null
         
         val extractPercentNearWithBox: (Int, String) -> Float? = { index, label ->
             var res: Float? = null
