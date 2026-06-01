@@ -154,11 +154,15 @@ class ScreenScanner(
                 val foundHole = mutableListOf<Card>()
                 
                 val commCrop = if (commRect.width() > 20 && commRect.height() > 20) {
-                    try { Bitmap.createBitmap(cleanBitmap!!, maxOf(0, commRect.left), maxOf(0, commRect.top), minOf(cleanBitmap.width - commRect.left, commRect.width()), minOf(cleanBitmap.height - commRect.top, commRect.height())) } catch(e: Exception) { null }
+                    val w = maxOf(1, minOf(cleanBitmap!!.width - maxOf(0, commRect.left), commRect.width()))
+                    val h = maxOf(1, minOf(cleanBitmap.height - maxOf(0, commRect.top), commRect.height()))
+                    try { Bitmap.createBitmap(cleanBitmap, maxOf(0, commRect.left), maxOf(0, commRect.top), w, h) } catch(e: Exception) { null }
                 } else null
 
                 val holeCrop = if (holeRect.width() > 20 && holeRect.height() > 20) {
-                    try { Bitmap.createBitmap(cleanBitmap!!, maxOf(0, holeRect.left), maxOf(0, holeRect.top), minOf(cleanBitmap.width - holeRect.left, holeRect.width()), minOf(cleanBitmap.height - holeRect.top, holeRect.height())) } catch(e: Exception) { null }
+                    val w = maxOf(1, minOf(cleanBitmap!!.width - maxOf(0, holeRect.left), holeRect.width()))
+                    val h = maxOf(1, minOf(cleanBitmap.height - maxOf(0, holeRect.top), holeRect.height()))
+                    try { Bitmap.createBitmap(cleanBitmap, maxOf(0, holeRect.left), maxOf(0, holeRect.top), w, h) } catch(e: Exception) { null }
                 } else null
 
                 suspend fun scanBox(crop: Bitmap?, out: MutableList<Card>) {
