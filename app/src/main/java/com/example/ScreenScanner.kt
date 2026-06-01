@@ -79,7 +79,7 @@ class ScreenScanner(
                 delay(400) // Small delay to allow UI to update and hide overlays
                 while (isActive) {
                     processLatestImage()
-                    delay(800) // Scan even more frequently (0.8s)
+                    delay(1100) // Slightly slower scan for better UX (less flicker)
                 }
             }
         } catch (e: Exception) {
@@ -94,9 +94,10 @@ class ScreenScanner(
 
     private suspend fun processLatestImage() {
         var image: Image? = null
+        var cleanBitmap: Bitmap? = null
         try {
             withContext(Dispatchers.Main) { PokerHudSharedState.isScanning.value = true }
-            delay(50) // Ultra fast hide delay
+            delay(120) // Give more time to hide overlays for a clean frame
             image = imageReader?.acquireLatestImage()
             withContext(Dispatchers.Main) { PokerHudSharedState.isScanning.value = false }
             
@@ -111,104 +112,108 @@ class ScreenScanner(
             val rowPadding = rowStride - pixelStride * width
             val totalWidth = width + rowPadding / pixelStride
 
-            val bitmap = Bitmap.createBitmap(
-                totalWidth,
-                height,
-                Bitmap.Config.ARGB_8888
-            )
+            val bitmap = Bitmap.createBitmap(totalWidth, height, Bitmap.Config.ARGB_8888)
             bitmap.copyPixelsFromBuffer(buffer)
+            image.close()
+            image = null
 
-            val cleanBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height)
+            cleanBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height)
             bitmap.recycle()
 
-            val inputImage = InputImage.fromBitmap(cleanBitmap, 0)
-            
-            try {
-                val (commRect, holeRect, hudRects) = withContext(Dispatchers.Main) {
-                    Triple(pokerHudService.getCommRect(), pokerHudService.getHoleRect(), pokerHudService.getHudRects())
-                }
-                
-                val currentState = PokerHudSharedState.uiState.value
-
-                // 1. Parallelize OCR Tasks
-                val commTask = scope.async {
-                    if (commRect.width() > 20 && commRect.height() > 20) {
-                        scanRegionForCards(cleanBitmap, commRect)
-                    } else emptyList()
-                }
-
-                val holeTask = scope.async {
-                    if (holeRect.width() > 20 && holeRect.height() > 20) {
-                        scanRegionForCards(cleanBitmap, holeRect)
-                    } else emptyList()
-                }
-
-                val fullScreenTask = scope.async {
-                    recognizer.process(inputImage).await()
-                }
-
-                // 2. Collect Results
-                val foundCommCards = commTask.await()
-                val foundHoleCards = holeTask.await()
-                val result = fullScreenTask.await()
-
-                // 3. PERSISTENCE/SMOOTHING
-                if (foundHoleCards.isEmpty()) consecutiveEmptyHole++ else consecutiveEmptyHole = 0
-                if (foundCommCards.isEmpty()) consecutiveEmptyComm++ else consecutiveEmptyComm = 0
-                
-                val finalH1 = foundHoleCards.getOrNull(0) ?: if (consecutiveEmptyHole < 3) currentState.heroCard1 else null
-                val finalH2 = foundHoleCards.getOrNull(1) ?: if (consecutiveEmptyHole < 3) currentState.heroCard2 else null
-                val finalBoard = List(5) { i ->
-                    foundCommCards.getOrNull(i) ?: if (consecutiveEmptyComm < 3) currentState.board.getOrNull(i) else null
-                }
-                
-                // 4. OPPONENTS & PROFILE
-                val scannedOpponents = OpponentScanner.scan(result, cleanBitmap, hudRects)
-                val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
-
-                var profileBoxesToHighlight: List<ScannedBox>? = null
-                if (requestProfileScan) {
-                    val scannedProfile = ProfileScanner.scan(result, cleanBitmap, hudRects)
-                    if (scannedProfile != null && scannedProfile.nickname != "Unknown_Profile") {
-                        profileBoxesToHighlight = scannedProfile.profileBoundingBoxes
-                        val prefsManager = PreferencesManager(pokerHudService)
-                        val existing = prefsManager.loadPlayerStats(scannedProfile.nickname)
-                        val updated = existing.copy(
-                            histVpip = scannedProfile.histVpip ?: existing.histVpip,
-                            histPfr = scannedProfile.histPfr ?: existing.histPfr
-                        )
-                        prefsManager.savePlayerStats(updated)
-                        withContext(Dispatchers.Main) {
-                            android.widget.Toast.makeText(context, "Profile parsed: ${scannedProfile.nickname}", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    requestProfileScan = false
-                }
-
-                PokerHudSharedState.externalActions.tryEmit(
-                    ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight, updateProfileBoxes = (profileBoxesToHighlight != null))
-                )
-                
-                scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} Ops:${finalOpponents.size}<br>" +
-                                   "Board: ${finalBoard.take(5).joinToString("") { it?.toHtmlString() ?: "[?]" }}"
-                
-            } catch (e: Exception) {
-                scanStatus.value = "Scan Error: ${e.message}"
-            } finally {
-                cleanBitmap.recycle()
+            val rects = withContext(Dispatchers.Main) {
+                Triple(pokerHudService.getCommRect(), pokerHudService.getHoleRect(), pokerHudService.getHudRects())
             }
-        } catch (e: Throwable) {
-            android.util.Log.e("ScreenScanner", "Fatal Scanner Error", e)
+            val commRect = rects.first
+            val holeRect = rects.second
+            val hudRects = rects.third
+            
+            val currentState = PokerHudSharedState.uiState.value
+
+            // 1. COMBINED CARD DETECTION
+            val cardOCRTask = scope.async {
+                val combinedCards = mutableListOf<CardTemplate>()
+                
+                // Scan Comm
+                if (commRect.width() > 20 && commRect.height() > 20) {
+                    combinedCards.addAll(detectCardsInRegion(cleanBitmap!!, commRect, isHole = false))
+                }
+                // Scan Hole
+                if (holeRect.width() > 20 && holeRect.height() > 20) {
+                    combinedCards.addAll(detectCardsInRegion(cleanBitmap!!, holeRect, isHole = true))
+                }
+                
+                if (combinedCards.isEmpty()) return@async Pair(emptyList<Card>(), emptyList<Card>())
+                
+                // Batch OCR for ALL cards found
+                performBatchCardOCR(cleanBitmap!!, combinedCards)
+            }
+
+            // 2. FULL SCREEN OCR (for opponents)
+            val fullScreenTask = scope.async {
+                val inputImage = InputImage.fromBitmap(cleanBitmap!!, 0)
+                recognizer.process(inputImage).await()
+            }
+
+            // 3. WAIT FOR RESULTS
+            val (foundCommCards, foundHoleCards) = cardOCRTask.await()
+            val result = fullScreenTask.await()
+
+            // 4. PERSISTENCE/SMOOTHING
+            if (foundHoleCards.isEmpty()) consecutiveEmptyHole++ else consecutiveEmptyHole = 0
+            if (foundCommCards.isEmpty()) consecutiveEmptyComm++ else consecutiveEmptyComm = 0
+            
+            val finalH1 = foundHoleCards.getOrNull(0) ?: if (consecutiveEmptyHole < 3) currentState.heroCard1 else null
+            val finalH2 = foundHoleCards.getOrNull(1) ?: if (consecutiveEmptyHole < 3) currentState.heroCard2 else null
+            val finalBoard = List(5) { i ->
+                foundCommCards.getOrNull(i) ?: if (consecutiveEmptyComm < 3) currentState.board.getOrNull(i) else null
+            }
+            
+            // 5. OPPONENTS & PROFILE
+            val scannedOpponents = OpponentScanner.scan(result, cleanBitmap!!, hudRects)
+            val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
+
+            var profileBoxesToHighlight: List<ScannedBox>? = null
+            if (requestProfileScan) {
+                val scannedProfile = ProfileScanner.scan(result, cleanBitmap!!, hudRects)
+                if (scannedProfile != null && scannedProfile.nickname != "Unknown_Profile") {
+                    profileBoxesToHighlight = scannedProfile.profileBoundingBoxes
+                    val prefsManager = PreferencesManager(pokerHudService)
+                    val existing = prefsManager.loadPlayerStats(scannedProfile.nickname)
+                    val updated = existing.copy(
+                        histVpip = scannedProfile.histVpip ?: existing.histVpip,
+                        histPfr = scannedProfile.histPfr ?: existing.histPfr
+                    )
+                    prefsManager.savePlayerStats(updated)
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "Profile parsed: ${scannedProfile.nickname}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+                requestProfileScan = false
+            }
+
+            PokerHudSharedState.externalActions.tryEmit(
+                ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight, updateProfileBoxes = (profileBoxesToHighlight != null))
+            )
+            
+            scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} Ops:${finalOpponents.size}<br>" +
+                               "Board: ${finalBoard.take(5).joinToString("") { it?.toHtmlString() ?: "[?]" }}"
+            
+        } catch (e: Exception) {
+            android.util.Log.e("ScreenScanner", "Process Error", e)
+            scanStatus.value = "Scan Error: ${e.message}"
         } finally {
+            cleanBitmap?.recycle()
             try { image?.close() } catch(ignored: Exception) {}
         }
     }
 
-    /**
-     * Efficiently scans a cropped region (Comm or Hole) for cards.
-     * Uses island detection to isolate cards and then OCR/color for identification.
-     */
-    private suspend fun scanRegionForCards(source: Bitmap, rect: android.graphics.Rect): List<Card> {
+    private data class CardTemplate(
+        val rectInSource: android.graphics.Rect,
+        val isHole: Boolean,
+        val island: android.graphics.Rect
+    )
+
+    private fun detectCardsInRegion(source: Bitmap, rect: android.graphics.Rect, isHole: Boolean): List<CardTemplate> {
         val safeRect = android.graphics.Rect(
             maxOf(0, rect.left),
             maxOf(0, rect.top),
@@ -217,29 +222,26 @@ class ScreenScanner(
         )
         if (safeRect.width() < 10 || safeRect.height() < 10) return emptyList()
         
-        val crop = Bitmap.createBitmap(source, safeRect.left, safeRect.top, safeRect.width(), safeRect.height())
-        
-        // 1. Find white islands (cards)
+        val crop = try { Bitmap.createBitmap(source, safeRect.left, safeRect.top, safeRect.width(), safeRect.height()) } catch(e: Exception) { return emptyList() }
         val islands = findCardIslands(crop)
-        if (islands.isEmpty()) {
-            crop.recycle()
-            return emptyList()
-        }
-
-        val foundCards = mutableListOf<Triple<Rank, Suit, Int>>()
+        crop.recycle()
         
-        // BATCH OCR OPTIMIZATION: Stitch islands into one bitmap to avoid multiple heavy ML Kit calls
+        return islands.map { CardTemplate(safeRect, isHole, it) }
+    }
+
+    private suspend fun performBatchCardOCR(source: Bitmap, templates: List<CardTemplate>): Pair<List<Card>, List<Card>> {
         val scale = 2.0f
         val margin = 30
         var totalW = 0
         var maxH = 0
+        
         val cardBitmaps = mutableListOf<Bitmap>()
-        val offsets = mutableMapOf<Int, Int>()
+        val bitmapToTemplateIndex = mutableListOf<Int>()
 
-        for (i in islands.indices) {
-            val island = islands[i]
-            val cardBmp = try { 
-                val b = Bitmap.createBitmap(crop, island.left, island.top, island.width(), island.height())
+        for (i in templates.indices) {
+            val t = templates[i]
+            val cardBmp = try {
+                val b = Bitmap.createBitmap(source, t.rectInSource.left + t.island.left, t.rectInSource.top + t.island.top, t.island.width(), t.island.height())
                 val rankW = (b.width * 0.8).toInt()
                 val rankH = (b.height * 0.8).toInt()
                 if (rankW < 2 || rankH < 2) {
@@ -255,66 +257,74 @@ class ScreenScanner(
             } catch(e: Exception) { null }
 
             if (cardBmp != null) {
-                offsets[i] = totalW
                 cardBitmaps.add(cardBmp)
+                bitmapToTemplateIndex.add(i)
                 totalW += cardBmp.width + margin
                 maxH = maxOf(maxH, cardBmp.height)
             }
         }
 
-        if (cardBitmaps.isNotEmpty()) {
-            val stitched = Bitmap.createBitmap(totalW, maxH, Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(stitched)
-            canvas.drawColor(android.graphics.Color.BLACK)
-            
+        if (cardBitmaps.isEmpty()) return Pair(emptyList(), emptyList())
+
+        val stitched = Bitmap.createBitmap(totalW, maxH, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(stitched)
+        canvas.drawColor(android.graphics.Color.BLACK)
+        
+        val offsets = mutableListOf<Int>()
+        var currentX = 0
+        for (bmp in cardBitmaps) {
+            offsets.add(currentX)
+            canvas.drawBitmap(bmp, currentX.toFloat(), 0f, null)
+            currentX += bmp.width + margin
+        }
+
+        val input = InputImage.fromBitmap(stitched, 0)
+        val result = try { recognizer.process(input).await() } catch(e: Exception) { null }
+
+        val foundComm = mutableListOf<Pair<Card, Int>>()
+        val foundHole = mutableListOf<Pair<Card, Int>>()
+
+        if (result != null) {
             for (i in cardBitmaps.indices) {
-                val off = offsets.values.elementAt(i)
-                canvas.drawBitmap(cardBitmaps[i], off.toFloat(), 0f, null)
-            }
-
-            val input = InputImage.fromBitmap(stitched, 0)
-            val result = try { recognizer.process(input).await() } catch(e: Exception) { null }
-
-            if (result != null) {
-                for (i in islands.indices) {
-                    val offX = offsets[i] ?: continue
-                    val cardW = cardBitmaps[offsets.keys.indexOf(i)].width
-                    val rightBound = offX + cardW
-                    
-                    val cardText = StringBuilder()
-                    for (block in result.textBlocks) {
-                        for (line in block.lines) {
-                            val box = line.boundingBox ?: continue
-                            if (box.centerX() >= offX && box.centerX() <= rightBound) {
-                                cardText.append(line.text).append(" ")
-                            }
+                val offX = offsets[i]
+                val cardW = cardBitmaps[i].width
+                val rightBound = offX + cardW
+                val t = templates[bitmapToTemplateIndex[i]]
+                
+                val cardText = StringBuilder()
+                for (block in result.textBlocks) {
+                    for (line in block.lines) {
+                        val box = line.boundingBox ?: continue
+                        if (box.centerX() >= offX && box.centerX() <= rightBound) {
+                            cardText.append(line.text).append(" ")
                         }
                     }
+                }
 
-                    val rankStr = cardText.toString()
-                    if (rankStr.isNotEmpty()) {
-                        val bestRank = matchRank(rankStr)
-                        if (bestRank != null) {
-                            val suitBmp = try { Bitmap.createBitmap(crop, islands[i].left, islands[i].top, islands[i].width(), islands[i].height()) } catch(e: Exception) { null }
-                            if (suitBmp != null) {
-                                val suit = detectSuitInCard(suitBmp)
-                                foundCards.add(Triple(bestRank, suit, safeRect.left + islands[i].centerX()))
-                                suitBmp.recycle()
-                            }
+                val rankStr = cardText.toString()
+                if (rankStr.isNotEmpty()) {
+                    val bestRank = matchRank(rankStr)
+                    if (bestRank != null) {
+                        val suitBmp = try { Bitmap.createBitmap(source, t.rectInSource.left + t.island.left, t.rectInSource.top + t.island.top, t.island.width(), t.island.height()) } catch(e: Exception) { null }
+                        if (suitBmp != null) {
+                            val suit = detectSuitInCard(suitBmp)
+                            val card = Card(bestRank, suit)
+                            val centerX = t.rectInSource.left + t.island.centerX()
+                            if (t.isHole) foundHole.add(card to centerX) else foundComm.add(card to centerX)
+                            suitBmp.recycle()
                         }
                     }
                 }
             }
-            stitched.recycle()
-            cardBitmaps.forEach { it.recycle() }
         }
-        
-        crop.recycle()
-        
-        // Sort by X position and deduplicate
-        return foundCards.sortedBy { it.third }
-            .map { Card(it.first, it.second) }
-            .distinct()
+
+        stitched.recycle()
+        cardBitmaps.forEach { it.recycle() }
+
+        val finalComm = foundComm.sortedBy { it.second }.map { it.first }.distinct()
+        val finalHole = foundHole.sortedBy { it.second }.map { it.first }.distinct()
+
+        return Pair(finalComm, finalHole)
     }
 
     private fun findCardIslands(bitmap: Bitmap): List<android.graphics.Rect> {
@@ -367,39 +377,51 @@ class ScreenScanner(
     private fun floodFillIsland(bitmap: Bitmap, startX: Int, startY: Int, visited: BooleanArray): android.graphics.Rect {
         val width = bitmap.width
         val height = bitmap.height
-        val queue = java.util.ArrayDeque<Pair<Int, Int>>()
-        queue.add(startX to startY)
+        val queueX = IntArray(3000)
+        val queueY = IntArray(3000)
+        var head = 0
+        var tail = 0
+        
+        queueX[tail] = startX
+        queueY[tail] = startY
+        tail++
         visited[startY * width + startX] = true
         
         var minX = startX; var maxX = startX; var minY = startY; var maxY = startY
         
-        var count = 0
-        while (queue.isNotEmpty() && count < 3000) {
-            val (px, py) = queue.poll()!!
-            count++
+        while (head < tail && tail < 3000) {
+            val px = queueX[head]
+            val py = queueY[head]
+            head++
             
             if (px < minX) minX = px
             if (px > maxX) maxX = px
             if (py < minY) minY = py
             if (py > maxY) maxY = py
             
-            // Search neighbors with step to speed up (smaller step for precision)
             val step = 2
-            val neighbors = arrayOf(px + step to py, px - step to py, px to py + step, px to py - step)
-            for ((nx, ny) in neighbors) {
+            val dx = intArrayOf(step, -step, 0, 0)
+            val dy = intArrayOf(0, 0, step, -step)
+            
+            for (i in 0 until 4) {
+                val nx = px + dx[i]
+                val ny = py + dy[i]
                 if (nx in 0 until width && ny in 0 until height) {
                     val nIdx = ny * width + nx
                     if (!visited[nIdx]) {
                         visited[nIdx] = true
                         if (isWhiteCardPixel(bitmap.getPixel(nx, ny))) {
-                            queue.add(nx to ny)
+                            if (tail < 3000) {
+                                queueX[tail] = nx
+                                queueY[tail] = ny
+                                tail++
+                            }
                         }
                     }
                 }
             }
         }
         val rect = android.graphics.Rect(minX, minY, maxX, maxY)
-        // Ensure some minimum padding for recognition
         return android.graphics.Rect(
             maxOf(0, rect.left - 1),
             maxOf(0, rect.top - 1),

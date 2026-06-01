@@ -1012,13 +1012,17 @@ class PokerHudService : Service() {
     fun getCommRect(): android.graphics.Rect {
         val view = floatingCommOverlay ?: return android.graphics.Rect(0, 0, 0, 0)
         val params = view.layoutParams as? WindowManager.LayoutParams ?: return android.graphics.Rect(0, 0, 0, 0)
-        return android.graphics.Rect(params.x, params.y, params.x + params.width, params.y + params.height)
+        val w = if (view.width > 0) view.width else (if (params.width > 0) params.width else dpToPx(200f))
+        val h = if (view.height > 0) view.height else (if (params.height > 0) params.height else dpToPx(120f))
+        return android.graphics.Rect(params.x, params.y, params.x + w, params.y + h)
     }
 
     fun getHoleRect(): android.graphics.Rect {
         val view = floatingHoleOverlay ?: return android.graphics.Rect(0, 0, 0, 0)
         val params = view.layoutParams as? WindowManager.LayoutParams ?: return android.graphics.Rect(0, 0, 0, 0)
-        return android.graphics.Rect(params.x, params.y, params.x + params.width, params.y + params.height)
+        val w = if (view.width > 0) view.width else (if (params.width > 0) params.width else dpToPx(150f))
+        val h = if (view.height > 0) view.height else (if (params.height > 0) params.height else dpToPx(100f))
+        return android.graphics.Rect(params.x, params.y, params.x + w, params.y + h)
     }
 
     private fun setupDragListener(view: View, params: WindowManager.LayoutParams) {
