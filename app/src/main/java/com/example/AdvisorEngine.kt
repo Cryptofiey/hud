@@ -315,40 +315,40 @@ object AdvisorEngine {
         when {
             betToCall > 0 && !profitableCall && rawScore < 0.35f -> {
                 action = "FOLD"
-                explanation = "Fold: equity ${pct(equity)}% < pot odds ${pct(potOdds)}%"
+                explanation = "Фолд: эквити ${pct(equity)}% < шансы банка ${pct(potOdds)}%"
             }
             equity > 0.65f && rawScore > 0.6f -> {
                 if (mRatio < 10.0f || (equity > 0.80f && positionFactor > 0.5f)) {
                     action = "ALL-IN"
-                    explanation = "ALL-IN: premium ${pct(equity)}%, M=${fmt(mRatio)}"
+                    explanation = "ОЛЛ-ИН: премиум ${pct(equity)}%, M=${fmt(mRatio)}"
                 } else {
                     action = "RAISE"
-                    explanation = "Raise: equity ${pct(equity)}%"
+                    explanation = "Рейз: эквити ${pct(equity)}%"
                 }
             }
             equity > 0.50f && rawScore > 0.4f -> {
                 if (betToCall > 0 && profitableCall && rawScore > 0.5f) {
                     action = "RAISE"
-                    explanation = "Raise: profitable, equity ${pct(equity)}%"
+                    explanation = "Рейз: выгодно, эквити ${pct(equity)}%"
                 } else if (betToCall > 0) {
                     action = "CALL"
-                    explanation = "Call: marginal ${pct(equity)}%"
+                    explanation = "Колл: маргинально ${pct(equity)}%"
                 } else {
                     action = "CHECK"
-                    explanation = "Check: moderate ${pct(equity)}%"
+                    explanation = "Чек: умеренно ${pct(equity)}%"
                 }
             }
             betToCall > 0 && rawScore < 0.3f -> {
                 action = "FOLD"
-                explanation = "Fold: weak ${pct(equity)}%"
+                explanation = "Фолд: слабо ${pct(equity)}%"
             }
             betToCall > 0 -> {
                 action = "CALL"
-                explanation = "Call: marginal, equity ${pct(equity)}%"
+                explanation = "Колл: маргинально, эквити ${pct(equity)}%"
             }
             else -> {
                 action = "CHECK"
-                explanation = "Check: ${pct(equity)}% equity"
+                explanation = "Чек: ${pct(equity)}% эквити"
             }
         }
 
@@ -358,6 +358,128 @@ object AdvisorEngine {
             "CALL" -> (1.0f - kotlin.math.abs(rawScore - 0.5f) / 0.5f).coerceIn(0f, 1f) * 100f
             "CHECK" -> if (rawScore < 0.3f) ((0.3f - rawScore)/0.3f).coerceIn(0f, 1f) * 100f else (1.0f - kotlin.math.abs(rawScore - 0.5f) / 0.5f).coerceIn(0f, 1f) * 100f
             else -> 50f
+        }
+
+        return Recommendation(action, confidence, explanation)
+    }
+
+    fun computeRecommendationAdvanced(
+        heroCard1: Card?,
+        heroCard2: Card?,
+        board: List<Card?>,
+        potSize: Int,
+        heroBet: Int,
+        opponents: List<OpponentState>,
+        activeOpponentsCount: Int,
+        simResult: SimulationResult?,
+        settings: AdvisorSettings,
+        position: TablePosition,
+        stage: TournamentStage,
+        smallBlind: Int,
+        bigBlind: Int,
+        heroStack: Int,
+        lastActions: String = ""
+    ): Recommendation {
+        // Advanced logic uses the 10 parameters more deeply
+        if (heroCard1 == null || heroCard2 == null) {
+            return Recommendation("FOLD", 100f, "Enter cards.")
+        }
+
+        val equity = (simResult?.heroWinPct ?: 0f) / 100f
+        
+        // Find the main opponent (most hands or currently active with highest aggression)
+        val opponent = opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
+        val profile = opponent?.stats
+        
+        var adjustedScore = equity
+
+        if (profile != null) {
+            // Apply adjustments based on 10 parameters
+            
+            // 1 & 2. VPIP/PFR Gap: High gap means passive fish, low gap means aggressive reg
+            val vpip = profile.histVpip ?: profile.vpip
+            val pfr = profile.histPfr ?: profile.pfr
+            val gap = vpip - pfr
+            if (gap > 30f) {
+                // Passive: their bets mean strength
+                if (heroBet < (opponents.maxByOrNull { it.betSize }?.betSize ?: 0)) {
+                    adjustedScore -= 0.1f // Be more cautious against their bets
+                } else {
+                    adjustedScore += 0.05f // They over-call, value bet them
+                }
+            }
+
+            // 3 & 4. 3-Bet & Fold to 3-Bet: Squeeze potential
+            val bet3 = profile.hist3Bet ?: 5f
+            val fold3 = profile.histFoldTo3Bet ?: 40f
+            if (fold3 > 60f) adjustedScore += 0.1f // They over-fold to 3-bets
+            if (bet3 > 15f) adjustedScore -= 0.05f // They 3-bet light, be careful
+
+            // 5 & 6. C-Bet & Fold to C-Bet: Post-flop texture
+            val cbet = profile.histCBet ?: 50f
+            val foldCbet = profile.histFoldToCBet ?: 40f
+            if (foldCbet > 60f) adjustedScore += 0.1f // Good target for C-bet
+            if (cbet > 80f) adjustedScore -= 0.05f // They c-bet everything, don't over-fold
+
+            // 7. Steal: Button/CO aggression
+            val steal = profile.histSteal ?: 30f
+            if (steal > 50f && (position == TablePosition.SB || position == TablePosition.BB)) {
+                adjustedScore += 0.1f // Defend wider against this steal
+            }
+
+            // 8. Check/Raise
+            val cr = profile.histCheckRaise ?: 10f
+            if (cr > 15f) adjustedScore -= 0.05f // Careful on dry boards, they polarize
+
+            // 9 & 10. WTSD & WSD: The "Showdown" factor
+            val wtsd = profile.histWtsd ?: 30f
+            val wsd = profile.histWsd ?: 50f
+            if (wtsd > 35f && wsd < 45f) {
+                // Calling station: value bet larger!
+                adjustedScore += 0.1f
+            } else if (wtsd < 25f && wsd > 55f) {
+                // Nit: don't bluff!
+                adjustedScore -= 0.1f
+            }
+        }
+
+        // Pot odds and profit check
+        var maxOpponentBet = 0
+        opponents.filter { it.isActive }.forEach { opp ->
+            val pBet = if (settings.usePip) opp.betSize else 0
+            if (pBet > maxOpponentBet) maxOpponentBet = pBet
+        }
+        val betToCall = maxOf(0, maxOpponentBet - heroBet).toFloat()
+        val activePot = potSize.toFloat() + betToCall
+        val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
+        
+        val isProfitable = adjustedScore > potOdds
+        
+        val action: String
+        val confidence: Float
+        val explanation: String
+        
+        when {
+            adjustedScore > 0.7f -> {
+                action = "RAISE"
+                confidence = (adjustedScore * 100f).coerceIn(0f, 100f)
+                explanation = "Adv: сильное эквити диапазона ${String.format("%.0f", adjustedScore*100)}%"
+            }
+            adjustedScore > 0.5f -> {
+                action = if (betToCall > 0) "CALL" else "CHECK"
+                confidence = 70f
+                explanation = "Adv: выгодный колл/чек"
+            }
+            isProfitable -> {
+                action = if (betToCall > 0) "CALL" else "CHECK"
+                confidence = 55f
+                explanation = "Adv: минимальная прибыль"
+            }
+            else -> {
+                action = if (betToCall > 0) "FOLD" else "CHECK"
+                confidence = 80f
+                explanation = "Adv: отрицательное EV"
+            }
         }
 
         return Recommendation(action, confidence, explanation)

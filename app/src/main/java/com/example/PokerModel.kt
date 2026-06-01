@@ -1,7 +1,8 @@
 package com.example
 
+import java.util.Random
 import java.util.Locale
-import kotlin.random.Random
+import kotlin.random.Random as KotlinRandom
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 
@@ -305,12 +306,126 @@ object HandEvaluator {
 object SimulationEngine {
     private val fullDeck: List<Card> = Rank.values().flatMap { r -> Suit.values().map { s -> Card(r, s) } }
 
+    private val rankedPairs: List<Pair<Rank, Rank>> by lazy {
+        val pairs = mutableListOf<Triple<Rank, Rank, Boolean>>() // R1, R2, suited
+        for (r1 in Rank.values()) {
+            for (r2 in Rank.values()) {
+                if (r1.value > r2.value) {
+                    pairs.add(Triple(r1, r2, true))
+                    pairs.add(Triple(r1, r2, false))
+                } else if (r1 == r2) {
+                    pairs.add(Triple(r1, r2, false))
+                }
+            }
+        }
+        // Sort by Sklansky Group (lower group is better)
+        pairs.sortedBy { (r1, r2, suited) ->
+            AdvisorEngine.getSklanskyGroup(Card(r1, Suit.SPADES), Card(r2, if (suited) Suit.SPADES else Suit.HEARTS))
+        }.map { Pair(it.first, it.second) }
+    }
+
     suspend fun runHoldemSimulation(
         heroCard1: Card?,
         heroCard2: Card?,
         opponents: List<OpponentState>,
         board: List<Card?>,
         simulations: Int = 3000
+    ): SimulationResult {
+        val activeOpponents = opponents.filter { it.isActive }
+        if (activeOpponents.isEmpty()) {
+            return SimulationResult(100f, 0f, 0f, HandCategory.values().associateWith { 0f }, 1, true)
+        }
+
+        val knownCardsSet = mutableSetOf<Card>().apply {
+            heroCard1?.let { add(it) }
+            heroCard2?.let { add(it) }
+            board.filterNotNull().forEach { add(it) }
+            activeOpponents.forEach { opp ->
+                if (!opp.isRandom) {
+                    opp.card1?.let { add(it) }
+                    opp.card2?.let { add(it) }
+                }
+            }
+        }
+
+        val remainingDeckPool = fullDeck.filter { it !in knownCardsSet }.toMutableList()
+        val totalToSample = board.count { it == null } + (if (heroCard1 == null) 1 else 0) + (if (heroCard2 == null) 1 else 0) +
+                activeOpponents.sumOf { opp ->
+                    if (opp.isRandom) 2 else (if (opp.card1 == null) 1 else 0) + (if (opp.card2 == null) 1 else 0)
+                }
+
+        if (remainingDeckPool.size < totalToSample) return SimulationResult(0f, 0f, 0f, emptyMap(), 0, false)
+
+        var heroWins = 0
+        var heroTies = 0
+        var heroLosses = 0
+        val handCategoryCounts = mutableMapOf<HandCategory, Int>().apply { HandCategory.values().forEach { put(it, 0) } }
+
+        val rng = Random(System.nanoTime())
+        val poolArray = remainingDeckPool.toTypedArray()
+        val poolSize = poolArray.size
+
+        for (sim in 0 until simulations) {
+            if (sim % 500 == 0 && !kotlinx.coroutines.currentCoroutineContext().isActive) break
+
+            // Efficient partial shuffle
+            for (i in 0 until totalToSample) {
+                val j = i + rng.nextInt(poolSize - i)
+                val temp = poolArray[i]
+                poolArray[i] = poolArray[j]
+                poolArray[j] = temp
+            }
+
+            var sampleIdx = 0
+            val simBoard = Array(5) { i -> board[i] ?: poolArray[sampleIdx++] }
+            val simBoardList = simBoard.toList()
+            val simHero1 = heroCard1 ?: poolArray[sampleIdx++]
+            val simHero2 = heroCard2 ?: poolArray[sampleIdx++]
+
+            val hero7 = listOf(simHero1, simHero2) + simBoardList
+            val heroScore = HandEvaluator.findBest5CardHand(hero7)
+            handCategoryCounts[heroScore.category] = handCategoryCounts.getValue(heroScore.category) + 1
+
+            var bestOppScore: HandScore? = null
+            for (opp in activeOpponents) {
+                val o1 = if (opp.isRandom) poolArray[sampleIdx++] else opp.card1 ?: poolArray[sampleIdx++]
+                val o2 = if (opp.isRandom) poolArray[sampleIdx++] else opp.card2 ?: poolArray[sampleIdx++]
+                val opp7 = listOf(o1, o2) + simBoardList
+                val oppScore = HandEvaluator.findBest5CardHand(opp7)
+                if (bestOppScore == null || oppScore > bestOppScore) bestOppScore = oppScore
+            }
+
+            if (bestOppScore != null) {
+                if (heroScore > bestOppScore) heroWins++
+                else if (heroScore == bestOppScore) heroTies++
+                else heroLosses++
+            }
+        }
+
+        val total = simulations.toFloat()
+        return SimulationResult(
+            heroWins / total * 100f, heroTiePct = heroTies / total * 100f, heroLossPct = heroLosses / total * 100f,
+            handCategoryCounts.mapValues { it.value / total * 100f }, simulations, true
+        )
+    }
+
+    suspend fun runHoldemSimulationAdvanced(
+        heroCard1: Card?,
+        heroCard2: Card?,
+        opponents: List<OpponentState>,
+        board: List<Card?>,
+        simulations: Int = 3000
+    ): SimulationResult {
+        return runHoldemSimulationInternal(heroCard1, heroCard2, opponents, board, simulations, true)
+    }
+
+    private suspend fun runHoldemSimulationInternal(
+        heroCard1: Card?,
+        heroCard2: Card?,
+        opponents: List<OpponentState>,
+        board: List<Card?>,
+        simulations: Int,
+        useRanges: Boolean
     ): SimulationResult {
         val activeOpponents = opponents.filter { it.isActive }
         
@@ -334,18 +449,18 @@ object SimulationEngine {
         var needsHero1 = (heroCard1 == null)
         var needsHero2 = (heroCard2 == null)
 
-        var randomOpponentsCount = activeOpponents.count { it.isRandom }
-        var knownOpponentsWithNullCount = activeOpponents.count { !it.isRandom && (it.card1 == null || it.card2 == null) }
-
-        // Total number of random cards we need to pull per simulation run
+        // Total number of random cards we need to pull per simulation run (for board)
         val boardCardsToFill = board.indices.filter { board[it] == null }
-        val randomHoleCardsNeeded = (if (needsHero1) 1 else 0) + (if (needsHero2) 1 else 0) +
+        
+        // For range-based simulation, we handle hole cards separately
+        val totalToSampleForBoard = nullBoardCount
+        val totalToSampleForHoles = (if (needsHero1) 1 else 0) + (if (needsHero2) 1 else 0) +
                 activeOpponents.sumOf { opp ->
                     if (opp.isRandom) 2 else {
                         (if (opp.card1 == null) 1 else 0) + (if (opp.card2 == null) 1 else 0)
                     }
                 }
-        val totalToSample = nullBoardCount + randomHoleCardsNeeded
+        val totalToSample = totalToSampleForBoard + totalToSampleForHoles
 
         // Edge case: if no opponents are active, Hero has 100% equity alone
         if (activeOpponents.isEmpty()) {
@@ -367,9 +482,6 @@ object SimulationEngine {
             return SimulationResult(100f, 0f, 0f, emptyMap, 1, true)
         }
 
-        // Hybrid approach: If total remaining combos are small (e.g. Turn/River with exact cards), we can calculate exact!
-        // For simplicity and solid real-time performance across all states, we'll run Monte Carlo.
-        // If remaining deck is smaller than what we need to pull, we can't run.
         if (remainingDeckPool.size < totalToSample) {
             return SimulationResult(0f, 0f, 0f, emptyMap(), 0, false)
         }
@@ -385,85 +497,193 @@ object SimulationEngine {
         val tempPoolArray = remainingDeckPool.toTypedArray()
         val poolSize = tempPoolArray.size
 
+        // Precompute ranges for opponents if useRanges is true
+        val cardsByRank = fullDeck.filter { it !in knownCardsSet }.groupBy { it.rank }
+
+        val opponentRanges = if (useRanges) {
+            activeOpponents.map { opp ->
+                val vpip = opp.stats?.histVpip ?: opp.stats?.vpip ?: 100f
+                val count = (rankedPairs.size * (vpip / 100f)).toInt().coerceIn(1, rankedPairs.size)
+                rankedPairs.take(count)
+            }
+        } else null
+
         // Run Monte Carlo loops
+        var successfulSims = 0
         for (sim in 0 until simulations) {
             if (sim % 200 == 0) {
                 if (!kotlinx.coroutines.currentCoroutineContext().isActive) {
-                    return SimulationResult(0f, 0f, 0f, emptyMap(), sim, false)
+                    if (successfulSims == 0) return SimulationResult(0f, 0f, 0f, emptyMap(), sim, false)
+                    break
                 }
             }
-            // High-performance partial shuffle: we only shuffle as many items as we need to sample!
-            for (i in 0 until totalToSample) {
-                val swapIdx = rng.nextInt(poolSize - i) + i
-                val temp = tempPoolArray[i]
-                tempPoolArray[i] = tempPoolArray[swapIdx]
-                tempPoolArray[swapIdx] = temp
-            }
+            
+            // For range-based, we might need multiple attempts to find non-conflicting cards
+            var attempts = 0
+            var success = false
+            
+            while (attempts < 8 && !success) {
+                attempts++
+                // Shuffle pool
+                for (i in 0 until totalToSample) {
+                    val swapIdx = rng.nextInt(poolSize - i) + i
+                    val temp = tempPoolArray[i]
+                    tempPoolArray[i] = tempPoolArray[swapIdx]
+                    tempPoolArray[swapIdx] = temp
+                }
 
-            // Cards from index 0 to totalToSample - 1 are now perfectly random samples!
-            var sampleIdx = 0
+                var sampleIdx = 0
+                val usedInSim = mutableSetOf<Card>()
 
-            // Fill Hero hand
-            val simHero1 = if (needsHero1) tempPoolArray[sampleIdx++] else heroCard1!!
-            val simHero2 = if (needsHero2) tempPoolArray[sampleIdx++] else heroCard2!!
+                // 1. Fill board
+                val simBoard = Array(5) { Card(Rank.TWO, Suit.SPADES) }
+                for (b in 0 until 5) {
+                    val existing = board[b]
+                    if (existing != null) {
+                        simBoard[b] = existing
+                    } else {
+                        val c = tempPoolArray[sampleIdx++]
+                        simBoard[b] = c
+                        usedInSim.add(c)
+                    }
+                }
+                val simBoardList = simBoard.toList()
 
-            // Fill board
-            val simBoard = Array(5) { Card(Rank.TWO, Suit.SPADES) }
-            for (b in 0 until 5) {
-                val existing = board[b]
-                if (existing != null) {
-                    simBoard[b] = existing
+                // 2. Fill Hero hand
+                val simHero1 = if (needsHero1) {
+                    val c = tempPoolArray[sampleIdx++]
+                    usedInSim.add(c)
+                    c
+                } else heroCard1!!
+                
+                val simHero2 = if (needsHero2) {
+                    val c = tempPoolArray[sampleIdx++]
+                    usedInSim.add(c)
+                    c
+                } else heroCard2!!
+
+                // 3. Fill Opponents
+                val simOpponentHands = mutableListOf<Pair<Card, Card>>()
+                var conflict = false
+                
+                // Track sample index for random cards
+                var currentSampleIdx = sampleIdx
+                
+                for (idx in activeOpponents.indices) {
+                    val opp = activeOpponents[idx]
+                    val range = opponentRanges?.get(idx)
+                    
+                    var h1: Card? = null
+                    var h2: Card? = null
+                    
+                    if (range != null && opp.isRandom) {
+                        // Pick from range
+                        val pair = range[rng.nextInt(range.size)]
+                        
+                        val cardsR1 = cardsByRank[pair.first] ?: emptyList()
+                        val availableForR1 = cardsR1.filter { it !in usedInSim }
+                        
+                        if (availableForR1.isNotEmpty()) {
+                            h1 = availableForR1[rng.nextInt(availableForR1.size)]
+                            usedInSim.add(h1)
+                            
+                            val cardsR2 = cardsByRank[pair.second] ?: emptyList()
+                            val availableForR2 = cardsR2.filter { it !in usedInSim }
+                            
+                            if (availableForR2.isNotEmpty()) {
+                                h2 = availableForR2[rng.nextInt(availableForR2.size)]
+                                usedInSim.add(h2)
+                            } else {
+                                conflict = true
+                                break
+                            }
+                        } else {
+                            conflict = true
+                            break
+                        }
+                    } else {
+                        // Pure random or known cards
+                        if (opp.isRandom) {
+                            // Find next available in tempPoolArray that was not used by range-based hero/opps
+                            while (currentSampleIdx < poolSize && tempPoolArray[currentSampleIdx] in usedInSim) {
+                                currentSampleIdx++
+                            }
+                            if (currentSampleIdx >= poolSize) { conflict = true; break }
+                            h1 = tempPoolArray[currentSampleIdx++]
+                            usedInSim.add(h1)
+
+                            while (currentSampleIdx < poolSize && tempPoolArray[currentSampleIdx] in usedInSim) {
+                                currentSampleIdx++
+                            }
+                            if (currentSampleIdx >= poolSize) { conflict = true; break }
+                            h2 = tempPoolArray[currentSampleIdx++]
+                            usedInSim.add(h2)
+                        } else {
+                            h1 = opp.card1 ?: run {
+                                while (currentSampleIdx < poolSize && tempPoolArray[currentSampleIdx] in usedInSim) {
+                                    currentSampleIdx++
+                                }
+                                if (currentSampleIdx >= poolSize) { conflict = true; break }
+                                val c = tempPoolArray[currentSampleIdx++]
+                                usedInSim.add(c)
+                                c
+                            }
+                            if (conflict) break
+                            h2 = opp.card2 ?: run {
+                                while (currentSampleIdx < poolSize && tempPoolArray[currentSampleIdx] in usedInSim) {
+                                    currentSampleIdx++
+                                }
+                                if (currentSampleIdx >= poolSize) { conflict = true; break }
+                                val c = tempPoolArray[currentSampleIdx++]
+                                usedInSim.add(c)
+                                c
+                            }
+                            if (conflict) break
+                        }
+                    }
+                    simOpponentHands.add(h1!! to h2!!)
+                }
+
+                if (conflict) continue
+                success = true
+                successfulSims++
+
+                // Evaluate Hero Hand
+                val hero7Cards = listOf(simHero1, simHero2) + simBoardList
+                val heroScore = HandEvaluator.findBest5CardHand(hero7Cards)
+                handCategoryCounts[heroScore.category] = handCategoryCounts.getOrDefault(heroScore.category, 0) + 1
+
+                // Evaluate all active opponents
+                var bestOpponentScore: HandScore? = null
+
+                for (hand in simOpponentHands) {
+                    val opp7Cards = listOf(hand.first, hand.second) + simBoardList
+                    val oppScore = HandEvaluator.findBest5CardHand(opp7Cards)
+
+                    if (bestOpponentScore == null || oppScore > bestOpponentScore) {
+                        bestOpponentScore = oppScore
+                    }
+                }
+
+                // Compare Hero to best opponent
+                if (bestOpponentScore != null) {
+                    if (heroScore > bestOpponentScore) {
+                        heroWins++
+                    } else if (heroScore == bestOpponentScore) {
+                        heroTies++
+                    } else {
+                        heroLosses++
+                    }
                 } else {
-                    simBoard[b] = tempPoolArray[sampleIdx++]
-                }
-            }
-            val simBoardList = simBoard.toList()
-
-            // Evaluate Hero Hand
-            val hero7Cards = listOf(simHero1, simHero2) + simBoardList
-            val heroScore = HandEvaluator.findBest5CardHand(hero7Cards)
-            handCategoryCounts[heroScore.category] = handCategoryCounts.getOrDefault(heroScore.category, 0) + 1
-
-            // Evaluate all active opponents
-            var bestOpponentScore: HandScore? = null
-
-            for (opp in activeOpponents) {
-                val oppCard1 = if (opp.isRandom) {
-                    tempPoolArray[sampleIdx++]
-                } else {
-                    opp.card1 ?: tempPoolArray[sampleIdx++]
-                }
-
-                val oppCard2 = if (opp.isRandom) {
-                    tempPoolArray[sampleIdx++]
-                } else {
-                    opp.card2 ?: tempPoolArray[sampleIdx++]
-                }
-
-                val opp7Cards = listOf(oppCard1, oppCard2) + simBoardList
-                val oppScore = HandEvaluator.findBest5CardHand(opp7Cards)
-
-                if (bestOpponentScore == null || oppScore > bestOpponentScore) {
-                    bestOpponentScore = oppScore
-                }
-            }
-
-            // Compare Hero to best opponent
-            if (bestOpponentScore != null) {
-                if (heroScore > bestOpponentScore) {
                     heroWins++
-                } else if (heroScore == bestOpponentScore) {
-                    heroTies++
-                } else {
-                    heroLosses++
                 }
-            } else {
-                heroWins++
             }
         }
 
         // Compute final statistics in percentage
-        val totalRun = simulations.toFloat()
+        if (successfulSims == 0) return SimulationResult(0f, 0f, 0f, emptyMap(), 0, false)
+        
+        val totalRun = successfulSims.toFloat()
         val heroWinPct = (heroWins / totalRun) * 100f
         val heroTiePct = (heroTies / totalRun) * 100f
         val heroLossPct = (heroLosses / totalRun) * 100f

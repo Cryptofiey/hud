@@ -46,6 +46,8 @@ data class PokerUiState(
     val stage: TournamentStage = TournamentStage.EARLY,
     val settings: AdvisorSettings = AdvisorSettings(),
     val recommendation: Recommendation? = null,
+    val advancedSimulationResult: SimulationResult? = null,
+    val advancedRecommendation: Recommendation? = null,
     val profileBoxes: List<ScannedBox>? = null
 ) {
     // Collect all selected cards on the table to dim them in the card picker grid
@@ -353,6 +355,7 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
         calculationJob = viewModelScope.launch(Dispatchers.Default) {
             val state = _uiState.value
             try {
+                // 1. Original
                 val result = SimulationEngine.runHoldemSimulation(
                     heroCard1 = state.heroCard1,
                     heroCard2 = state.heroCard2,
@@ -361,7 +364,6 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     simulations = simSize
                 )
                 
-                // Compute state bound advisor recommendation
                 val recommendation = AdvisorEngine.computeRecommendation(
                     heroCard1 = state.heroCard1,
                     heroCard2 = state.heroCard2,
@@ -379,12 +381,40 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     heroStack = state.heroStack
                 )
 
+                // 2. Advanced
+                val advResult = SimulationEngine.runHoldemSimulationAdvanced(
+                    heroCard1 = state.heroCard1,
+                    heroCard2 = state.heroCard2,
+                    opponents = state.opponents,
+                    board = state.board,
+                    simulations = simSize
+                )
+
+                val advRecommendation = AdvisorEngine.computeRecommendationAdvanced(
+                    heroCard1 = state.heroCard1,
+                    heroCard2 = state.heroCard2,
+                    board = state.board,
+                    potSize = state.potSize,
+                    heroBet = state.heroBet,
+                    opponents = state.opponents,
+                    activeOpponentsCount = state.opponents.count { it.isActive },
+                    simResult = advResult,
+                    settings = state.settings,
+                    position = state.position,
+                    stage = state.stage,
+                    smallBlind = state.smallBlind,
+                    bigBlind = state.bigBlind,
+                    heroStack = state.heroStack
+                )
+
                 withContext(Dispatchers.Main) {
                     _uiState.update {
                         it.copy(
                             isCalculating = false,
                             simulationResult = result,
-                            recommendation = recommendation
+                            recommendation = recommendation,
+                            advancedSimulationResult = advResult,
+                            advancedRecommendation = advRecommendation
                         )
                     }
                 }
