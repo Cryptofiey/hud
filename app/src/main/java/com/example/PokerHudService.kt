@@ -802,15 +802,17 @@ class PokerHudService : Service() {
                     }
 
                     // Dynamically map opponents with real-time up-to-date stats
-                    val finalOpponentsList = if (action.opponents.isNotEmpty()) {
-                        action.opponents.map { opp ->
-                            val dbStats = prefs.loadPlayerStats(opp.nickname)
-                            opp.copy(stats = dbStats)
-                        }
-                    } else {
-                        currentState.opponents.map { opp ->
-                            val dbStats = prefs.loadPlayerStats(opp.nickname)
-                            opp.copy(stats = dbStats)
+                    val finalOpponentsList = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        if (action.opponents.isNotEmpty()) {
+                            action.opponents.map { opp ->
+                                val dbStats = prefs.loadPlayerStats(opp.nickname)
+                                opp.copy(stats = dbStats)
+                            }
+                        } else {
+                            currentState.opponents.map { opp ->
+                                val dbStats = prefs.loadPlayerStats(opp.nickname)
+                                opp.copy(stats = dbStats)
+                            }
                         }
                     }
 

@@ -118,9 +118,9 @@ class ScreenScanner(
             val inputImage = InputImage.fromBitmap(cleanBitmap, 0)
             
             try {
-                val commRect = withContext(Dispatchers.Main) { pokerHudService.getCommRect() }
-                val holeRect = withContext(Dispatchers.Main) { pokerHudService.getHoleRect() }
-                val hudRects = withContext(Dispatchers.Main) { pokerHudService.getHudRects() }
+                val (commRect, holeRect, hudRects) = withContext(Dispatchers.Main) {
+                    Triple(pokerHudService.getCommRect(), pokerHudService.getHoleRect(), pokerHudService.getHudRects())
+                }
                 
                 val foundCommCards = mutableListOf<Card>()
                 val foundHoleCards = mutableListOf<Card>()
@@ -197,7 +197,7 @@ class ScreenScanner(
 
     /**
      * Efficiently scans a cropped region (Comm or Hole) for cards.
-     * Uses direct OCR and color sampling for robust multi-color deck detection.
+     * Uses island detection to isolate cards and then OCR/color for identification.
      */
     private suspend fun scanRegionForCards(source: Bitmap, rect: android.graphics.Rect): List<Card> {
         val safeRect = android.graphics.Rect(
@@ -209,36 +209,38 @@ class ScreenScanner(
         if (safeRect.width() < 10 || safeRect.height() < 10) return emptyList()
         
         val crop = Bitmap.createBitmap(source, safeRect.left, safeRect.top, safeRect.width(), safeRect.height())
-        // Scale up crops for significantly better OCR performance on small card text
-        val scale = 2
-        val scaled = Bitmap.createScaledBitmap(crop, crop.width * scale, crop.height * scale, true)
-        val input = com.google.mlkit.vision.common.InputImage.fromBitmap(scaled, 0)
         
-        val result = try { recognizer.process(input).await() } catch(e: Exception) { null }
+        // 1. Find white islands (cards)
+        val islands = findCardIslands(crop)
         val foundCards = mutableListOf<Triple<Rank, Suit, Int>>()
         
-        if (result != null) {
-            for (block in result.textBlocks) {
-                val blockText = block.text.uppercase(java.util.Locale.US)
-                // Filter out HUD labels that might be in the crop area
-                if (blockText.contains("CROP") || blockText.contains("BOX") || blockText.contains("CARDS")) continue
-                
-                for (line in block.lines) {
-                    for (element in line.elements) {
-                        val text = element.text.uppercase(java.util.Locale.US).replace(" ", "")
-                        val rank = matchRank(text) ?: continue
-                        val elementBox = element.boundingBox ?: continue
-                        
-                        // Detect suit based on color of text itself or nearby pixels
-                        val suit = detectSuitInElement(scaled, elementBox)
-                        foundCards.add(Triple(rank, suit, elementBox.centerX()))
-                    }
+        for (island in islands) {
+            // Scale up for OCR
+            val scale = 2
+            val cardBmp = try { Bitmap.createBitmap(crop, island.left, island.top, island.width(), island.height()) } catch(e: Exception) { continue }
+            // Target the rank area (top-left)
+            val rankArea = try { Bitmap.createBitmap(cardBmp, 0, 0, (cardBmp.width * 0.6).toInt(), (cardBmp.height * 0.6).toInt()) } catch(e: Exception) { cardBmp }
+            val scaled = Bitmap.createScaledBitmap(rankArea, rankArea.width * scale, rankArea.height * scale, true)
+            
+            val input = InputImage.fromBitmap(scaled, 0)
+            val result = try { recognizer.process(input).await() } catch(e: Exception) { null }
+            
+            if (result != null && result.text.isNotEmpty()) {
+                val text = result.text.uppercase(java.util.Locale.US).replace(" ", "")
+                val rank = matchRank(text)
+                if (rank != null) {
+                    // Detect suit using color sampling in the card bitmap
+                    val suit = detectSuitInCard(cardBmp)
+                    foundCards.add(Triple(rank, suit, safeRect.left + island.centerX()))
                 }
             }
+            
+            if (cardBmp != crop) cardBmp.recycle()
+            if (rankArea != cardBmp && rankArea != crop) rankArea.recycle()
+            scaled.recycle()
         }
         
         crop.recycle()
-        scaled.recycle()
         
         // Sort by X position and deduplicate
         return foundCards.sortedBy { it.third }
@@ -246,28 +248,106 @@ class ScreenScanner(
             .distinct()
     }
 
-    private fun detectSuitInElement(bitmap: Bitmap, box: android.graphics.Rect): Suit {
-        var rC = 0; var gC = 0; var bC = 0; var blkC = 0
-        // Sample in and slightly below the rank element to catch suit color/icons
-        val scan = android.graphics.Rect(
-            maxOf(0, box.left),
-            maxOf(0, box.top),
-            minOf(bitmap.width - 1, box.right),
-            minOf(bitmap.height - 1, box.bottom + (box.height() * 0.4).toInt())
-        )
+    private fun findCardIslands(bitmap: Bitmap): List<android.graphics.Rect> {
+        val islands = mutableListOf<android.graphics.Rect>()
+        val width = bitmap.width
+        val height = bitmap.height
+        val visited = BooleanArray(width * height)
         
-        for (x in scan.left until scan.right step 2) {
-            for (y in scan.top until scan.bottom step 2) {
+        // Minimum size of a card relative to box
+        val minIslandW = 15
+        val minIslandH = 20
+        
+        for (y in 2 until height - 2 step 6) {
+            for (x in 2 until width - 2 step 6) {
+                val idx = y * width + x
+                if (visited[idx]) continue
+                
+                val pixel = bitmap.getPixel(x, y)
+                if (isWhiteCardPixel(pixel)) {
+                    val rect = floodFillIsland(bitmap, x, y, visited)
+                    if (rect.width() >= 12 && rect.height() >= 18) {
+                        // Split wide islands (potential overlapping cards)
+                        val ratio = rect.width().toFloat() / rect.height().toFloat()
+                        if (ratio > 1.0f) {
+                            val numCards = (ratio + 0.5f).toInt()
+                            val cardWidth = rect.width() / numCards
+                            for (i in 0 until numCards) {
+                                islands.add(android.graphics.Rect(rect.left + i * cardWidth, rect.top, rect.left + (i + 1) * cardWidth, rect.bottom))
+                            }
+                        } else {
+                            islands.add(rect)
+                        }
+                    }
+                }
+            }
+        }
+        return islands.sortedBy { it.left }
+    }
+
+    private fun isWhiteCardPixel(pixel: Int): Boolean {
+        val r = android.graphics.Color.red(pixel)
+        val g = android.graphics.Color.green(pixel)
+        val b = android.graphics.Color.blue(pixel)
+        // Card white is usually very bright
+        return r > 190 && g > 190 && b > 190
+    }
+
+    private fun floodFillIsland(bitmap: Bitmap, startX: Int, startY: Int, visited: BooleanArray): android.graphics.Rect {
+        val width = bitmap.width
+        val height = bitmap.height
+        val queue = java.util.ArrayDeque<Pair<Int, Int>>()
+        queue.add(startX to startY)
+        visited[startY * width + startX] = true
+        
+        var minX = startX; var maxX = startX; var minY = startY; var maxY = startY
+        
+        var count = 0
+        while (queue.isNotEmpty() && count < 3000) {
+            val (px, py) = queue.poll()!!
+            count++
+            
+            if (px < minX) minX = px
+            if (px > maxX) maxX = px
+            if (py < minY) minY = py
+            if (py > maxY) maxY = py
+            
+            // Search neighbors with step to speed up
+            val step = 4
+            val neighbors = arrayOf(px + step to py, px - step to py, px to py + step, px to py - step)
+            for ((nx, ny) in neighbors) {
+                if (nx in 0 until width && ny in 0 until height) {
+                    val nIdx = ny * width + nx
+                    if (!visited[nIdx]) {
+                        visited[nIdx] = true
+                        if (isWhiteCardPixel(bitmap.getPixel(nx, ny))) {
+                            queue.add(nx to ny)
+                        }
+                    }
+                }
+            }
+        }
+        return android.graphics.Rect(minX, minY, maxX, maxY)
+    }
+
+    private fun detectSuitInCard(bitmap: Bitmap): Suit {
+        var rC = 0; var gC = 0; var bC = 0; var blkC = 0
+        val w = bitmap.width
+        val h = bitmap.height
+        
+        // Sample in the suit area
+        for (x in (w * 0.05).toInt() until (w * 0.95).toInt() step 2) {
+            for (y in (h * 0.2).toInt() until (h * 0.95).toInt() step 2) {
                 val p = bitmap.getPixel(x, y)
                 val r = android.graphics.Color.red(p)
                 val g = android.graphics.Color.green(p)
                 val b = android.graphics.Color.blue(p)
                 
-                // Color thresholds for CoinPoker 4-color deck
-                if (r > 150 && r > g + 60 && r > b + 60) rC++
-                else if (g > 130 && g > r + 60 && g > b + 50) gC++
-                else if (b > 130 && b > r + 60 && b > g + 15) bC++
-                else if (r < 80 && g < 80 && b < 80) blkC++
+                // CoinPoker 4-color deck
+                if (r > 160 && r > g + 70 && r > b + 70) rC++
+                else if (g > 140 && g > r + 70 && g > b + 60) gC++
+                else if (b > 130 && b > r + 70 && b > g + 20) bC++
+                else if (r < 70 && g < 70 && b < 70) blkC++
             }
         }
         
