@@ -46,7 +46,7 @@ data class PokerUiState(
     val stage: TournamentStage = TournamentStage.EARLY,
     val settings: AdvisorSettings = AdvisorSettings(),
     val recommendation: Recommendation? = null,
-    val profileBoxes: List<android.graphics.Rect>? = null
+    val profileBoxes: List<ScannedBox>? = null
 ) {
     // Collect all selected cards on the table to dim them in the card picker grid
     fun getAllSelectedCards(): Set<Card> {
@@ -84,13 +84,6 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     opp.copy(stats = loadedStats)
                 }
             )
-        }
-        viewModelScope.launch {
-            PokerHudSharedState.externalActions.collect { action ->
-                if (action is ExternalAction.UpdateCards) {
-                    loadGamePreset(action.hero1, action.hero2, action.board)
-                }
-            }
         }
         triggerAutoCalculation()
     }

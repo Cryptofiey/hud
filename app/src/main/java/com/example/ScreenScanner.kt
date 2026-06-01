@@ -150,17 +150,19 @@ class ScreenScanner(
                             val commInputImage = com.google.mlkit.vision.common.InputImage.fromBitmap(scaledComm, 0)
                             val commResult = recognizer.process(commInputImage).await()
                             
-                            val rankPatternRegex = Regex("(10|1|T|[AKQJ]|[2-9])")
+                            val rankPatternRegex = Regex("(10|1|T|[AKQJGBSYZE46]|[2-9])")
                             for (block in commResult.textBlocks) {
                                 for (line in block.lines) {
                                     for (element in line.elements) {
                                         var rawText = element.text.uppercase(java.util.Locale.US).trim()
                                         rawText = rawText.replace("1O", "10").replace("I0", "10").replace("IO", "10").replace("L0", "10")
-                                        if (rawText == "O" || rawText == "D" || rawText == "0") rawText = "Q"
-                                        if (rawText == "Z") rawText = "2"
-                                        if (rawText == "B") rawText = "8"
-                                        if (rawText == "S" || rawText == "s") rawText = "5"
-                                        if (rawText == "I" || rawText == "l") rawText = "1"
+                                        if (rawText == "O" || rawText == "D" || rawText == "0" || rawText == "Q") rawText = "Q"
+                                        if (rawText == "Z" || rawText == "2") rawText = "2"
+                                        if (rawText == "B" || rawText == "8") rawText = "8"
+                                        if (rawText == "S" || rawText == "s" || rawText == "5") rawText = "5"
+                                        if (rawText == "I" || rawText == "l" || rawText == "L" || rawText == "1") rawText = "1"
+                                        if (rawText == "E" || rawText == "3") rawText = "3"
+                                        if (rawText == "T" || rawText == "7" || rawText == "Y") rawText = "7"
                                         
                                         val match = rankPatternRegex.find(rawText)
                                         if (match != null) {
@@ -182,7 +184,7 @@ class ScreenScanner(
                                             val startX = maxOf(0, approxCenterBoxX - (box.width() / scale))
                                             val endX = minOf(cleanBitmap.width - 1, approxCenterBoxX + (box.width() / scale / 4))
                                             val startY = maxOf(0, safeComm.top + (box.top / scale) - 5)
-                                            val endY = minOf(cleanBitmap.height - 1, safeComm.top + (box.bottom / scale) + 20)
+                                            val endY = minOf(cleanBitmap.height - 1, safeComm.top + (box.bottom / scale) + (box.height() / scale))
                                             
                                             if (startX <= endX && startY <= endY) {
                                                 for (px in startX..endX step 2) {
@@ -192,10 +194,14 @@ class ScreenScanner(
                                                         val g = android.graphics.Color.green(pixel)
                                                         val b = android.graphics.Color.blue(pixel)
                                                         
-                                                        if (r - g > 40 && r - b > 40 && r > 100) redCount++
-                                                        else if (g - r > 30 && g - b > 20 && g > 90) greenCount++
-                                                        else if ((b - r > 30 && b > 90) || (b > 120 && g > 100 && r < 100)) blueCount++
-                                                        else if (r < 90 && g < 90 && b < 90) blackCount++
+                                                        // Red Suits (Hearts)
+                                                        if (r > 120 && r > g + 50 && r > b + 50) redCount++
+                                                        // Green Suits (Clubs - CoinPoker 4-color)
+                                                        else if (g > 100 && g > r + 40 && g > b + 30) greenCount++
+                                                        // Blue Suits (Diamonds - CoinPoker 4-color)
+                                                        else if (b > 100 && b > r + 40 && b > g + 15) blueCount++
+                                                        // Black Suits (Spades)
+                                                        else if (r < 75 && g < 75 && b < 75) blackCount++
                                                     }
                                                 }
                                             }
@@ -262,17 +268,19 @@ class ScreenScanner(
                             val holeInputImage = InputImage.fromBitmap(combinedScaled, 0)
                             val holeResult = recognizer.process(holeInputImage).await()
                             
-                            val rankPatternRegex = Regex("(10|1|T|[AKQJ]|[2-9])")
+                            val rankPatternRegex = Regex("(10|1|T|[AKQJGBSYZE46]|[2-9])")
                             for (block in holeResult.textBlocks) {
                                 for (line in block.lines) {
                                     for (element in line.elements) {
-                                        var rawText = element.text.uppercase(java.util.Locale.US)
+                                        var rawText = element.text.uppercase(java.util.Locale.US).trim()
                                         rawText = rawText.replace("1O", "10").replace("I0", "10").replace("IO", "10").replace("L0", "10")
-                                        if (rawText == "O" || rawText == "D" || rawText == "0") rawText = "Q"
-                                        if (rawText == "Z") rawText = "2"
-                                        if (rawText == "B") rawText = "8"
-                                        if (rawText == "S" || rawText == "s") rawText = "5"
-                                        if (rawText == "I" || rawText == "l") rawText = "1"
+                                        if (rawText == "O" || rawText == "D" || rawText == "0" || rawText == "Q") rawText = "Q"
+                                        if (rawText == "Z" || rawText == "2") rawText = "2"
+                                        if (rawText == "B" || rawText == "8") rawText = "8"
+                                        if (rawText == "S" || rawText == "s" || rawText == "5") rawText = "5"
+                                        if (rawText == "I" || rawText == "l" || rawText == "L" || rawText == "1") rawText = "1"
+                                        if (rawText == "E" || rawText == "3") rawText = "3"
+                                        if (rawText == "T" || rawText == "7" || rawText == "Y") rawText = "7"
                                         val match = rankPatternRegex.find(rawText)
                                         if (match != null) {
                                             val text = match.value
@@ -295,7 +303,7 @@ class ScreenScanner(
                                             val startX = maxOf(0, approxCenterBoxX - (box.width() / scale))
                                             val endX = minOf(cleanBitmap.width - 1, approxCenterBoxX + (box.width() / scale / 4))
                                             val startY = maxOf(0, safeHole.top + (box.top / scale) - 5)
-                                            val endY = minOf(cleanBitmap.height - 1, safeHole.top + (box.bottom / scale) + 20)
+                                            val endY = minOf(cleanBitmap.height - 1, safeHole.top + (box.bottom / scale) + (box.height() / scale))
                                             
                                             if (startX <= endX && startY <= endY) {
                                                 for (px in startX..endX step 2) {
@@ -305,10 +313,14 @@ class ScreenScanner(
                                                         val g = android.graphics.Color.green(pixel)
                                                         val b = android.graphics.Color.blue(pixel)
                                                         
-                                                        if (r - g > 40 && r - b > 40 && r > 100) redCount++
-                                                        else if (g - r > 30 && g - b > 20 && g > 90) greenCount++
-                                                        else if ((b - r > 30 && b > 90) || (b > 120 && g > 100 && r < 100)) blueCount++
-                                                        else if (r < 90 && g < 90 && b < 90) blackCount++
+                                                        // Red Suits (Hearts)
+                                                        if (r > 120 && r > g + 50 && r > b + 50) redCount++
+                                                        // Green Suits (Clubs - CoinPoker 4-color)
+                                                        else if (g > 100 && g > r + 40 && g > b + 30) greenCount++
+                                                        // Blue Suits (Diamonds - CoinPoker 4-color)
+                                                        else if (b > 100 && b > r + 40 && b > g + 15) blueCount++
+                                                        // Black Suits (Spades)
+                                                        else if (r < 75 && g < 75 && b < 75) blackCount++
                                                     }
                                                 }
                                             }
@@ -364,10 +376,17 @@ class ScreenScanner(
                                 debugLogs.add(element.text)
                             }
                             
-                            var rawText = element.text.uppercase(java.util.Locale.US)
+                            var rawText = element.text.uppercase(java.util.Locale.US).trim()
                             rawText = rawText.replace("1O", "10").replace("I0", "10").replace("IO", "10").replace("L0", "10")
+                            if (rawText == "O" || rawText == "D" || rawText == "0" || rawText == "Q") rawText = "Q"
+                            if (rawText == "Z" || rawText == "2") rawText = "2"
+                            if (rawText == "B" || rawText == "8") rawText = "8"
+                            if (rawText == "S" || rawText == "s" || rawText == "5") rawText = "5"
+                            if (rawText == "I" || rawText == "l" || rawText == "L" || rawText == "1") rawText = "1"
+                            if (rawText == "E" || rawText == "3") rawText = "3"
+                            if (rawText == "T" || rawText == "7" || rawText == "Y") rawText = "7"
                             
-                            val rankPatternRegex = Regex("(10|1|T|[AKQJ]|[2-9])")
+                            val rankPatternRegex = Regex("(10|1|T|[AKQJGBSYZE46]|[2-9])")
                             val matches = rankPatternRegex.findAll(rawText).toList()
 
                             for (match in matches) {
@@ -382,23 +401,27 @@ class ScreenScanner(
                                 var blueCount = 0
                                 var blackCount = 0
                                 
-                                val startX = maxOf(0, approxCenterBoxX - box.width())
-                                val endX = minOf(cleanBitmap.width - 1, approxCenterBoxX + (box.width() / 4))
+                                val startX = maxOf(0, approxCenterBoxX - (box.width() * 1.2).toInt())
+                                val endX = minOf(cleanBitmap.width - 1, approxCenterBoxX + (box.width() / 2))
                                 val startY = maxOf(0, box.top - (box.height() / 4))
-                                val endY = minOf(cleanBitmap.height - 1, box.bottom + (box.height() / 2))
+                                val endY = minOf(cleanBitmap.height - 1, box.bottom + (box.height() * 1.5).toInt())
                                 
                                 if (startX <= endX && startY <= endY) {
-                                    for (px in startX..endX step 3) {
-                                        for (py in startY..endY step 3) {
+                                    for (px in startX..endX step 2) {
+                                        for (py in startY..endY step 2) {
                                             val pixel = cleanBitmap.getPixel(px, py)
                                             val r = android.graphics.Color.red(pixel)
                                             val g = android.graphics.Color.green(pixel)
                                             val b = android.graphics.Color.blue(pixel)
                                             
-                                            if (r - g > 40 && r - b > 40 && r > 100) redCount++
-                                            else if (g - r > 30 && g - b > 20 && g > 90) greenCount++
-                                            else if ((b - r > 30 && b > 90) || (b > 120 && g > 100 && r < 100)) blueCount++
-                                            else if (r < 90 && g < 90 && b < 90) blackCount++
+                                            // Red Suits (Hearts)
+                                            if (r > 120 && r > g + 50 && r > b + 50) redCount++
+                                            // Green Suits (Clubs - CoinPoker 4-color)
+                                            else if (g > 100 && g > r + 40 && g > b + 30) greenCount++
+                                            // Blue Suits (Diamonds - CoinPoker 4-color)
+                                            else if (b > 100 && b > r + 40 && b > g + 15) blueCount++
+                                            // Black Suits (Spades)
+                                            else if (r < 75 && g < 75 && b < 75) blackCount++
                                         }
                                     }
                                 }
@@ -416,11 +439,16 @@ class ScreenScanner(
                                 
                                 val card = Card(rank, suit)
                                 
-                                if (inComm && foundCommCardsRaw.isEmpty()) {
-                                    foundCommCardsRaw.add(Pair(card, approxCenterBoxX))
-                                } else if (inHole && foundHoleCardsRaw.isEmpty()) {
-                                    // only fallback to full-screen hole card parsing if the targeted approach found nothing
-                                    foundHoleCardsRaw.add(Pair(card, approxCenterBoxX))
+                                if (inComm) {
+                                    // Check if we already have a card at similar X position in comm area
+                                    if (!foundCommCardsRaw.any { Math.abs(it.second - approxCenterBoxX) < (box.width() / 2) }) {
+                                        foundCommCardsRaw.add(Pair(card, approxCenterBoxX))
+                                    }
+                                } else if (inHole) {
+                                    // Check if we already have a card at similar X position in hole area
+                                    if (!foundHoleCardsRaw.any { Math.abs(it.second - approxCenterBoxX) < (box.width() / 2) }) {
+                                        foundHoleCardsRaw.add(Pair(card, approxCenterBoxX))
+                                    }
                                 }
                             }
                         }
@@ -458,7 +486,7 @@ class ScreenScanner(
                 val scannedOpponents = OpponentScanner.scan(result, cleanBitmap, hudRects)
                 val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
 
-                var profileBoxesToHighlight: List<android.graphics.Rect>? = null
+                var profileBoxesToHighlight: List<ScannedBox>? = null
                 if (requestProfileScan) {
                     val scannedProfile = ProfileScanner.scan(result, cleanBitmap, hudRects)
                     if (scannedProfile != null && scannedProfile.nickname != "Unknown_Profile") {
@@ -491,7 +519,7 @@ class ScreenScanner(
                     
                     if (stopAfterProfileScan) {
                         PokerHudSharedState.externalActions.tryEmit(
-                            ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight)
+                            ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight, updateProfileBoxes = true)
                         )
                         stop()
                         return
@@ -503,7 +531,7 @@ class ScreenScanner(
                                    "Board: ${finalBoard.joinToString("") { it?.toHtmlString() ?: "[?]" }}"
                 
                 PokerHudSharedState.externalActions.tryEmit(
-                    ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight)
+                    ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight, updateProfileBoxes = (profileBoxesToHighlight != null))
                 )
                 
             } catch (e: Exception) {
@@ -520,19 +548,19 @@ class ScreenScanner(
 
     private fun parseRank(rankStr: String): Rank? {
         return when (rankStr) {
-            "A" -> Rank.ACE
+            "A", "4", "6" -> Rank.ACE
             "K" -> Rank.KING
             "Q" -> Rank.QUEEN
             "J" -> Rank.JACK
             "10", "T", "1" -> Rank.TEN
-            "9" -> Rank.NINE
-            "8" -> Rank.EIGHT
-            "7" -> Rank.SEVEN
+            "9", "G" -> Rank.NINE
+            "8", "B" -> Rank.EIGHT
+            "7", "Y" -> Rank.SEVEN
             "6" -> Rank.SIX
-            "5" -> Rank.FIVE
+            "5", "S" -> Rank.FIVE
             "4" -> Rank.FOUR
-            "3" -> Rank.THREE
-            "2" -> Rank.TWO
+            "3", "E" -> Rank.THREE
+            "2", "Z" -> Rank.TWO
             else -> null
         }
     }

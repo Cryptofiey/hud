@@ -40,7 +40,8 @@ sealed class ExternalAction {
         val hero2: Card?,
         val board: List<Card?>,
         val opponents: List<OpponentState> = emptyList(),
-        val profileBoxes: List<android.graphics.Rect>? = null
+        val profileBoxes: List<ScannedBox>? = null,
+        val updateProfileBoxes: Boolean = false
     ) : ExternalAction()
     data class ControlHud(val command: String) : ExternalAction()
 }
@@ -600,6 +601,7 @@ class PokerHudService : Service() {
 
         // 5. OBSERVE LIVE RECALCULATED STATE COUPLING FROM MAIN APP VIEWMODEL
         serviceScope.launch {
+            var lastProfileBoxes: List<ScannedBox>? = null
             PokerHudSharedState.uiState.collect { state ->
                 // Emit calculations to LOGCAT under tag POKER_HUD_LOG and send local broadcast
                 val h1Raw = state.heroCard1?.let { formatCardRaw(it) } ?: "?"
@@ -607,9 +609,12 @@ class PokerHudService : Service() {
                 val bRaw = state.board.filterNotNull().joinToString(" ") { formatCardRaw(it) }
                 val res = state.simulationResult
                 
-                updateBoxOverlays()
+                if (state.profileBoxes != lastProfileBoxes) {
+                    updateBoxOverlays()
+                }
+                
                 val rec = state.recommendation
-                val winPctRaw = if (res != null) String.format(Locale.US, "%.1f", (res.heroWinPct + res.heroTiePct) * 100) else "0.0"
+                val winPctRaw = if (res != null) String.format(Locale.US, "%.1f", res.heroWinPct + res.heroTiePct) else "0.0"
                 val recActionRaw = rec?.action ?: "UNKNOWN"
                 val recConfidenceRaw = rec?.confidence ?: 0f
 
@@ -636,6 +641,21 @@ class PokerHudService : Service() {
                 txtScannerStatus?.text = "🔍 $activeScannerStr Stage/Board: $boardStr\n" +
                         "Opponents: $oppsCount tracked\n" +
                         "Hero: $h1Raw $h2Raw"
+                
+                lastProfileBoxes = state.profileBoxes
+            }
+        }
+
+        // Separate observers for UI toggles to update overlays ONLY when toggles change
+        serviceScope.launch {
+            kotlinx.coroutines.flow.combine(
+                PokerHudSharedState.isGameMode,
+                PokerHudSharedState.showCommBox,
+                PokerHudSharedState.showHoleBox,
+                PokerHudSharedState.showProbsBox,
+                PokerHudSharedState.showScannerBoxes
+            ) { _, _, _, _, _ -> }.collect {
+                updateBoxOverlays()
             }
         }
 
@@ -802,14 +822,17 @@ class PokerHudService : Service() {
                         heroCard2 = action.hero2,
                         board = newBoard,
                         opponents = finalOpponentsList,
-                        profileBoxes = action.profileBoxes 
+                        profileBoxes = if (action.updateProfileBoxes) action.profileBoxes else currentState.profileBoxes
                     )
                     PokerHudSharedState.uiState.value = updatedState
                     
-                    if (action.profileBoxes != null) {
+                    if (action.updateProfileBoxes && action.profileBoxes != null) {
                         serviceScope.launch {
-                            kotlinx.coroutines.delay(2500)
-                            PokerHudSharedState.uiState.value = PokerHudSharedState.uiState.value.copy(profileBoxes = null)
+                            kotlinx.coroutines.delay(5500)
+                            // Only clear if the current state still has THESE profile boxes (don't clear newer ones)
+                            if (PokerHudSharedState.uiState.value.profileBoxes == action.profileBoxes) {
+                                PokerHudSharedState.uiState.value = PokerHudSharedState.uiState.value.copy(profileBoxes = null)
+                            }
                         }
                     }
                     
@@ -873,27 +896,8 @@ class PokerHudService : Service() {
     }
 
     private fun bringHudsToFront() {
-        floatingOverlayView?.let { v ->
-            try {
-                val params = v.layoutParams
-                windowManager?.removeView(v)
-                windowManager?.addView(v, params)
-            } catch (e: Exception) {}
-        }
-        floatingProbsOverlay?.let { v ->
-            try {
-                val params = v.layoutParams
-                windowManager?.removeView(v)
-                windowManager?.addView(v, params)
-            } catch (e: Exception) {}
-        }
-        floatingAdvisorOverlay?.let { v ->
-            try {
-                val params = v.layoutParams
-                windowManager?.removeView(v)
-                windowManager?.addView(v, params)
-            } catch (e: Exception) {}
-        }
+        // Reduced frequency or use updateViewLayout instead of remove/add to prevent flickering
+        // We only really need to bring to front if specifically requested, not on every OCR update.
     }
 
     fun getHudRects(): List<android.graphics.Rect> {
@@ -932,8 +936,6 @@ class PokerHudService : Service() {
         if (PokerHudSharedState.showHoleBox.value && !gameMode) showHoleOverlay() else hideHoleOverlay()
         if (PokerHudSharedState.showProbsBox.value && !gameMode) showProbsOverlay() else hideProbsOverlay()
         if (PokerHudSharedState.showScannerBoxes.value || PokerHudSharedState.uiState.value.profileBoxes != null) showScannerOutlinesOverlay() else hideScannerOutlinesOverlay()
-        
-        bringHudsToFront()
     }
 
     fun getCommRect(): android.graphics.Rect {
@@ -1141,6 +1143,17 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(2f))
         }
         content.addView(spacer)
+        
+        val txtCardsInfo = TextView(this).apply {
+            text = "SCANNING"
+            setTextColor(AndroidColor.WHITE)
+            textSize = 8f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            setShadowLayer(4f, 0f, 2f, AndroidColor.BLACK)
+        }
+        content.addView(txtCardsInfo)
 
         val laserLine = View(this).apply {
             setBackgroundColor(AndroidColor.parseColor("#FF00FFCC"))
@@ -1203,7 +1216,14 @@ class PokerHudService : Service() {
             }
             launch {
                 PokerHudSharedState.uiState.collect { state ->
-                    // Removed txtCardsInfo updates
+                    val cards = state.board.filterNotNull()
+                    if (cards.isNotEmpty()) {
+                        txtCardsInfo.text = cards.joinToString(" ") { "${it.rank.symbol}${it.suit.symbol}" }
+                        txtCardsInfo.setTextColor(AndroidColor.parseColor("#FF2196F3"))
+                    } else {
+                        txtCardsInfo.text = "NOT FOUND"
+                        txtCardsInfo.setTextColor(AndroidColor.GRAY)
+                    }
                 }
             }
         }
@@ -1453,6 +1473,23 @@ class PokerHudService : Service() {
             setTextColor(AndroidColor.parseColor("#FFD54F"))
             textSize = 8f
         }
+        val txtBoardCards = TextView(this).apply {
+            text = "Board: --"
+            setTextColor(AndroidColor.parseColor("#FFB74D"))
+            textSize = 8f
+        }
+        val txtHandRank = TextView(this).apply {
+            text = "Hand: --"
+            setTextColor(AndroidColor.parseColor("#90CAF9"))
+            textSize = 9f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dpToPx(2f)
+            }
+        }
         val txtStrength = TextView(this).apply {
             text = "Strength: High"
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
@@ -1465,6 +1502,8 @@ class PokerHudService : Service() {
         }
         content.addView(txtWin)
         content.addView(txtHeroCards)
+        content.addView(txtBoardCards)
+        content.addView(txtHandRank)
         content.addView(txtStrength)
         content.addView(txtSklan)
         
@@ -1520,93 +1559,128 @@ class PokerHudService : Service() {
         probsJob = job
         
         serviceScope.launch(job) {
+            var lastHero1: Card? = null
+            var lastHero2: Card? = null
+            var lastBoard: List<Card?> = emptyList()
+            var lastSimulationResult: SimulationResult? = null
+            var lastOpponents: List<OpponentState> = emptyList()
+            var lastRecommendation: Recommendation? = null
+
             PokerHudSharedState.uiState.collect { state ->
-                // 1. Update Probabilities
+                // 1. Update Probabilities & Cards
                 val res = state.simulationResult
-                if (state.heroCard1 == null || state.heroCard2 == null) {
-                    txtWin.text = "Winning chance: 0.0%"
-                    txtHeroCards.text = "Hero Cards: --"
-                } else if (res != null) {
-                    val combinedWin = res.heroWinPct + res.heroTiePct
-                    txtWin.text = String.format(Locale.US, "Winning chance: %.1f%%", combinedWin)
-                    txtHeroCards.text = android.text.Html.fromHtml("Hero Cards: ${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}", android.text.Html.FROM_HTML_MODE_LEGACY)
-                } else {
-                    txtWin.text = "Winning chance: Calculating..."
-                    txtHeroCards.text = android.text.Html.fromHtml("Hero Cards: ${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}", android.text.Html.FROM_HTML_MODE_LEGACY)
-                }
-
-                if (state.heroCard1 != null && state.heroCard2 != null) {
-                    val groupNum = AdvisorEngine.getSklanskyGroup(state.heroCard1, state.heroCard2)
-                    txtSklan.text = "Sklansky: Group $groupNum"
-                    val strengthDesc = when (groupNum) {
-                        1, 2 -> "Premium (Top 1/20)"
-                        3, 4 -> "High (Top 4/20)"
-                        5, 6 -> "Medium (Top 8/20)"
-                        else -> "Low (Top 14/20)"
-                    }
-                    txtStrength.text = "Strength: $strengthDesc"
-                } else {
-                    txtSklan.text = "Sklansky: [No starting cards]"
-                    txtStrength.text = "Strength: --"
-                }
-
-                // 2. Update Action Advisor Recommendation
+                val heroCardsChanged = state.heroCard1 != lastHero1 || state.heroCard2 != lastHero2
+                val boardChanged = state.board != lastBoard
+                val simResultChanged = res != lastSimulationResult
+                val opponentsChanged = state.opponents != lastOpponents
                 val rec = state.recommendation
-                if (rec != null) {
-                    val actName = rec.action.uppercase(Locale.US)
-                    txtAdvisor.text = "Advisor Strategy: $actName (Conf: ${String.format(Locale.US, "%.0f%%", rec.confidence)})"
-                    when (actName) {
-                        "FOLD" -> {
-                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FF90A4AE"))
+                val recommendationChanged = rec != lastRecommendation
+
+                if (heroCardsChanged || boardChanged || simResultChanged) {
+                    if (state.heroCard1 == null || state.heroCard2 == null) {
+                        txtWin.text = "Winning chance: 0.0%"
+                        txtHeroCards.text = "Hero Cards: --"
+                        txtBoardCards.text = "Board: --"
+                        txtHandRank.text = "Hand: --"
+                    } else {
+                        if (res != null) {
+                            val combinedWin = res.heroWinPct + res.heroTiePct
+                            txtWin.text = String.format(Locale.US, "Winning chance: %.1f%%", combinedWin)
+                        } else {
+                            txtWin.text = "Winning chance: Calculating..."
                         }
-                        "CHECK" -> {
-                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FF81C784"))
+                        
+                        txtHeroCards.text = android.text.Html.fromHtml("Hero Cards: ${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}", android.text.Html.FROM_HTML_MODE_LEGACY)
+                        
+                        val boardStr = state.board.filterNotNull().joinToString(" ") { it.toHtmlString() }
+                        txtBoardCards.text = if (boardStr.isEmpty()) "Board: --" 
+                                               else android.text.Html.fromHtml("Board: $boardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
+    
+                        // Hand evaluation
+                        val allVisible = (listOf(state.heroCard1, state.heroCard2) + state.board).filterNotNull()
+                        if (allVisible.size >= 5) {
+                            val bestHand = HandEvaluator.findBest5CardHand(allVisible)
+                            txtHandRank.text = "Hand: ${bestHand.category.displayNameRu}"
+                        } else if (allVisible.size >= 2 && state.board.none { it != null }) {
+                            txtHandRank.text = "Hand: Pre-flop"
+                        } else {
+                            val partialHand = HandEvaluator.findBestHand(allVisible)
+                            txtHandRank.text = if (allVisible.isEmpty()) "Hand: --" else "Hand: ${partialHand.category.displayNameRu}"
                         }
-                        "CALL" -> {
-                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FF4CAF50"))
+                    }
+                }
+
+                if (heroCardsChanged) {
+                    if (state.heroCard1 != null && state.heroCard2 != null) {
+                        val groupNum = AdvisorEngine.getSklanskyGroup(state.heroCard1, state.heroCard2)
+                        txtSklan.text = "Sklansky: Group $groupNum"
+                        val strengthDesc = when (groupNum) {
+                            1, 2 -> "Premium (Top 1/20)"
+                            3, 4 -> "High (Top 4/20)"
+                            5, 6 -> "Medium (Top 8/20)"
+                            else -> "Low (Top 14/20)"
                         }
-                        "RAISE", "ALL-IN", "BET" -> {
-                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FFE57373"))
+                        txtStrength.text = "Strength: $strengthDesc"
+                    } else {
+                        txtSklan.text = "Sklansky: [No starting cards]"
+                        txtStrength.text = "Strength: --"
+                    }
+                }
+                
+                if (recommendationChanged) {
+                    if (rec != null) {
+                        val actName = rec.action.uppercase(Locale.US)
+                        txtAdvisor.text = "Advisor Strategy: $actName (Conf: ${String.format(Locale.US, "%.0f%%", rec.confidence)})"
+                        when (actName) {
+                            "FOLD" -> txtAdvisor.setTextColor(AndroidColor.parseColor("#FF90A4AE"))
+                            "CHECK" -> txtAdvisor.setTextColor(AndroidColor.parseColor("#FF81C784"))
+                            "CALL" -> txtAdvisor.setTextColor(AndroidColor.parseColor("#FF4CAF50"))
+                            "RAISE", "ALL-IN", "BET" -> txtAdvisor.setTextColor(AndroidColor.parseColor("#FFE57373"))
+                            else -> txtAdvisor.setTextColor(AndroidColor.parseColor("#FF90CAF9"))
                         }
-                        else -> {
+                    } else {
+                        if (state.heroCard1 != null && state.heroCard2 != null) {
+                            txtAdvisor.text = "Advisor Strategy: Calculating..."
+                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FFFFD54F"))
+                        } else {
+                            txtAdvisor.text = "Advisor Strategy: Enter starter cards"
                             txtAdvisor.setTextColor(AndroidColor.parseColor("#FF90CAF9"))
                         }
                     }
-                } else {
-                    if (state.heroCard1 != null && state.heroCard2 != null) {
-                        txtAdvisor.text = "Advisor Strategy: Calculating..."
-                        txtAdvisor.setTextColor(AndroidColor.parseColor("#FFFFD54F"))
-                    } else {
-                        txtAdvisor.text = "Advisor Strategy: Enter starter cards"
-                        txtAdvisor.setTextColor(AndroidColor.parseColor("#FF90CAF9"))
-                    }
                 }
 
-                // 3. Update Opponents Section
-                val sb = StringBuilder()
-                val activeOpps = state.opponents.filter { it.isActive }
-                if (activeOpps.isEmpty()) {
-                    sb.append("No active opponents tracked.")
-                } else {
-                    val minHands = PokerHudSharedState.advMinHands.value
-                    activeOpps.forEachIndexed { index, opp ->
-                        val prefix = if (index > 0) "\n" else ""
-                        val nameToShow = if (opp.nickname.length > 10) opp.nickname.take(9) + ".." else opp.nickname
-                        val actStr = if (opp.currentAction != "NONE") " (${opp.currentAction})" else ""
-                        val balanceStr = if (opp.stackSize > 0) " \$${opp.stackSize}" else ""
-                        val betStr = if (opp.betSize > 0) " Bet: \$${opp.betSize}" else ""
-                        
-                        val vpipVal = opp.stats?.vpip?.toInt() ?: 0
-                        val pfrVal = opp.stats?.pfr?.toInt() ?: 0
-                        val hands = opp.stats?.handsPlayed ?: 0
-                        
-                        sb.append("${prefix}${nameToShow}${actStr}${balanceStr}${betStr}")
-                        if (hands > 0 || vpipVal > 0 || pfrVal > 0) {
-                             sb.append(" | VPIP:${vpipVal}% PFR:${pfrVal}%")
+                if (opponentsChanged) {
+                    val sb = StringBuilder()
+                    val activeOpps = state.opponents.filter { it.isActive }
+                    if (activeOpps.isEmpty()) {
+                        sb.append("No active opponents tracked.")
+                    } else {
+                        activeOpps.forEachIndexed { index, opp ->
+                            val prefix = if (index > 0) "\n" else ""
+                            val nameToShow = if (opp.nickname.length > 10) opp.nickname.take(9) + ".." else opp.nickname
+                            val actStr = if (opp.currentAction != "NONE") " (${opp.currentAction})" else ""
+                            val balanceStr = if (opp.stackSize > 0) " \$${opp.stackSize}" else ""
+                            val betStr = if (opp.betSize > 0) " Bet: \$${opp.betSize}" else ""
+                            
+                            val vpipVal = opp.stats?.vpip?.toInt() ?: 0
+                            val pfrVal = opp.stats?.pfr?.toInt() ?: 0
+                            val hands = opp.stats?.handsPlayed ?: 0
+                            
+                            sb.append("${prefix}${nameToShow}${actStr}${balanceStr}${betStr}")
+                            if (hands > 0 || vpipVal > 0 || pfrVal > 0) {
+                                 sb.append(" | VPIP:${vpipVal}% PFR:${pfrVal}%")
+                            }
                         }
                     }
+                    oppStatsTxt.text = sb.toString()
                 }
-                oppStatsTxt.text = sb.toString()
+                
+                lastHero1 = state.heroCard1
+                lastHero2 = state.heroCard2
+                lastBoard = state.board
+                lastSimulationResult = res
+                lastOpponents = state.opponents
+                lastRecommendation = rec
             }
         }
         

@@ -27,17 +27,17 @@ data class Card(val rank: Rank, val suit: Suit) {
     fun toHtmlString(): String = "<font color='${suit.colorHex}'>${rank.symbol}${suit.symbol}</font>"
 }
 
-enum class HandCategory(val value: Int, val displayName: String) {
-    HIGH_CARD(1, "High Card"),
-    ONE_PAIR(2, "One Pair"),
-    TWO_PAIR(3, "Two Pair"),
-    THREE_OF_A_KIND(4, "Three of a Kind"),
-    STRAIGHT(5, "Straight"),
-    FLUSH(6, "Flush"),
-    FULL_HOUSE(7, "Full House"),
-    FOUR_OF_A_KIND(8, "Four of a Kind"),
-    STRAIGHT_FLUSH(9, "Straight Flush"),
-    ROYAL_FLUSH(10, "Royal Flush")
+enum class HandCategory(val value: Int, val displayName: String, val displayNameRu: String) {
+    HIGH_CARD(1, "High Card", "Нет пары"),
+    ONE_PAIR(2, "One Pair", "Пара"),
+    TWO_PAIR(3, "Two Pair", "Две пары"),
+    THREE_OF_A_KIND(4, "Three of a Kind", "Сет/Трипс"),
+    STRAIGHT(5, "Straight", "Стрит"),
+    FLUSH(6, "Flush", "Флеш"),
+    FULL_HOUSE(7, "Full House", "Фулл-Хаус"),
+    FOUR_OF_A_KIND(8, "Four of a Kind", "Каре"),
+    STRAIGHT_FLUSH(9, "Straight Flush", "Стрит-Флеш"),
+    ROYAL_FLUSH(10, "Royal Flush", "Рояль-Флеш")
 }
 
 data class HandScore(
@@ -56,6 +56,11 @@ data class HandScore(
         return 0
     }
 }
+
+data class ScannedBox(
+    val rect: android.graphics.Rect,
+    val label: String
+)
 
 data class OpponentState(
     val id: Int,
@@ -230,9 +235,40 @@ object HandEvaluator {
         return HandScore(HandCategory.HIGH_CARD, uniqueRanksSorted)
     }
 
+    fun findBestHand(allCards: List<Card>): HandScore {
+        if (allCards.size < 2) return HandScore(HandCategory.HIGH_CARD, emptyList())
+        
+        if (allCards.size >= 5) {
+            return findBest5CardHand(allCards)
+        }
+        
+        // For partial hands (pre-flop/flop), evaluate based on fewer cards
+        val rankCounts = IntArray(15)
+        for (card in allCards) rankCounts[card.rank.value]++
+        
+        val sortedRanks = allCards.map { it.rank.value }.sortedDescending()
+        
+        // Check for Quads (impossible with < 5 unless multiple decks, but for safety)
+        for (r in 14 downTo 2) if (rankCounts[r] == 4) return HandScore(HandCategory.FOUR_OF_A_KIND, listOf(r))
+        // Trips
+        for (r in 14 downTo 2) if (rankCounts[r] == 3) return HandScore(HandCategory.THREE_OF_A_KIND, listOf(r))
+        // Two pairs or One pair
+        var firstPair = 0
+        var secondPair = 0
+        for (r in 14 downTo 2) {
+            if (rankCounts[r] == 2) {
+                if (firstPair == 0) firstPair = r else if (secondPair == 0) secondPair = r
+            }
+        }
+        if (firstPair > 0 && secondPair > 0) return HandScore(HandCategory.TWO_PAIR, listOf(firstPair, secondPair))
+        if (firstPair > 0) return HandScore(HandCategory.ONE_PAIR, listOf(firstPair))
+        
+        return HandScore(HandCategory.HIGH_CARD, sortedRanks)
+    }
+
     fun findBest5CardHand(allCards: List<Card>): HandScore {
         if (allCards.size < 5) {
-            return HandScore(HandCategory.HIGH_CARD, emptyList())
+            return findBestHand(allCards)
         }
 
         var bestScore = HandScore(HandCategory.HIGH_CARD, listOf(0))

@@ -134,13 +134,16 @@ class ScannerBoxesView(context: Context) : View(context) {
         // Draw profile stat highlights if any
         state.profileBoxes?.forEach { box ->
             val actualBox = Rect(
-                box.left + offsetX.toInt(),
-                box.top + offsetY.toInt(),
-                box.right + offsetX.toInt(),
-                box.bottom + offsetY.toInt()
+                box.rect.left + offsetX.toInt(),
+                box.rect.top + offsetY.toInt(),
+                box.rect.right + offsetX.toInt(),
+                box.rect.bottom + offsetY.toInt()
             )
             canvas.drawRect(actualBox, profileFillPaint)
             canvas.drawRect(actualBox, profileBoxPaint)
+            
+            // Draw parsed value above the box
+            canvas.drawText(box.label, actualBox.left.toFloat(), actualBox.top.toFloat() - 5f, textPaint)
         }
     }
 }
