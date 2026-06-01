@@ -48,6 +48,7 @@ class ScreenScanner(
     @SuppressLint("WrongConstant")
     fun start() {
         if (isScanning.value) return
+        PokerHudSharedState.isScanning.value = true
         try {
             isScanning.value = true
             scanStatus.value = "Starting modern ML Kit scanner..."
@@ -75,6 +76,7 @@ class ScreenScanner(
             )
 
             scanJob = scope.launch {
+                delay(400) // Small delay to allow UI to update and hide overlays
                 while (isActive) {
                     processLatestImage()
                     delay(2000) // Scan every 2 seconds
@@ -215,29 +217,41 @@ class ScreenScanner(
         val foundCards = mutableListOf<Triple<Rank, Suit, Int>>()
         
         for (island in islands) {
-            // Scale up for OCR
-            val scale = 2
+            // Try different scales for better OCR
+            val scales = listOf(2.5f, 1.5f, 3.5f)
+            var bestRank: Rank? = null
+            
             val cardBmp = try { Bitmap.createBitmap(crop, island.left, island.top, island.width(), island.height()) } catch(e: Exception) { continue }
-            // Target the rank area (top-left)
-            val rankArea = try { Bitmap.createBitmap(cardBmp, 0, 0, (cardBmp.width * 0.6).toInt(), (cardBmp.height * 0.6).toInt()) } catch(e: Exception) { cardBmp }
-            val scaled = Bitmap.createScaledBitmap(rankArea, rankArea.width * scale, rankArea.height * scale, true)
             
-            val input = InputImage.fromBitmap(scaled, 0)
-            val result = try { recognizer.process(input).await() } catch(e: Exception) { null }
-            
-            if (result != null && result.text.isNotEmpty()) {
-                val text = result.text.uppercase(java.util.Locale.US).replace(" ", "")
-                val rank = matchRank(text)
-                if (rank != null) {
-                    // Detect suit using color sampling in the card bitmap
-                    val suit = detectSuitInCard(cardBmp)
-                    foundCards.add(Triple(rank, suit, safeRect.left + island.centerX()))
+            for (scale in scales) {
+                // Target the rank area (top-left) - adjust to cover enough for suit too if needed, but focus on rank
+                val rankW = (cardBmp.width * 0.75).toInt()
+                val rankH = (cardBmp.height * 0.75).toInt()
+                if (rankW < 2 || rankH < 2) continue
+                
+                val rankArea = try { Bitmap.createBitmap(cardBmp, 0, 0, rankW, rankH) } catch(e: Exception) { cardBmp }
+                val scaled = Bitmap.createScaledBitmap(rankArea, (rankArea.width * scale).toInt(), (rankArea.height * scale).toInt(), true)
+                
+                val input = InputImage.fromBitmap(scaled, 0)
+                val result = try { recognizer.process(input).await() } catch(e: Exception) { null }
+                
+                if (result != null && result.text.isNotEmpty()) {
+                    bestRank = matchRank(result.text)
                 }
+                
+                if (rankArea != cardBmp && rankArea != crop) rankArea.recycle()
+                scaled.recycle()
+                
+                if (bestRank != null) break
+            }
+            
+            if (bestRank != null) {
+                // Detect suit using color sampling in the card bitmap
+                val suit = detectSuitInCard(cardBmp)
+                foundCards.add(Triple(bestRank, suit, safeRect.left + island.centerX()))
             }
             
             if (cardBmp != crop) cardBmp.recycle()
-            if (rankArea != cardBmp && rankArea != crop) rankArea.recycle()
-            scaled.recycle()
         }
         
         crop.recycle()
@@ -255,18 +269,18 @@ class ScreenScanner(
         val visited = BooleanArray(width * height)
         
         // Minimum size of a card relative to box
-        val minIslandW = 15
-        val minIslandH = 20
+        val minIslandW = 12
+        val minIslandH = 15
         
-        for (y in 2 until height - 2 step 6) {
-            for (x in 2 until width - 2 step 6) {
+        for (y in 2 until height - 2 step 3) {
+            for (x in 2 until width - 2 step 3) {
                 val idx = y * width + x
                 if (visited[idx]) continue
                 
                 val pixel = bitmap.getPixel(x, y)
                 if (isWhiteCardPixel(pixel)) {
                     val rect = floodFillIsland(bitmap, x, y, visited)
-                    if (rect.width() >= 12 && rect.height() >= 18) {
+                    if (rect.width() >= 10 && rect.height() >= 12) {
                         // Split wide islands (potential overlapping cards)
                         val ratio = rect.width().toFloat() / rect.height().toFloat()
                         if (ratio > 1.0f) {
@@ -289,8 +303,10 @@ class ScreenScanner(
         val r = android.graphics.Color.red(pixel)
         val g = android.graphics.Color.green(pixel)
         val b = android.graphics.Color.blue(pixel)
-        // Card white is usually very bright
-        return r > 190 && g > 190 && b > 190
+        // Card white can be dim (150+) or tinted (e.g. green table reflection)
+        return r > 150 && g > 150 && b > 140 && 
+               kotlin.math.abs(r - g) < 45 && 
+               kotlin.math.abs(r - b) < 50
     }
 
     private fun floodFillIsland(bitmap: Bitmap, startX: Int, startY: Int, visited: BooleanArray): android.graphics.Rect {
@@ -312,8 +328,8 @@ class ScreenScanner(
             if (py < minY) minY = py
             if (py > maxY) maxY = py
             
-            // Search neighbors with step to speed up
-            val step = 4
+            // Search neighbors with step to speed up (smaller step for precision)
+            val step = 2
             val neighbors = arrayOf(px + step to py, px - step to py, px to py + step, px to py - step)
             for ((nx, ny) in neighbors) {
                 if (nx in 0 until width && ny in 0 until height) {
@@ -327,7 +343,14 @@ class ScreenScanner(
                 }
             }
         }
-        return android.graphics.Rect(minX, minY, maxX, maxY)
+        val rect = android.graphics.Rect(minX, minY, maxX, maxY)
+        // Ensure some minimum padding for recognition
+        return android.graphics.Rect(
+            maxOf(0, rect.left - 1),
+            maxOf(0, rect.top - 1),
+            minOf(width, rect.right + 1),
+            minOf(height, rect.bottom + 1)
+        )
     }
 
     private fun detectSuitInCard(bitmap: Bitmap): Suit {
@@ -360,42 +383,46 @@ class ScreenScanner(
     }
 
     private fun matchRank(text: String): Rank? {
-        val t = text.uppercase(java.util.Locale.US).trim()
+        val t = text.uppercase(java.util.Locale.US).replace(" ", "").replace("|", "I").replace("(", "").replace(")", "").trim()
+        
         return when {
-            t.contains("10") || t.contains("T") -> Rank.TEN
+            t.contains("10") || t.contains("T") || t.contains("IO") || t.contains("IQ") -> Rank.TEN
             t.contains("A") -> Rank.ACE
-            t.contains("K") -> Rank.KING
-            t.contains("Q") || t == "0" -> Rank.QUEEN
-            t.contains("J") -> Rank.JACK
-            t == "9" -> Rank.NINE
-            t == "8" || t == "B" -> Rank.EIGHT
-            t == "7" -> Rank.SEVEN
-            t == "6" -> Rank.SIX
-            t == "5" || t == "S" -> Rank.FIVE
-            t == "4" -> Rank.FOUR
-            t == "3" -> Rank.THREE
-            t == "2" -> Rank.TWO
-            else -> if (t.length == 1) {
-                when (t[0]) {
-                    'A','4' -> Rank.ACE
-                    'K' -> Rank.KING
-                    'Q','0' -> Rank.QUEEN
-                    'J','I','L','1' -> Rank.JACK
-                    '9' -> Rank.NINE
-                    '8','B' -> Rank.EIGHT
-                    '7' -> Rank.SEVEN
-                    '6' -> Rank.SIX
-                    '5','S' -> Rank.FIVE
-                    '4' -> Rank.FOUR
-                    '3' -> Rank.THREE
-                    '2','Z' -> Rank.TWO
-                    else -> null
-                }
-            } else null
+            t.contains("K") || t.contains("X") -> Rank.KING
+            t.contains("Q") || t.contains("0") || (t.length == 1 && t == "O") -> Rank.QUEEN
+            t.contains("J") || (t.length == 1 && (t == "I" || t == "L" || t == "1")) -> Rank.JACK
+            t.contains("9") || (t.length == 1 && t == "G") -> Rank.NINE
+            t.contains("8") || t.contains("B") || t.contains("&") -> Rank.EIGHT
+            t.contains("7") -> Rank.SEVEN
+            t.contains("6") -> Rank.SIX
+            t.contains("5") || t.contains("S") -> Rank.FIVE
+            t.contains("4") -> Rank.FOUR
+            t.contains("3") -> Rank.THREE
+            t.contains("2") || t.contains("Z") -> Rank.TWO
+            else -> {
+                if (t.length == 1) {
+                    when (t[0]) {
+                        'A','4' -> Rank.ACE
+                        'K' -> Rank.KING
+                        'Q','0','O' -> Rank.QUEEN
+                        'J','I','L','1' -> Rank.JACK
+                        '9','G' -> Rank.NINE
+                        '8','B','&' -> Rank.EIGHT
+                        '7' -> Rank.SEVEN
+                        '6' -> Rank.SIX
+                        '5','S' -> Rank.FIVE
+                        '4' -> Rank.FOUR
+                        '3' -> Rank.THREE
+                        '2','Z' -> Rank.TWO
+                        else -> null
+                    }
+                } else null
+            }
         }
     }
 
     fun stop() {
+        PokerHudSharedState.isScanning.value = false
         isScanning.value = false
         scanStatus.value = "Scanner stopped."
         

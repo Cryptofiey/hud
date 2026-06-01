@@ -112,7 +112,13 @@ class PokerHudService : Service() {
     private var probsJob: Job? = null
     private var floatingAdvisorOverlay: FrameLayout? = null
     private var floatingScannerOverlay: ScannerBoxesView? = null
+    private var scannerOverlayJob: Job? = null
     private var advisorJob: Job? = null
+
+    private var commHeader: View? = null
+    private var commTxt: View? = null
+    private var holeHeader: View? = null
+    private var holeTxt: View? = null
     private var floatingOpponentsOverlay: FrameLayout? = null
     private var oppJob: Job? = null
     private var screenScanner: ScreenScanner? = null
@@ -943,7 +949,7 @@ class PokerHudService : Service() {
     fun getHudRects(): List<android.graphics.Rect> {
         val rects = mutableListOf<android.graphics.Rect>()
         floatingOverlayView?.let { v ->
-            if (v.visibility == View.VISIBLE || v.visibility == View.INVISIBLE) {
+            if (v.visibility == View.VISIBLE) {
                 val params = v.layoutParams as? WindowManager.LayoutParams
                 if (params != null) {
                     rects.add(android.graphics.Rect(params.x, params.y, params.x + v.width, params.y + v.height))
@@ -951,7 +957,7 @@ class PokerHudService : Service() {
             }
         }
         floatingProbsOverlay?.let { v ->
-            if (v.visibility == View.VISIBLE || v.visibility == View.INVISIBLE) {
+            if (v.visibility == View.VISIBLE) {
                 val params = v.layoutParams as? WindowManager.LayoutParams
                 if (params != null) {
                     rects.add(android.graphics.Rect(params.x, params.y, params.x + v.width, params.y + v.height))
@@ -959,7 +965,15 @@ class PokerHudService : Service() {
             }
         }
         floatingAdvisorOverlay?.let { v ->
-            if (v.visibility == View.VISIBLE || v.visibility == View.INVISIBLE) {
+            if (v.visibility == View.VISIBLE) {
+                val params = v.layoutParams as? WindowManager.LayoutParams
+                if (params != null) {
+                    rects.add(android.graphics.Rect(params.x, params.y, params.x + v.width, params.y + v.height))
+                }
+            }
+        }
+        floatingScannerOverlay?.let { v ->
+            if (v.visibility == View.VISIBLE) {
                 val params = v.layoutParams as? WindowManager.LayoutParams
                 if (params != null) {
                     rects.add(android.graphics.Rect(params.x, params.y, params.x + v.width, params.y + v.height))
@@ -1071,8 +1085,6 @@ class PokerHudService : Service() {
         }
     }
 
-    private var scannerOverlayJob: Job? = null
-
     private fun showScannerOutlinesOverlay() {
         if (floatingScannerOverlay == null) {
             val params = WindowManager.LayoutParams(
@@ -1112,6 +1124,11 @@ class PokerHudService : Service() {
                 launch {
                     PokerHudSharedState.scannerOffsetY.collect { dy ->
                         floatingScannerOverlay?.offsetY = dy
+                    }
+                }
+                launch {
+                    PokerHudSharedState.isScanning.collect { scanning ->
+                        floatingScannerOverlay?.visibility = if (scanning) View.GONE else View.VISIBLE
                     }
                 }
             }
@@ -1184,6 +1201,7 @@ class PokerHudService : Service() {
 
         header.addView(title)
         header.addView(closeBtn)
+        commHeader = header
         content.addView(header)
 
         val spacer = View(this).apply {
@@ -1200,6 +1218,7 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             setShadowLayer(4f, 0f, 2f, AndroidColor.BLACK)
         }
+        commTxt = txtCardsInfo
         content.addView(txtCardsInfo)
 
         val laserLine = View(this).apply {
@@ -1241,22 +1260,11 @@ class PokerHudService : Service() {
         commJob = serviceScope.launch {
             launch {
                 PokerHudSharedState.isScanning.collect { scanning ->
-                    laserLine.visibility = if (scanning) View.VISIBLE else View.GONE
+                    laserLine.visibility = View.GONE
+                    frame.visibility = if (scanning) View.GONE else View.VISIBLE
                     if (scanning) {
-                        frame.background = createBackgroundDrawable(
-                            AndroidColor.parseColor("#00000000"),
-                            8f,
-                            dpToPx(1.5f),
-                            AndroidColor.parseColor("#FF00FFCC")
-                        )
                         try { anim.start() } catch (ignored: Exception) {}
                     } else {
-                        frame.background = createBackgroundDrawable(
-                            AndroidColor.parseColor("#00000000"),
-                            8f,
-                            dpToPx(1.5f),
-                            AndroidColor.parseColor("#FF2196F3")
-                        )
                         try { anim.cancel() } catch (ignored: Exception) {}
                     }
                 }
@@ -1349,6 +1357,7 @@ class PokerHudService : Service() {
 
         header.addView(title)
         header.addView(closeBtn)
+        holeHeader = header
         content.addView(header)
 
         val spacer = View(this).apply {
@@ -1365,6 +1374,7 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             setShadowLayer(4f, 0f, 2f, AndroidColor.BLACK)
         }
+        holeTxt = txtCardsInfo
         content.addView(txtCardsInfo)
 
         val laserLine = View(this).apply {
@@ -1406,22 +1416,11 @@ class PokerHudService : Service() {
         holeJob = serviceScope.launch {
             launch {
                 PokerHudSharedState.isScanning.collect { scanning ->
-                    laserLine.visibility = if (scanning) View.VISIBLE else View.GONE
+                    laserLine.visibility = View.GONE
+                    frame.visibility = if (scanning) View.GONE else View.VISIBLE
                     if (scanning) {
-                        frame.background = createBackgroundDrawable(
-                            AndroidColor.parseColor("#00000000"),
-                            8f,
-                            dpToPx(1.5f),
-                            AndroidColor.parseColor("#FF00FFCC")
-                        )
                         try { anim.start() } catch (ignored: Exception) {}
                     } else {
-                        frame.background = createBackgroundDrawable(
-                            AndroidColor.parseColor("#00000000"),
-                            8f,
-                            dpToPx(1.5f),
-                            AndroidColor.parseColor("#FFE53935")
-                        )
                         try { anim.cancel() } catch (ignored: Exception) {}
                     }
                 }
@@ -1620,6 +1619,11 @@ class PokerHudService : Service() {
         probsJob = job
         
         serviceScope.launch(job) {
+            launch {
+                PokerHudSharedState.isScanning.collect { scanning ->
+                    frame.visibility = if (scanning) View.GONE else View.VISIBLE
+                }
+            }
             var lastHero1: Card? = null
             var lastHero2: Card? = null
             var lastBoard: List<Card?> = emptyList()
