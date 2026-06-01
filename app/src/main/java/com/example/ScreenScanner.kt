@@ -151,9 +151,7 @@ class ScreenScanner(
                     foundCommCards.getOrNull(i) ?: if (consecutiveEmptyComm < 3) currentState.board.getOrNull(i) else null
                 }
                 
-                // 4. OPPONENTS & PROFILE (ML Kit pass on whole screen only if needed, but here we reuse original result for stats)
-                // We'll do a focused ML Kit pass for Opponents/Profiles to avoid full screen drag
-                val inputImage = InputImage.fromBitmap(cleanBitmap, 0)
+                // 4. OPPONENTS & PROFILE
                 val result = recognizer.process(inputImage).await()
                 
                 val scannedOpponents = OpponentScanner.scan(result, cleanBitmap, hudRects)
@@ -216,18 +214,17 @@ class ScreenScanner(
         val islands = findCardIslands(crop)
         val foundCards = mutableListOf<Triple<Rank, Suit, Int>>()
         
-        for (island in islands) {
-            // Try different scales for better OCR
-            val scales = listOf(2.5f, 1.5f, 3.5f)
-            var bestRank: Rank? = null
-            
-            val cardBmp = try { Bitmap.createBitmap(crop, island.left, island.top, island.width(), island.height()) } catch(e: Exception) { continue }
-            
-            for (scale in scales) {
-                // Target the rank area (top-left) - adjust to cover enough for suit too if needed, but focus on rank
-                val rankW = (cardBmp.width * 0.75).toInt()
-                val rankH = (cardBmp.height * 0.75).toInt()
-                if (rankW < 2 || rankH < 2) continue
+            for (island in islands) {
+                val cardBmp = try { Bitmap.createBitmap(crop, island.left, island.top, island.width(), island.height()) } catch(e: Exception) { continue }
+                
+                // Use a single optimized scale pass
+                val scale = 2.0f
+                val rankW = (cardBmp.width * 0.8).toInt()
+                val rankH = (cardBmp.height * 0.8).toInt()
+                if (rankW < 2 || rankH < 2) {
+                    cardBmp.recycle()
+                    continue
+                }
                 
                 val rankArea = try { Bitmap.createBitmap(cardBmp, 0, 0, rankW, rankH) } catch(e: Exception) { cardBmp }
                 val scaled = Bitmap.createScaledBitmap(rankArea, (rankArea.width * scale).toInt(), (rankArea.height * scale).toInt(), true)
@@ -235,24 +232,20 @@ class ScreenScanner(
                 val input = InputImage.fromBitmap(scaled, 0)
                 val result = try { recognizer.process(input).await() } catch(e: Exception) { null }
                 
+                var bestRank: Rank? = null
                 if (result != null && result.text.isNotEmpty()) {
                     bestRank = matchRank(result.text)
                 }
                 
+                if (bestRank != null) {
+                    val suit = detectSuitInCard(cardBmp)
+                    foundCards.add(Triple(bestRank, suit, safeRect.left + island.centerX()))
+                }
+                
                 if (rankArea != cardBmp && rankArea != crop) rankArea.recycle()
                 scaled.recycle()
-                
-                if (bestRank != null) break
+                if (cardBmp != crop) cardBmp.recycle()
             }
-            
-            if (bestRank != null) {
-                // Detect suit using color sampling in the card bitmap
-                val suit = detectSuitInCard(cardBmp)
-                foundCards.add(Triple(bestRank, suit, safeRect.left + island.centerX()))
-            }
-            
-            if (cardBmp != crop) cardBmp.recycle()
-        }
         
         crop.recycle()
         

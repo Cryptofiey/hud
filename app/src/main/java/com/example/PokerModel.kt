@@ -90,10 +90,7 @@ data class SimulationResult(
 object HandEvaluator {
 
     fun evaluate5CardHand(cards: List<Card>): HandScore {
-        require(cards.size == 5)
-
-        val rankCounts = IntArray(15)
-        var suitBits = 0
+        val rankCounts = IntArray(15) { 0 }
         var isFlush = true
         val firstSuit = cards[0].suit.index
         for (i in 0 until 5) {
@@ -124,30 +121,32 @@ object HandEvaluator {
             return HandScore(if (straightHighCard == 14) HandCategory.ROYAL_FLUSH else HandCategory.STRAIGHT_FLUSH, listOf(straightHighCard))
         }
 
+        var quadRank = 0
         var tripRank = 0
         var pair1 = 0
         var pair2 = 0
-        var quadRank = 0
-        var kicker = 0
+        var pairCount = 0
 
         for (r in 14 downTo 2) {
             val count = rankCounts[r]
-            if (count == 4) quadRank = r
-            else if (count == 3) tripRank = r
-            else if (count == 2) {
-                if (pair1 == 0) pair1 = r else pair2 = r
+            when (count) {
+                4 -> quadRank = r
+                3 -> tripRank = r
+                2 -> {
+                    if (pairCount == 0) pair1 = r else if (pairCount == 1) pair2 = r
+                    pairCount++
+                }
             }
         }
 
         if (quadRank > 0) {
+            var kicker = 0
             for (r in 14 downTo 2) if (rankCounts[r] > 0 && r != quadRank) { kicker = r; break }
             return HandScore(HandCategory.FOUR_OF_A_KIND, listOf(quadRank, kicker))
         }
         if (tripRank > 0 && pair1 > 0) return HandScore(HandCategory.FULL_HOUSE, listOf(tripRank, pair1))
         if (isFlush) {
-            val ranks = mutableListOf<Int>()
-            for (i in 0 until 5) ranks.add(uniqueRanks[i])
-            return HandScore(HandCategory.FLUSH, ranks)
+            return HandScore(HandCategory.FLUSH, uniqueRanks.take(uniqueCount))
         }
         if (isStraight) return HandScore(HandCategory.STRAIGHT, listOf(straightHighCard))
         if (tripRank > 0) {
@@ -155,19 +154,18 @@ object HandEvaluator {
             for (i in 0 until uniqueCount) if (uniqueRanks[i] != tripRank) kickers.add(uniqueRanks[i])
             return HandScore(HandCategory.THREE_OF_A_KIND, listOf(tripRank) + kickers)
         }
-        if (pair1 > 0 && pair2 > 0) {
+        if (pairCount >= 2) {
+            var kicker = 0
             for (i in 0 until uniqueCount) if (uniqueRanks[i] != pair1 && uniqueRanks[i] != pair2) { kicker = uniqueRanks[i]; break }
             return HandScore(HandCategory.TWO_PAIR, listOf(pair1, pair2, kicker))
         }
-        if (pair1 > 0) {
+        if (pairCount == 1) {
             val kickers = mutableListOf<Int>()
             for (i in 0 until uniqueCount) if (uniqueRanks[i] != pair1) kickers.add(uniqueRanks[i])
             return HandScore(HandCategory.ONE_PAIR, listOf(pair1) + kickers)
         }
         
-        val ranks = mutableListOf<Int>()
-        for (i in 0 until 5) ranks.add(uniqueRanks[i])
-        return HandScore(HandCategory.HIGH_CARD, ranks)
+        return HandScore(HandCategory.HIGH_CARD, uniqueRanks.take(uniqueCount))
     }
 
     fun findBestHand(allCards: List<Card>): HandScore {
@@ -179,19 +177,26 @@ object HandEvaluator {
     }
 
     fun findBest5CardHand(allCards: List<Card>): HandScore {
-        if (allCards.size == 5) return evaluate5CardHand(allCards)
+        val n = allCards.size
+        if (n == 5) return evaluate5CardHand(allCards)
         
         var bestScore: HandScore? = null
-        val n = allCards.size
-        
-        // Iterative 5-out-of-n combination to avoid recursion overhead
+        val combo = ArrayList<Card>(5)
+        for (i in 0..4) combo.add(allCards[0]) // Initial dummy
+
+        // Optimized combination generation
         for (i in 0 until n - 4) {
+            val c1 = allCards[i]
             for (j in i + 1 until n - 3) {
+                val c2 = allCards[j]
                 for (k in j + 1 until n - 2) {
+                    val c3 = allCards[k]
                     for (l in k + 1 until n - 1) {
+                        val c4 = allCards[l]
                         for (m in l + 1 until n) {
-                            val combo = listOf(allCards[i], allCards[j], allCards[k], allCards[l], allCards[m])
-                            val score = evaluate5CardHand(combo)
+                            val c5 = allCards[m]
+                            val currentCombo = listOf(c1, c2, c3, c4, c5)
+                            val score = evaluate5CardHand(currentCombo)
                             if (bestScore == null || score > bestScore!!) bestScore = score
                         }
                     }

@@ -762,10 +762,27 @@ class PokerHudService : Service() {
                     val currentState = PokerHudSharedState.uiState.value
                     val newBoard = action.board.take(5) + List(maxOf(0, 5 - action.board.size)) { null }
                     
+                    // 1. Check for changes before doing intensive work
+                    val isPreflop = newBoard.all { it == null }
+                    val heroCardsString = "${action.hero1?.toString() ?: "Empty"}_${action.hero2?.toString() ?: "Empty"}"
+                    
+                    val opponentsChanged = if (action.opponents.size != currentState.opponents.size) true else {
+                        action.opponents.zip(currentState.opponents).any { (a, b) ->
+                            a.nickname != b.nickname || a.isActive != b.isActive || kotlin.math.abs(a.stackSize - b.stackSize) > 20
+                        }
+                    }
+
+                    if (!opponentsChanged && 
+                        currentState.heroCard1 == action.hero1 && 
+                        currentState.heroCard2 == action.hero2 && 
+                        currentState.board == newBoard &&
+                        !action.updateProfileBoxes) {
+                        return@collect
+                    }
+
                     val prefs = PreferencesManager(this@PokerHudService)
 
                     // Automated tracking of hands, VPIP and PFR
-                    val heroCardsString = "${action.hero1?.toString() ?: "Empty"}_${action.hero2?.toString() ?: "Empty"}"
                     if (heroCardsString != "Empty_Empty" && heroCardsString != lastHandKey) {
                         lastHandKey = heroCardsString
                         countedHandPlayers.clear()
@@ -774,18 +791,14 @@ class PokerHudService : Service() {
                     }
 
                     if (action.opponents.isNotEmpty()) {
-                        val isPreflop = newBoard.all { it == null }
                         for (opponent in action.opponents) {
                             val name = opponent.nickname
                             if (name.isNotEmpty() && name != "Unknown") {
-                                // 1. Increment Hands Played
                                 if (!countedHandPlayers.contains(name)) {
                                     countedHandPlayers.add(name)
                                     val stats = prefs.loadPlayerStats(name)
                                     prefs.savePlayerStats(stats.copy(handsPlayed = stats.handsPlayed + 1))
                                 }
-
-                                // 2. Track Pre-flop Actions (VPIP & PFR)
                                 if (isPreflop) {
                                     val act = opponent.currentAction
                                     if (act == "RAISE" || act == "ALL_IN") {
@@ -809,21 +822,14 @@ class PokerHudService : Service() {
 
                     // Dynamically map opponents with real-time up-to-date stats
                     val finalOpponentsList = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        if (action.opponents.isNotEmpty()) {
-                            action.opponents.map { opp ->
-                                val dbStats = prefs.loadPlayerStats(opp.nickname)
-                                opp.copy(stats = dbStats)
-                            }
-                        } else {
-                            currentState.opponents.map { opp ->
-                                val dbStats = prefs.loadPlayerStats(opp.nickname)
-                                opp.copy(stats = dbStats)
-                            }
+                        val sourceList = if (action.opponents.isNotEmpty()) action.opponents else currentState.opponents
+                        sourceList.map { opp ->
+                            // Simple cache for stats during this single update pass? 
+                            // Actually loadPlayerStats uses SharedPreferences which is mostly cached in memory by Android anyway,
+                            // but we still want to avoid unnecessary copies.
+                            val dbStats = prefs.loadPlayerStats(opp.nickname)
+                            if (opp.stats == dbStats) opp else opp.copy(stats = dbStats)
                         }
-                    }
-
-                    if (currentState.heroCard1 == action.hero1 && currentState.heroCard2 == action.hero2 && currentState.board == newBoard && currentState.opponents == finalOpponentsList && currentState.profileBoxes == action.profileBoxes) {
-                        return@collect
                     }
 
                     val updatedState = currentState.copy(
@@ -837,8 +843,7 @@ class PokerHudService : Service() {
                     
                     if (action.updateProfileBoxes && action.profileBoxes != null) {
                         serviceScope.launch {
-                            kotlinx.coroutines.delay(5500)
-                            // Only clear if the current state still has THESE profile boxes (don't clear newer ones)
+                            kotlinx.coroutines.delay(5000)
                             PokerHudSharedState.uiState.update { 
                                 if (it.profileBoxes == action.profileBoxes) it.copy(profileBoxes = null) else it
                             }
@@ -848,13 +853,11 @@ class PokerHudService : Service() {
                     backgroundSimulationJob?.cancel()
                     backgroundSimulationJob = serviceScope.launch(kotlinx.coroutines.Dispatchers.Default) {
                         try {
-                            // Small delay to debounce rapid updates from OCR/External
-                            kotlinx.coroutines.delay(150)
+                            kotlinx.coroutines.delay(100)
+                            // Reduced sim size for persistent HUD for battery/thermal/memory safety
+                            val simSize = 1200 
                             
-                            // Use slightly smaller sim size for HUD background for responsiveness
-                            val simSize = (updatedState.simulationSize.coerceAtMost(2500))
-                            
-                            // 1. Original Branch (Level 1/2)
+                            // 1. Original Branch
                             val result = com.example.SimulationEngine.runHoldemSimulation(
                                 heroCard1 = updatedState.heroCard1,
                                 heroCard2 = updatedState.heroCard2,
@@ -879,7 +882,7 @@ class PokerHudService : Service() {
                                 heroStack = updatedState.heroStack
                             )
 
-                            // 2. Advanced Branch (Level 3 - Range based)
+                            // 2. Advanced Branch
                             val advResult = com.example.SimulationEngine.runHoldemSimulationAdvanced(
                                 heroCard1 = updatedState.heroCard1,
                                 heroCard2 = updatedState.heroCard2,
@@ -1869,6 +1872,7 @@ class PokerHudService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         PokerHudSharedState.isHudOverlayRunning.value = false
+        screenScanner?.stop()
         stopFloatingOverlay()
         floatingScannerOverlay?.let { 
             try { windowManager?.removeView(it) } catch(e: Exception){} 
