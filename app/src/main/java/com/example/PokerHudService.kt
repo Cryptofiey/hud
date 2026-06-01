@@ -1539,17 +1539,15 @@ class PokerHudService : Service() {
         // 1. PROBABILITIES SECTION
         val txtWin = TextView(this).apply {
             text = "Победа: 0.0%"
-            setTextColor(AndroidColor.parseColor("#00FFC8")) // Neon Cyan
-            textSize = 9f
+            setTextColor(AndroidColor.WHITE)
+            textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
-            setShadowLayer(12f, 0f, 0f, AndroidColor.parseColor("#BB00FFC8")) // Distinct neon glow
         }
         val txtAdvWin = TextView(this).apply {
             text = "Победа (L3): 0.0%"
-            setTextColor(AndroidColor.parseColor("#FF00FFCC")) // Neon Greenish Cyan
-            textSize = 9f
+            setTextColor(AndroidColor.parseColor("#FF00FFCC"))
+            textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
-            setShadowLayer(12f, 0f, 0f, AndroidColor.parseColor("#BBFF00FFCC"))
         }
         val txtHeroCards = TextView(this).apply {
             text = "Карты: --"
