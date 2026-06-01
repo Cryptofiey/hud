@@ -165,7 +165,7 @@ class ScreenScanner(
                     if (crop == null) return
                     val islands = findCardIslands(crop)
                     if (islands.isNotEmpty()) {
-                        for (rect in islands) {
+                        for (rect in islands.take(8)) { // Hard max of 8 islands (5 comm, max 2 hole) to strictly prevent excessive loops
                             val cardImg = try { Bitmap.createBitmap(crop, rect.left, rect.top, rect.width(), rect.height()) } catch(e: Exception) { null } ?: continue
                             val scale = 3.0f
                             val scaled = Bitmap.createScaledBitmap(cardImg, (cardImg.width * scale).toInt(), (cardImg.height * scale).toInt(), true)
@@ -332,22 +332,18 @@ class ScreenScanner(
         val height = bitmap.height
         val visited = BooleanArray(width * height)
         
-        // Minimum size of a card relative to box
-        val minIslandW = 12
-        val minIslandH = 15
-        
-        for (y in 2 until height - 2 step 3) {
-            for (x in 2 until width - 2 step 3) {
+        for (y in 2 until height - 2 step 2) {
+            for (x in 2 until width - 2 step 2) {
                 val idx = y * width + x
                 if (visited[idx]) continue
                 
                 val pixel = bitmap.getPixel(x, y)
                 if (isWhiteCardPixel(pixel)) {
                     val rect = floodFillIsland(bitmap, x, y, visited)
-                    if (rect.width() >= 10 && rect.height() >= 12) {
+                    if (rect.width() >= 8 && rect.height() >= 10) {
                         // Split wide islands (potential overlapping cards)
                         val ratio = rect.width().toFloat() / rect.height().toFloat()
-                        if (ratio > 1.0f) {
+                        if (ratio > 1.2f) {
                             val numCards = (ratio + 0.5f).toInt()
                             val cardWidth = rect.width() / numCards
                             for (i in 0 until numCards) {
@@ -376,31 +372,24 @@ class ScreenScanner(
     private fun floodFillIsland(bitmap: Bitmap, startX: Int, startY: Int, visited: BooleanArray): android.graphics.Rect {
         val width = bitmap.width
         val height = bitmap.height
-        val queueX = IntArray(3000)
-        val queueY = IntArray(3000)
-        var head = 0
-        var tail = 0
         
-        queueX[tail] = startX
-        queueY[tail] = startY
-        tail++
+        // Use an array list for infinite capacity instead of fixed arrays that overflow
+        val queue = java.util.LinkedList<Pair<Int, Int>>()
+        queue.add(Pair(startX, startY))
         visited[startY * width + startX] = true
         
         var minX = startX; var maxX = startX; var minY = startY; var maxY = startY
         
-        while (head < tail && tail < 3000) {
-            val px = queueX[head]
-            val py = queueY[head]
-            head++
+        while (queue.isNotEmpty()) {
+            val (px, py) = queue.removeFirst()
             
             if (px < minX) minX = px
             if (px > maxX) maxX = px
             if (py < minY) minY = py
             if (py > maxY) maxY = py
             
-            val step = 2
-            val dx = intArrayOf(step, -step, 0, 0)
-            val dy = intArrayOf(0, 0, step, -step)
+            val dx = intArrayOf(1, -1, 0, 0)
+            val dy = intArrayOf(0, 0, 1, -1)
             
             for (i in 0 until 4) {
                 val nx = px + dx[i]
@@ -410,11 +399,7 @@ class ScreenScanner(
                     if (!visited[nIdx]) {
                         visited[nIdx] = true
                         if (isWhiteCardPixel(bitmap.getPixel(nx, ny))) {
-                            if (tail < 3000) {
-                                queueX[tail] = nx
-                                queueY[tail] = ny
-                                tail++
-                            }
+                            queue.add(Pair(nx, ny))
                         }
                     }
                 }
