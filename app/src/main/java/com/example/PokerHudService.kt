@@ -931,7 +931,7 @@ class PokerHudService : Service() {
             }
         }
     }
-    }
+}
 
     private fun bringHudsToFront() {
         // Reduced frequency or use updateViewLayout instead of remove/add to prevent flickering
@@ -1681,17 +1681,26 @@ class PokerHudService : Service() {
                     }
                 }
 
-                if (heroCardsChanged) {
+                if (heroCardsChanged || opponentsChanged) {
                     if (state.heroCard1 != null && state.heroCard2 != null) {
                         val groupNum = AdvisorEngine.getSklanskyGroup(state.heroCard1, state.heroCard2)
-                        txtSklan.text = "Группа: $groupNum"
+                        
+                        // Find the target opponent for range comparison
+                        val mainOpp = state.opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
+                        val vpip = mainOpp?.stats?.histVpip ?: mainOpp?.stats?.vpip ?: 100f
+                        val sRange = AdvisorEngine.getSklanskyRangeForVpip(vpip)
+                        
+                        txtSklan.text = "Группа: $groupNum | Диапазон: 1-$sRange"
+                        
                         val strengthDesc = when (groupNum) {
                             1, 2 -> "Топ (1/20)"
                             3, 4 -> "Высокая (4/20)"
                             5, 6 -> "Средняя (8/20)"
                             else -> "Слабая (14/20)"
                         }
-                        txtStrength.text = "Сила: $strengthDesc"
+                        
+                        val relativePos = if (groupNum <= sRange) "Впереди диапазона" else "Позади диапазона"
+                        txtStrength.text = "Сила: $strengthDesc ($relativePos)"
                     } else {
                         txtSklan.text = "Группа: [Нет карт]"
                         txtStrength.text = "Сила: --"

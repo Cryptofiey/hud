@@ -68,6 +68,18 @@ enum class TournamentStage(val displayName: String) {
 }
 
 object AdvisorEngine {
+    fun getSklanskyRangeForVpip(vpip: Float): Int {
+        return when {
+            vpip <= 5f -> 1
+            vpip <= 12f -> 2
+            vpip <= 20f -> 3
+            vpip <= 30f -> 4
+            vpip <= 45f -> 5
+            vpip <= 60f -> 6
+            vpip <= 80f -> 7
+            else -> 8
+        }
+    }
 
     // Helper: Determine Sklansky & Malmuth Hand Group for two cards
     fun getSklanskyGroup(card1: Card, card2: Card): Int {
@@ -393,56 +405,6 @@ object AdvisorEngine {
         
         var adjustedScore = equity
 
-        if (profile != null) {
-            // Apply adjustments based on 10 parameters
-            
-            // 1 & 2. VPIP/PFR Gap: High gap means passive fish, low gap means aggressive reg
-            val vpip = profile.histVpip ?: profile.vpip
-            val pfr = profile.histPfr ?: profile.pfr
-            val gap = vpip - pfr
-            if (gap > 30f) {
-                // Passive: their bets mean strength
-                if (heroBet < (opponents.maxByOrNull { it.betSize }?.betSize ?: 0)) {
-                    adjustedScore -= 0.1f // Be more cautious against their bets
-                } else {
-                    adjustedScore += 0.05f // They over-call, value bet them
-                }
-            }
-
-            // 3 & 4. 3-Bet & Fold to 3-Bet: Squeeze potential
-            val bet3 = profile.hist3Bet ?: 5f
-            val fold3 = profile.histFoldTo3Bet ?: 40f
-            if (fold3 > 60f) adjustedScore += 0.1f // They over-fold to 3-bets
-            if (bet3 > 15f) adjustedScore -= 0.05f // They 3-bet light, be careful
-
-            // 5 & 6. C-Bet & Fold to C-Bet: Post-flop texture
-            val cbet = profile.histCBet ?: 50f
-            val foldCbet = profile.histFoldToCBet ?: 40f
-            if (foldCbet > 60f) adjustedScore += 0.1f // Good target for C-bet
-            if (cbet > 80f) adjustedScore -= 0.05f // They c-bet everything, don't over-fold
-
-            // 7. Steal: Button/CO aggression
-            val steal = profile.histSteal ?: 30f
-            if (steal > 50f && (position == TablePosition.SB || position == TablePosition.BB)) {
-                adjustedScore += 0.1f // Defend wider against this steal
-            }
-
-            // 8. Check/Raise
-            val cr = profile.histCheckRaise ?: 10f
-            if (cr > 15f) adjustedScore -= 0.05f // Careful on dry boards, they polarize
-
-            // 9 & 10. WTSD & WSD: The "Showdown" factor
-            val wtsd = profile.histWtsd ?: 30f
-            val wsd = profile.histWsd ?: 50f
-            if (wtsd > 35f && wsd < 45f) {
-                // Calling station: value bet larger!
-                adjustedScore += 0.1f
-            } else if (wtsd < 25f && wsd > 55f) {
-                // Nit: don't bluff!
-                adjustedScore -= 0.1f
-            }
-        }
-
         // Pot odds and profit check
         var maxOpponentBet = 0
         opponents.filter { it.isActive }.forEach { opp ->
@@ -450,6 +412,55 @@ object AdvisorEngine {
             if (pBet > maxOpponentBet) maxOpponentBet = pBet
         }
         val betToCall = maxOf(0, maxOpponentBet - heroBet).toFloat()
+
+        if (profile != null) {
+            // Integrate ALL 10 parameters into the calculation
+            val vpip = profile.histVpip ?: profile.vpip
+            val pfr = profile.histPfr ?: profile.pfr
+            val bet3 = profile.hist3Bet ?: profile.foldTo3bet // fallback
+            val fold3 = profile.histFoldTo3Bet ?: 45f
+            val cbet = profile.histCBet ?: 55f
+            val foldCbet = profile.histFoldToCBet ?: 45f
+            val steal = profile.histSteal ?: 35f
+            val cr = profile.histCheckRaise ?: 10f
+            val wtsd = profile.histWtsd ?: 30f
+            val wsd = profile.histWsd ?: 50f
+
+            // 1 & 2. VPIP/PFR Profile
+            val gap = vpip - pfr
+            if (gap > 25f) adjustedScore += 0.05f // Loose/Passive (Fish): Value bet more
+            else if (gap < 8f && vpip < 20f) adjustedScore -= 0.05f // Tight/Aggressive (Reg): Respect their bets
+
+            // 3 & 4. 3-Bet logic
+            if (fold3 > 60f) adjustedScore += 0.07f // Exploit by 3-betting
+            if (bet3 > 12f && betToCall > (bigBlind * 2)) adjustedScore -= 0.05f // Careful against high 3-betters
+
+            // 5 & 6. C-Bet logic
+            if (foldCbet > 60f) adjustedScore += 0.08f // Automatic C-bet candidate
+            if (cbet > 75f) adjustedScore += 0.03f // They C-bet too much, we can float or check/raise
+
+            // 7. Steal Defense
+            if (steal > 45f && (position == TablePosition.SB || position == TablePosition.BB)) {
+                adjustedScore += 0.08f // Defend blinds aggressively
+            }
+
+            // 8. Check/Raise Aggression
+            if (cr > 15f) adjustedScore -= 0.06f // Respect their check-raises
+
+            // 9 & 10. Showdown reliability
+            if (wtsd > 35f && wsd < 45f) adjustedScore += 0.1f // Calling station: pure value
+            else if (wtsd < 25f && wsd > 55f) adjustedScore -= 0.1f // Nit: no bluffs, only nuts
+
+            // Sklansky Range Info
+            val sRange = getSklanskyRangeForVpip(vpip)
+            val mySGroup = getSklanskyGroup(heroCard1, heroCard2)
+            val rangeMsg = "Range: Gr. 1-$sRange (Opp VPIP: ${vpip.toInt()}%)"
+            
+            // Influence score based on how our hand group compares to their VPIP range
+            if (mySGroup <= sRange) adjustedScore += 0.1f
+            else adjustedScore -= 0.05f
+        }
+
         val activePot = potSize.toFloat() + betToCall
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
         
