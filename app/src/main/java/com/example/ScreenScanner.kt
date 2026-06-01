@@ -48,7 +48,6 @@ class ScreenScanner(
     @SuppressLint("WrongConstant")
     fun start() {
         if (isScanning.value) return
-        PokerHudSharedState.isScanning.value = true
         try {
             isScanning.value = true
             scanStatus.value = "Starting modern ML Kit scanner..."
@@ -95,7 +94,11 @@ class ScreenScanner(
     private suspend fun processLatestImage() {
         var image: Image? = null
         try {
+            withContext(Dispatchers.Main) { PokerHudSharedState.isScanning.value = true }
+            delay(150) // Short delay to ensure overlays are hidden
             image = imageReader?.acquireLatestImage()
+            withContext(Dispatchers.Main) { PokerHudSharedState.isScanning.value = false }
+            
             if (image == null) return
             
             val width = image.width

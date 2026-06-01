@@ -30,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -78,6 +79,7 @@ object PokerHudSharedState {
     val showHoleBox = MutableStateFlow(true)
     val showProbsBox = MutableStateFlow(true)
     val isScanning = MutableStateFlow(false)
+    val isUserInteracting = MutableStateFlow(false)
     // Modules basic settings
     val winProbScale = MutableStateFlow(1f)
     val winProbMaxHands = MutableStateFlow(4)
@@ -122,6 +124,16 @@ class PokerHudService : Service() {
     private var floatingOpponentsOverlay: FrameLayout? = null
     private var oppJob: Job? = null
     private var screenScanner: ScreenScanner? = null
+    private var interactionJob: Job? = null
+
+    private fun notifyInteraction() {
+        PokerHudSharedState.isUserInteracting.value = true
+        interactionJob?.cancel()
+        interactionJob = serviceScope.launch {
+            kotlinx.coroutines.delay(5000)
+            PokerHudSharedState.isUserInteracting.value = false
+        }
+    }
 
     // Automated VPIP/PFR hand tracking state definitions
     private var lastHandKey: String? = null
@@ -524,6 +536,7 @@ class PokerHudService : Service() {
         val dragListener = View.OnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    notifyInteraction()
                     initialX = params.x
                     initialY = params.y
                     initialTouchX = event.rawX
@@ -552,6 +565,7 @@ class PokerHudService : Service() {
         val miniDragListener = View.OnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    notifyInteraction()
                     miniInitialX = params.x
                     miniInitialY = params.y
                     miniInitialTouchX = event.rawX
@@ -1016,6 +1030,7 @@ class PokerHudService : Service() {
         view.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    notifyInteraction()
                     initialX = params.x
                     initialY = params.y
                     initialTouchX = event.rawX
@@ -1130,8 +1145,10 @@ class PokerHudService : Service() {
                     }
                 }
                 launch {
-                    PokerHudSharedState.isScanning.collect { scanning ->
-                        floatingScannerOverlay?.visibility = if (scanning) View.GONE else View.VISIBLE
+                    combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
+                        scanning && !interacting
+                    }.collect { hide ->
+                        floatingScannerOverlay?.visibility = if (hide) View.GONE else View.VISIBLE
                     }
                 }
             }
@@ -1262,10 +1279,12 @@ class PokerHudService : Service() {
         commJob?.cancel()
         commJob = serviceScope.launch {
             launch {
-                PokerHudSharedState.isScanning.collect { scanning ->
+                combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
+                    scanning && !interacting
+                }.collect { hide ->
                     laserLine.visibility = View.GONE
-                    frame.visibility = if (scanning) View.GONE else View.VISIBLE
-                    if (scanning) {
+                    frame.visibility = if (hide) View.GONE else View.VISIBLE
+                    if (hide) {
                         try { anim.start() } catch (ignored: Exception) {}
                     } else {
                         try { anim.cancel() } catch (ignored: Exception) {}
@@ -1418,10 +1437,12 @@ class PokerHudService : Service() {
         holeJob?.cancel()
         holeJob = serviceScope.launch {
             launch {
-                PokerHudSharedState.isScanning.collect { scanning ->
+                combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
+                    scanning && !interacting
+                }.collect { hide ->
                     laserLine.visibility = View.GONE
-                    frame.visibility = if (scanning) View.GONE else View.VISIBLE
-                    if (scanning) {
+                    frame.visibility = if (hide) View.GONE else View.VISIBLE
+                    if (hide) {
                         try { anim.start() } catch (ignored: Exception) {}
                     } else {
                         try { anim.cancel() } catch (ignored: Exception) {}
@@ -1623,8 +1644,10 @@ class PokerHudService : Service() {
         
         serviceScope.launch(job) {
             launch {
-                PokerHudSharedState.isScanning.collect { scanning ->
-                    frame.visibility = if (scanning) View.GONE else View.VISIBLE
+                combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
+                    scanning && !interacting
+                }.collect { hide ->
+                    frame.visibility = if (hide) View.GONE else View.VISIBLE
                 }
             }
             var lastHero1: Card? = null
