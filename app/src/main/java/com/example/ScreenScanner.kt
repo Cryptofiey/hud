@@ -163,46 +163,34 @@ class ScreenScanner(
 
                 suspend fun scanBox(crop: Bitmap?, out: MutableList<Card>) {
                     if (crop == null) return
-                    val islands = findCardIslands(crop)
-                    if (islands.isNotEmpty()) {
-                        for (rect in islands.take(8)) { // Hard max of 8 islands (5 comm, max 2 hole) to strictly prevent excessive loops
-                            val cardImg = try { Bitmap.createBitmap(crop, rect.left, rect.top, rect.width(), rect.height()) } catch(e: Exception) { null } ?: continue
-                            val scale = 3.0f
-                            val scaled = Bitmap.createScaledBitmap(cardImg, (cardImg.width * scale).toInt(), (cardImg.height * scale).toInt(), true)
-                            val input = InputImage.fromBitmap(scaled, 0)
-                            val result = recognizer.process(input).await()
-                            
-                            var rankStr = ""
-                            for (block in result.textBlocks) {
-                                for (line in block.lines) rankStr += line.text
-                            }
-                            val rank = matchRank(rankStr)
-                            if (rank != null) {
-                                val suit = detectSuitInCard(cardImg)
-                                out.add(Card(rank, suit))
-                            }
-                            cardImg.recycle(); scaled.recycle()
-                        }
-                    } else {
-                        // Fallback: full box OCR
-                        val scale = 2.5f
-                        val scaled = Bitmap.createScaledBitmap(crop, (crop.width * scale).toInt(), (crop.height * scale).toInt(), true)
-                        val input = InputImage.fromBitmap(scaled, 0)
-                        val result = recognizer.process(input).await()
-                        for (block in result.textBlocks) {
-                            for (line in block.lines) {
-                                for (element in line.elements) {
-                                    val rank = matchRank(element.text)
-                                    if (rank != null) {
-                                        val box = element.boundingBox ?: continue
-                                        val suit = robustDetectSuit(crop, (box.centerX() / scale).toInt(), (box.centerY() / scale).toInt())
-                                        out.add(Card(rank, suit))
-                                    }
-                                }
+                    // Use ML Kit Text Recognition on the cropped box directly (similar to profile scanner)
+                    val scale = 3.0f // Scale up for better OCR on small card ranks
+                    val scaled = Bitmap.createScaledBitmap(crop, (crop.width * scale).toInt(), (crop.height * scale).toInt(), true)
+                    val input = InputImage.fromBitmap(scaled, 0)
+                    val result = recognizer.process(input).await()
+                    
+                    var sortedElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
+                    
+                    for (block in result.textBlocks) {
+                        for (line in block.lines) {
+                            for (element in line.elements) {
+                                sortedElements.add(element)
                             }
                         }
-                        scaled.recycle()
                     }
+                    
+                    // Sort elements left to right
+                    sortedElements.sortBy { it.boundingBox?.left ?: 0 }
+
+                    for (element in sortedElements) {
+                        val parsedRanks = findCardsInText(element.text)
+                        val box = element.boundingBox ?: continue
+                        for (rank in parsedRanks) {
+                            val suit = robustDetectSuit(crop, (box.centerX() / scale).toInt(), (box.centerY() / scale).toInt())
+                            out.add(Card(rank, suit))
+                        }
+                    }
+                    scaled.recycle()
                 }
 
                 scanBox(commCrop, foundComm)
@@ -326,121 +314,6 @@ class ScreenScanner(
         }
     }
 
-    private fun findCardIslands(bitmap: Bitmap): List<android.graphics.Rect> {
-        val islands = mutableListOf<android.graphics.Rect>()
-        val width = bitmap.width
-        val height = bitmap.height
-        val visited = BooleanArray(width * height)
-        
-        for (y in 2 until height - 2 step 2) {
-            for (x in 2 until width - 2 step 2) {
-                val idx = y * width + x
-                if (visited[idx]) continue
-                
-                val pixel = bitmap.getPixel(x, y)
-                if (isWhiteCardPixel(pixel)) {
-                    val rect = floodFillIsland(bitmap, x, y, visited)
-                    if (rect.width() >= 8 && rect.height() >= 10) {
-                        // Split wide islands (potential overlapping cards)
-                        val ratio = rect.width().toFloat() / rect.height().toFloat()
-                        if (ratio > 1.2f) {
-                            val numCards = (ratio + 0.5f).toInt()
-                            val cardWidth = rect.width() / numCards
-                            for (i in 0 until numCards) {
-                                islands.add(android.graphics.Rect(rect.left + i * cardWidth, rect.top, rect.left + (i + 1) * cardWidth, rect.bottom))
-                            }
-                        } else {
-                            islands.add(rect)
-                        }
-                    }
-                }
-            }
-        }
-        return islands.sortedBy { it.left }
-    }
-
-    private fun isWhiteCardPixel(pixel: Int): Boolean {
-        val r = android.graphics.Color.red(pixel)
-        val g = android.graphics.Color.green(pixel)
-        val b = android.graphics.Color.blue(pixel)
-        // Card white can be dim (130+) or tinted (e.g. green table reflection)
-        return r > 130 && g > 130 && b > 120 && 
-               kotlin.math.abs(r - g) < 55 && 
-               kotlin.math.abs(r - b) < 60
-    }
-
-    private fun floodFillIsland(bitmap: Bitmap, startX: Int, startY: Int, visited: BooleanArray): android.graphics.Rect {
-        val width = bitmap.width
-        val height = bitmap.height
-        
-        // Use an array list for infinite capacity instead of fixed arrays that overflow
-        val queue = java.util.LinkedList<Pair<Int, Int>>()
-        queue.add(Pair(startX, startY))
-        visited[startY * width + startX] = true
-        
-        var minX = startX; var maxX = startX; var minY = startY; var maxY = startY
-        
-        while (queue.isNotEmpty()) {
-            val (px, py) = queue.removeFirst()
-            
-            if (px < minX) minX = px
-            if (px > maxX) maxX = px
-            if (py < minY) minY = py
-            if (py > maxY) maxY = py
-            
-            val dx = intArrayOf(1, -1, 0, 0)
-            val dy = intArrayOf(0, 0, 1, -1)
-            
-            for (i in 0 until 4) {
-                val nx = px + dx[i]
-                val ny = py + dy[i]
-                if (nx in 0 until width && ny in 0 until height) {
-                    val nIdx = ny * width + nx
-                    if (!visited[nIdx]) {
-                        visited[nIdx] = true
-                        if (isWhiteCardPixel(bitmap.getPixel(nx, ny))) {
-                            queue.add(Pair(nx, ny))
-                        }
-                    }
-                }
-            }
-        }
-        val rect = android.graphics.Rect(minX, minY, maxX, maxY)
-        return android.graphics.Rect(
-            maxOf(0, rect.left - 1),
-            maxOf(0, rect.top - 1),
-            minOf(width, rect.right + 1),
-            minOf(height, rect.bottom + 1)
-        )
-    }
-
-    private fun detectSuitInCard(bitmap: Bitmap): Suit {
-        var rC = 0; var gC = 0; var bC = 0; var blkC = 0
-        val w = bitmap.width
-        val h = bitmap.height
-        
-        // Sample in the suit area
-        for (x in (w * 0.05).toInt() until (w * 0.95).toInt() step 2) {
-            for (y in (h * 0.2).toInt() until (h * 0.95).toInt() step 2) {
-                val p = bitmap.getPixel(x, y)
-                val r = android.graphics.Color.red(p)
-                val g = android.graphics.Color.green(p)
-                val b = android.graphics.Color.blue(p)
-                
-                if (r > 150 && r > g + 70 && r > b + 70) rC++
-                else if (g > 130 && g > r + 60 && g > b + 50) gC++
-                else if (b > 120 && b > r + 60 && b > g + 15) bC++
-                else if (r < 80 && g < 80 && b < 80) blkC++
-            }
-        }
-        
-        return when {
-            rC > gC && rC > bC && rC > 3 -> Suit.HEARTS
-            gC > rC && gC > bC && gC > 3 -> Suit.CLUBS
-            bC > rC && bC > gC && bC > 3 -> Suit.DIAMONDS
-            else -> Suit.SPADES
-        }
-    }
 
     private fun matchRank(text: String): Rank? {
         val t = text.uppercase(java.util.Locale.US).replace(" ", "").replace("|", "I").replace("(", "").replace(")", "").replace(":", "").trim()
