@@ -1284,13 +1284,17 @@ class PokerHudService : Service() {
             }
             launch {
                 PokerHudSharedState.uiState.collect { state ->
-                    val cards = state.board.filterNotNull()
-                    if (cards.isNotEmpty()) {
-                        txtCardsInfo.text = cards.joinToString(" ") { "${it.rank.symbol}${it.suit.symbol}" }
-                        txtCardsInfo.setTextColor(AndroidColor.parseColor("#FF2196F3"))
-                    } else {
-                        txtCardsInfo.text = "NOT FOUND"
-                        txtCardsInfo.setTextColor(AndroidColor.GRAY)
+                    try {
+                        val cards = state.board.filterNotNull()
+                        if (cards.isNotEmpty()) {
+                            txtCardsInfo.text = cards.joinToString(" ") { "${it.rank.symbol}${it.suit.symbol}" }
+                            txtCardsInfo.setTextColor(AndroidColor.parseColor("#FF2196F3"))
+                        } else {
+                            txtCardsInfo.text = "NOT FOUND"
+                            txtCardsInfo.setTextColor(AndroidColor.GRAY)
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("PokerHudService", "Error in commOverlay collect", e)
                     }
                 }
             }
@@ -1437,12 +1441,16 @@ class PokerHudService : Service() {
             }
             launch {
                 PokerHudSharedState.uiState.collect { state ->
-                    if (state.heroCard1 != null && state.heroCard2 != null) {
-                        txtCardsInfo.text = "${state.heroCard1.rank.symbol}${state.heroCard1.suit.symbol} ${state.heroCard2.rank.symbol}${state.heroCard2.suit.symbol}"
-                        txtCardsInfo.setTextColor(AndroidColor.parseColor("#4CAF50"))
-                    } else {
-                        txtCardsInfo.text = "NOT FOUND"
-                        txtCardsInfo.setTextColor(AndroidColor.GRAY)
+                    try {
+                        if (state.heroCard1 != null && state.heroCard2 != null) {
+                            txtCardsInfo.text = "${state.heroCard1.rank.symbol}${state.heroCard1.suit.symbol} ${state.heroCard2.rank.symbol}${state.heroCard2.suit.symbol}"
+                            txtCardsInfo.setTextColor(AndroidColor.parseColor("#4CAF50"))
+                        } else {
+                            txtCardsInfo.text = "NOT FOUND"
+                            txtCardsInfo.setTextColor(AndroidColor.GRAY)
+                        }
+                    } catch(e: Exception) {
+                        android.util.Log.e("PokerHudService", "Error in holeOverlay collect", e)
                     }
                 }
             }
@@ -1530,7 +1538,7 @@ class PokerHudService : Service() {
             setTextColor(AndroidColor.parseColor("#FF00FFCC")) // Neon Greenish Cyan
             textSize = 9f
             typeface = Typeface.DEFAULT_BOLD
-            setShadowLayer(12f, 0f, 0f, AndroidColor.parseColor("#BBFF00FFCC"))
+            setShadowLayer(12f, 0f, 0f, AndroidColor.parseColor("#BB00FFCC"))
         }
         val txtHeroCards = TextView(this).apply {
             text = "Карты: --"
@@ -1627,10 +1635,7 @@ class PokerHudService : Service() {
         } catch (e: Exception) {}
 
         probsJob?.cancel()
-        val job = Job()
-        probsJob = job
-        
-        serviceScope.launch(job) {
+        probsJob = serviceScope.launch {
             launch {
                 combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
                     scanning && !interacting
@@ -1648,168 +1653,172 @@ class PokerHudService : Service() {
             var lastAdvRecommendation: Recommendation? = null
 
             PokerHudSharedState.uiState.collect { state ->
-                // 1. Update Probabilities & Cards
-                val res = state.simulationResult
-                val advRes = state.advancedSimulationResult
-                val heroCardsChanged = state.heroCard1 != lastHero1 || state.heroCard2 != lastHero2
-                val boardChanged = state.board != lastBoard
-                val simResultChanged = res != lastSimulationResult || advRes != lastAdvSimulationResult
-                val opponentsChanged = state.opponents != lastOpponents
-                val rec = state.recommendation
-                val advRec = state.advancedRecommendation
-                val recommendationChanged = rec != lastRecommendation || advRec != lastAdvRecommendation
+                try {
+                    // 1. Update Probabilities & Cards
+                    val res = state.simulationResult
+                    val advRes = state.advancedSimulationResult
+                    val heroCardsChanged = state.heroCard1 != lastHero1 || state.heroCard2 != lastHero2
+                    val boardChanged = state.board != lastBoard
+                    val simResultChanged = res != lastSimulationResult || advRes != lastAdvSimulationResult
+                    val opponentsChanged = state.opponents != lastOpponents
+                    val rec = state.recommendation
+                    val advRec = state.advancedRecommendation
+                    val recommendationChanged = rec != lastRecommendation || advRec != lastAdvRecommendation
 
-                if (heroCardsChanged || boardChanged || simResultChanged) {
-                    if (state.heroCard1 == null || state.heroCard2 == null) {
-                        txtWin.text = "Победа: 0.0%"
-                        txtAdvWin.text = "Победа (L3): 0.0%"
-                        txtHeroCards.text = "Карты: --"
-                        txtBoardCards.text = "Борд: --"
-                        txtHandRank.text = "Комбо: --"
-                    } else {
-                        if (res != null) {
-                            val combinedWin = res.heroWinPct + res.heroTiePct
-                            txtWin.text = String.format(Locale.US, "Победа: %.1f%%", combinedWin)
+                    if (heroCardsChanged || boardChanged || simResultChanged) {
+                        if (state.heroCard1 == null || state.heroCard2 == null) {
+                            txtWin.text = "Победа: 0.0%"
+                            txtAdvWin.text = "Победа (L3): 0.0%"
+                            txtHeroCards.text = "Карты: --"
+                            txtBoardCards.text = "Борд: --"
+                            txtHandRank.text = "Комбо: --"
                         } else {
-                            txtWin.text = "Победа: Ждем..."
-                        }
+                            if (res != null) {
+                                val combinedWin = res.heroWinPct + res.heroTiePct
+                                txtWin.text = String.format(Locale.US, "Победа: %.1f%%", combinedWin)
+                            } else {
+                                txtWin.text = "Победа: Ждем..."
+                            }
 
-                        if (advRes != null) {
-                            val combinedWin = advRes.heroWinPct + advRes.heroTiePct
-                            txtAdvWin.text = String.format(Locale.US, "Победа (L3): %.1f%%", combinedWin)
-                        } else {
-                            txtAdvWin.text = "Победа (L3): Ждем..."
-                        }
-                        
-                        txtHeroCards.text = android.text.Html.fromHtml("Карты: ${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}", android.text.Html.FROM_HTML_MODE_LEGACY)
-                        
-                        val boardStr = state.board.filterNotNull().joinToString(" ") { it.toHtmlString() }
-                        txtBoardCards.text = if (boardStr.isEmpty()) "Борд: --" 
-                                               else android.text.Html.fromHtml("Борд: $boardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
-    
-                        // Hand evaluation
-                        val allVisible = (listOf(state.heroCard1, state.heroCard2) + state.board).filterNotNull()
-                        if (allVisible.size >= 5) {
-                            val bestHand = HandEvaluator.findBest5CardHand(allVisible)
-                            txtHandRank.text = "Комбо: ${bestHand.category.displayNameRu}"
-                        } else if (allVisible.size >= 2 && state.board.none { it != null }) {
-                            txtHandRank.text = "Комбо: Пре-флоп"
-                        } else {
-                            val partialHand = HandEvaluator.findBestHand(allVisible)
-                            txtHandRank.text = if (allVisible.isEmpty()) "Комбо: --" else "Комбо: ${partialHand.category.displayNameRu}"
-                        }
-                    }
-                }
-
-                if (heroCardsChanged || opponentsChanged) {
-                    if (state.heroCard1 != null && state.heroCard2 != null) {
-                        val groupNum = AdvisorEngine.getSklanskyGroup(state.heroCard1, state.heroCard2)
-                        
-                        // Find the target opponent for range comparison
-                        val mainOpp = state.opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
-                        val vpip = mainOpp?.stats?.histVpip ?: mainOpp?.stats?.vpip ?: 100f
-                        val sRange = AdvisorEngine.getSklanskyRangeForVpip(vpip)
-                        
-                        txtSklan.text = "Группа: $groupNum | Диапазон: 1-$sRange"
-                        
-                        val strengthDesc = when (groupNum) {
-                            1, 2 -> "Топ (1/20)"
-                            3, 4 -> "Высокая (4/20)"
-                            5, 6 -> "Средняя (8/20)"
-                            else -> "Слабая (14/20)"
-                        }
-                        
-                        val relativePos = if (groupNum <= sRange) "Впереди диапазона" else "Позади диапазона"
-                        txtStrength.text = "Сила: $strengthDesc ($relativePos)"
-                    } else {
-                        txtSklan.text = "Группа: [Нет карт]"
-                        txtStrength.text = "Сила: --"
-                    }
-                }
-                
-                if (recommendationChanged) {
-                    // Update original recommendation
-                    if (rec != null) {
-                        val actName = translateAction(rec.action)
-                        txtAdvisor.text = "Совет: $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)})"
-                        setRecommendationColor(txtAdvisor, rec.action)
-                    } else {
-                        txtAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "Совет: Ждем..." else "Совет: Введите карты"
-                        txtAdvisor.setTextColor(AndroidColor.parseColor("#FFFFD54F"))
-                    }
-
-                    // Update advanced recommendation
-                    if (advRec != null) {
-                        val actName = translateAction(advRec.action)
-                        txtAdvAdvisor.text = "Совет (L3): $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)})"
-                        setRecommendationColor(txtAdvAdvisor, advRec.action)
-                    } else {
-                        txtAdvAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "Совет (L3): Ждем..." else ""
-                        txtAdvAdvisor.setTextColor(AndroidColor.parseColor("#FF00FFCC"))
-                    }
-                }
-
-                if (opponentsChanged) {
-                    val sb = StringBuilder()
-                    val activeOpps = state.opponents.filter { it.isActive }
-                    if (activeOpps.isEmpty()) {
-                        sb.append("No active opponents tracked.")
-                    } else {
-                        activeOpps.forEachIndexed { index, opp ->
-                            val prefix = if (index > 0) "\n" else ""
-                            val nameToShow = if (opp.nickname.length > 10) opp.nickname.take(9) + ".." else opp.nickname
-                            val actStr = if (opp.currentAction != "NONE") " (${opp.currentAction})" else ""
-                            val balanceStr = if (opp.stackSize > 0) " \$${opp.stackSize}" else ""
-                            val betStr = if (opp.betSize > 0) " Bet: \$${opp.betSize}" else ""
+                            if (advRes != null) {
+                                val combinedWin = advRes.heroWinPct + advRes.heroTiePct
+                                txtAdvWin.text = String.format(Locale.US, "Победа (L3): %.1f%%", combinedWin)
+                            } else {
+                                txtAdvWin.text = "Победа (L3): Ждем..."
+                            }
                             
-                            val vpipVal = opp.stats?.vpip?.toInt() ?: 0
-                            val pfrVal = opp.stats?.pfr?.toInt() ?: 0
-                            val hands = opp.stats?.handsPlayed ?: 0
+                            txtHeroCards.text = android.text.Html.fromHtml("Карты: ${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}", android.text.Html.FROM_HTML_MODE_LEGACY)
                             
-                            sb.append("${prefix}${nameToShow}${actStr}${balanceStr}${betStr}")
-                            if (hands > 0 || vpipVal > 0 || pfrVal > 0) {
-                                 sb.append(" | VPIP:${vpipVal}% PFR:${pfrVal}%")
+                            val boardStr = state.board.filterNotNull().joinToString(" ") { it.toHtmlString() }
+                            txtBoardCards.text = if (boardStr.isEmpty()) "Борд: --" 
+                                                   else android.text.Html.fromHtml("Борд: $boardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
+
+                            // Hand evaluation
+                            val allVisible = (listOf(state.heroCard1, state.heroCard2) + state.board).filterNotNull()
+                            if (allVisible.size >= 5) {
+                                val bestHand = HandEvaluator.findBest5CardHand(allVisible)
+                                txtHandRank.text = "Комбо: ${bestHand.category.displayNameRu}"
+                            } else if (allVisible.size >= 2 && state.board.none { it != null }) {
+                                txtHandRank.text = "Комбо: Пре-флоп"
+                            } else {
+                                val partialHand = HandEvaluator.findBestHand(allVisible)
+                                txtHandRank.text = if (allVisible.isEmpty()) "Комбо: --" else "Комбо: ${partialHand.category.displayNameRu}"
                             }
                         }
                     }
-                    oppStatsTxt.text = sb.toString()
+
+                    if (heroCardsChanged || opponentsChanged) {
+                        if (state.heroCard1 != null && state.heroCard2 != null) {
+                            val groupNum = AdvisorEngine.getSklanskyGroup(state.heroCard1, state.heroCard2)
+                            
+                            // Find the target opponent for range comparison
+                            val mainOpp = state.opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
+                            val vpip = mainOpp?.stats?.histVpip ?: mainOpp?.stats?.vpip ?: 100f
+                            val sRange = AdvisorEngine.getSklanskyRangeForVpip(vpip)
+                            
+                            txtSklan.text = "Группа: $groupNum | Диапазон: 1-$sRange"
+                            
+                            val strengthDesc = when (groupNum) {
+                                1, 2 -> "Топ (1/20)"
+                                3, 4 -> "Высокая (4/20)"
+                                5, 6 -> "Средняя (8/20)"
+                                else -> "Слабая (14/20)"
+                            }
+                            
+                            val relativePos = if (groupNum <= sRange) "Впереди диапазона" else "Позади диапазона"
+                            txtStrength.text = "Сила: $strengthDesc ($relativePos)"
+                        } else {
+                            txtSklan.text = "Группа: [Нет карт]"
+                            txtStrength.text = "Сила: --"
+                        }
+                    }
+                    
+                    if (recommendationChanged) {
+                        // Update original recommendation
+                        if (rec != null) {
+                            val actName = translateAction(rec.action)
+                            txtAdvisor.text = "Совет: $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)})"
+                            setRecommendationColor(txtAdvisor, rec.action)
+                        } else {
+                            txtAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "Совет: Ждем..." else "Совет: Введите карты"
+                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FFFFD54F"))
+                        }
+
+                        // Update advanced recommendation
+                        if (advRec != null) {
+                            val actName = translateAction(advRec.action)
+                            txtAdvAdvisor.text = "Совет (L3): $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)})"
+                            setRecommendationColor(txtAdvAdvisor, advRec.action)
+                        } else {
+                            txtAdvAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "Совет (L3): Ждем..." else ""
+                            txtAdvAdvisor.setTextColor(AndroidColor.parseColor("#FF00FFCC"))
+                        }
+                    }
+
+                    if (opponentsChanged) {
+                        val sb = StringBuilder()
+                        val activeOpps = state.opponents.filter { it.isActive }
+                        if (activeOpps.isEmpty()) {
+                            sb.append("No active opponents tracked.")
+                        } else {
+                            activeOpps.forEachIndexed { index, opp ->
+                                val prefix = if (index > 0) "\n" else ""
+                                val nameToShow = if (opp.nickname.length > 10) opp.nickname.take(9) + ".." else opp.nickname
+                                val actStr = if (opp.currentAction != "NONE") " (${opp.currentAction})" else ""
+                                val balanceStr = if (opp.stackSize > 0) " \$${opp.stackSize}" else ""
+                                val betStr = if (opp.betSize > 0) " Bet: \$${opp.betSize}" else ""
+                                
+                                val vpipVal = opp.stats?.vpip?.toInt() ?: 0
+                                val pfrVal = opp.stats?.pfr?.toInt() ?: 0
+                                val hands = opp.stats?.handsPlayed ?: 0
+                                
+                                sb.append("${prefix}${nameToShow}${actStr}${balanceStr}${betStr}")
+                                if (hands > 0 || vpipVal > 0 || pfrVal > 0) {
+                                     sb.append(" | VPIP:${vpipVal}% PFR:${pfrVal}%")
+                                }
+                            }
+                        }
+                        oppStatsTxt.text = sb.toString()
+                    }
+                    
+                    lastHero1 = state.heroCard1
+                    lastHero2 = state.heroCard2
+                    lastBoard = state.board
+                    lastSimulationResult = res
+                    lastAdvSimulationResult = advRes
+                    lastOpponents = state.opponents
+                    lastRecommendation = rec
+                    lastAdvRecommendation = advRec
+                } catch (e: Exception) {
+                    android.util.Log.e("PokerHudService", "Error inside HUD uiState catch", e)
                 }
-                
-                lastHero1 = state.heroCard1
-                lastHero2 = state.heroCard2
-                lastBoard = state.board
-                lastSimulationResult = res
-                lastAdvSimulationResult = advRes
-                lastOpponents = state.opponents
-                lastRecommendation = rec
-                lastAdvRecommendation = advRec
             }
         }
         
-        serviceScope.launch(job) {
+        serviceScope.launch(probsJob!!) {
             PokerHudSharedState.winProbToggle.collect { isVisible ->
                 txtWin.visibility = if (isVisible) View.VISIBLE else View.GONE
                 txtAdvWin.visibility = if (isVisible) View.VISIBLE else View.GONE
             }
         }
-        serviceScope.launch(job) {
+        serviceScope.launch(probsJob!!) {
             PokerHudSharedState.handStrengthToggle.collect { isVisible ->
                 txtStrength.visibility = if (isVisible) View.VISIBLE else View.GONE
             }
         }
-        serviceScope.launch(job) {
+        serviceScope.launch(probsJob!!) {
             PokerHudSharedState.sklanskyToggle.collect { isVisible ->
                 txtSklan.visibility = if (isVisible) View.VISIBLE else View.GONE
             }
         }
-        serviceScope.launch(job) {
+        serviceScope.launch(probsJob!!) {
             PokerHudSharedState.showActionAdvisor.collect { isVisible ->
                 advDivider.visibility = if (isVisible) View.VISIBLE else View.GONE
                 txtAdvisor.visibility = if (isVisible) View.VISIBLE else View.GONE
                 txtAdvAdvisor.visibility = if (isVisible) View.VISIBLE else View.GONE
             }
         }
-        serviceScope.launch(job) {
+        serviceScope.launch(probsJob!!) {
             PokerHudSharedState.advStatsToggle.collect { isVisible ->
                 oppDivider.visibility = if (isVisible) View.VISIBLE else View.GONE
                 txtOppHeader.visibility = if (isVisible) View.VISIBLE else View.GONE
@@ -1817,22 +1826,22 @@ class PokerHudService : Service() {
             }
         }
         
-        serviceScope.launch(job) {
+        serviceScope.launch(probsJob!!) {
             PokerHudSharedState.winProbScale.collect { scale -> txtWin.textSize = 8f * scale }
         }
-        serviceScope.launch(job) {
+        serviceScope.launch(probsJob!!) {
             PokerHudSharedState.handStrengthScale.collect { scale -> txtStrength.textSize = 8f * scale }
         }
-        serviceScope.launch(job) {
+        serviceScope.launch(probsJob!!) {
             PokerHudSharedState.sklanskyScale.collect { scale -> txtSklan.textSize = 8f * scale }
         }
-        serviceScope.launch(job) {
+        serviceScope.launch(probsJob!!) {
             PokerHudSharedState.actionAdvisorScale.collect { scale -> 
                 txtAdvisor.textSize = 8f * scale
                 txtAdvAdvisor.textSize = 8f * scale
             }
         }
-        serviceScope.launch(job) {
+        serviceScope.launch(probsJob!!) {
             PokerHudSharedState.advStatsScale.collect { scale -> oppStatsTxt.textSize = 9f * scale }
         }
     }
