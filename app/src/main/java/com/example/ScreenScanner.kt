@@ -148,67 +148,69 @@ class ScreenScanner(
             
             val currentState = PokerHudSharedState.uiState.value
 
-            // 1. COMBINED CARDS OCR (Island-based strategy)
-            val cardOCRTask = scope.async {
-                val foundComm = mutableListOf<Card>()
-                val foundHole = mutableListOf<Card>()
+            // 1. RUN FULL SCREEN OCR
+            val inputImage = InputImage.fromBitmap(cleanBitmap!!, 0)
+            val result = recognizer.process(inputImage).await()
+
+            // 2. EXTRACT CARDS BY SCALED CROP
+            val bitmapRect = android.graphics.Rect(0, 0, cleanBitmap!!.width, cleanBitmap!!.height)
+            
+            val commIntersect = android.graphics.Rect(commRect)
+            val isCommValid = commIntersect.intersect(bitmapRect)
+            val commCrop = if (isCommValid && commIntersect.width() > 20 && commIntersect.height() > 20) {
+                try { Bitmap.createBitmap(cleanBitmap!!, commIntersect.left, commIntersect.top, commIntersect.width(), commIntersect.height()) } catch(e: Exception) { null }
+            } else null
+
+            val holeIntersect = android.graphics.Rect(holeRect)
+            val isHoleValid = holeIntersect.intersect(bitmapRect)
+            val holeCrop = if (isHoleValid && holeIntersect.width() > 20 && holeIntersect.height() > 20) {
+                try { Bitmap.createBitmap(cleanBitmap!!, holeIntersect.left, holeIntersect.top, holeIntersect.width(), holeIntersect.height()) } catch(e: Exception) { null }
+            } else null
+            
+            suspend fun scanBox(crop: Bitmap?, out: MutableList<Card>) {
+                if (crop == null || crop.width == 0 || crop.height == 0) return
+                val maxScaledWidth = 1200f
+                val scale = minOf(3.0f, maxScaledWidth / crop.width.toFloat()) 
+                val scaledSizeW = (crop.width * scale).toInt()
+                val scaledSizeH = (crop.height * scale).toInt()
+                if (scaledSizeW <= 0 || scaledSizeH <= 0) return
                 
-                val commCrop = if (commRect.width() > 20 && commRect.height() > 20) {
-                    try { Bitmap.createBitmap(cleanBitmap!!, maxOf(0, commRect.left), maxOf(0, commRect.top), minOf(cleanBitmap.width - commRect.left, commRect.width()), minOf(cleanBitmap.height - commRect.top, commRect.height())) } catch(e: Exception) { null }
-                } else null
-
-                val holeCrop = if (holeRect.width() > 20 && holeRect.height() > 20) {
-                    try { Bitmap.createBitmap(cleanBitmap!!, maxOf(0, holeRect.left), maxOf(0, holeRect.top), minOf(cleanBitmap.width - holeRect.left, holeRect.width()), minOf(cleanBitmap.height - holeRect.top, holeRect.height())) } catch(e: Exception) { null }
-                } else null
-
-                suspend fun scanBox(crop: Bitmap?, out: MutableList<Card>) {
-                    if (crop == null) return
-                    // Use ML Kit Text Recognition on the cropped box directly (similar to profile scanner)
-                    val scale = 3.0f // Scale up for better OCR on small card ranks
-                    val scaled = Bitmap.createScaledBitmap(crop, (crop.width * scale).toInt(), (crop.height * scale).toInt(), true)
-                    val input = InputImage.fromBitmap(scaled, 0)
-                    val result = recognizer.process(input).await()
-                    
-                    var sortedElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
-                    
-                    for (block in result.textBlocks) {
-                        for (line in block.lines) {
-                            for (element in line.elements) {
-                                sortedElements.add(element)
-                            }
+                val scaled = Bitmap.createScaledBitmap(crop, scaledSizeW, scaledSizeH, true)
+                val inputCropImage = InputImage.fromBitmap(scaled, 0)
+                val cropResult = recognizer.process(inputCropImage).await()
+                
+                var sortedElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
+                for (block in cropResult.textBlocks) {
+                    for (line in block.lines) {
+                        for (element in line.elements) {
+                            sortedElements.add(element)
                         }
                     }
-                    
-                    // Sort elements left to right
-                    sortedElements.sortBy { it.boundingBox?.left ?: 0 }
-
-                    for (element in sortedElements) {
-                        val parsedRanks = findCardsInText(element.text)
-                        val box = element.boundingBox ?: continue
-                        for (rank in parsedRanks) {
-                            val suit = robustDetectSuit(crop, (box.centerX() / scale).toInt(), (box.centerY() / scale).toInt())
-                            out.add(Card(rank, suit))
-                        }
-                    }
-                    scaled.recycle()
                 }
+                sortedElements.sortBy { it.boundingBox?.left ?: 0 }
 
-                scanBox(commCrop, foundComm)
-                scanBox(holeCrop, foundHole)
-                
-                commCrop?.recycle(); holeCrop?.recycle()
-                Pair(foundComm.distinct(), foundHole.distinct())
+                for (element in sortedElements) {
+                    val parsedRanks = findCardsInText(element.text)
+                    val box = element.boundingBox ?: continue
+                    for (rank in parsedRanks) {
+                        val suit = robustDetectSuit(crop, (box.centerX() / scale).toInt(), (box.centerY() / scale).toInt())
+                        out.add(Card(rank, suit))
+                    }
+                }
+                scaled.recycle()
             }
 
-            // 2. FULL SCREEN EXTENSION (for opponents/names)
-            val fullScreenTask = scope.async {
-                val inputImage = InputImage.fromBitmap(cleanBitmap!!, 0)
-                recognizer.process(inputImage).await()
-            }
+            val tempCommCards = mutableListOf<Card>()
+            val tempHoleCards = mutableListOf<Card>()
+            
+            scanBox(commCrop, tempCommCards)
+            scanBox(holeCrop, tempHoleCards)
+            
+            commCrop?.recycle()
+            holeCrop?.recycle()
 
-            // 3. WAIT AND PERSIST
-            val (foundCommCards, foundHoleCards) = cardOCRTask.await()
-            val result = fullScreenTask.await()
+            val foundCommCards = tempCommCards.distinct()
+            val foundHoleCards = tempHoleCards.distinct()
 
             if (foundHoleCards.isEmpty()) consecutiveEmptyHole++ else consecutiveEmptyHole = 0
             if (foundCommCards.isEmpty()) consecutiveEmptyComm++ else consecutiveEmptyComm = 0
