@@ -1540,16 +1540,16 @@ class PokerHudService : Service() {
         val txtWin = TextView(this).apply {
             text = "Победа: 0.0%"
             setTextColor(AndroidColor.parseColor("#00FFC8")) // Neon Cyan
-            textSize = 10f
+            textSize = 9f
             typeface = Typeface.DEFAULT_BOLD
-            setShadowLayer(18f, 0f, 0f, AndroidColor.parseColor("#EE00FFC8")) // Maximum neon glow
+            setShadowLayer(12f, 0f, 0f, AndroidColor.parseColor("#BB00FFC8")) // Distinct neon glow
         }
         val txtAdvWin = TextView(this).apply {
             text = "Победа (L3): 0.0%"
             setTextColor(AndroidColor.parseColor("#FF00FFCC")) // Neon Greenish Cyan
-            textSize = 10f
+            textSize = 9f
             typeface = Typeface.DEFAULT_BOLD
-            setShadowLayer(18f, 0f, 0f, AndroidColor.parseColor("#EE00FFCC"))
+            setShadowLayer(12f, 0f, 0f, AndroidColor.parseColor("#BB00FFCC"))
         }
         val txtHeroCards = TextView(this).apply {
             text = "Карты: --"
