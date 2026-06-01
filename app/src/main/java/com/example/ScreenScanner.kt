@@ -82,7 +82,7 @@ class ScreenScanner(
                     delay(1100) // Slightly slower scan for better UX (less flicker)
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             android.util.Log.e("ScreenScanner", "Error starting scanner", e)
             scanStatus.value = "Scanner start failed: ${e.message}"
             isScanning.value = false
@@ -152,63 +152,47 @@ class ScreenScanner(
             val inputImage = InputImage.fromBitmap(cleanBitmap!!, 0)
             val result = recognizer.process(inputImage).await()
 
-            // 2. EXTRACT CARDS BY SCALED CROP
-            val bitmapRect = android.graphics.Rect(0, 0, cleanBitmap!!.width, cleanBitmap!!.height)
-            
-            val commIntersect = android.graphics.Rect(commRect)
-            val isCommValid = commIntersect.intersect(bitmapRect)
-            val commCrop = if (isCommValid && commIntersect.width() > 20 && commIntersect.height() > 20) {
-                try { Bitmap.createBitmap(cleanBitmap!!, commIntersect.left, commIntersect.top, commIntersect.width(), commIntersect.height()) } catch(e: Exception) { null }
-            } else null
-
-            val holeIntersect = android.graphics.Rect(holeRect)
-            val isHoleValid = holeIntersect.intersect(bitmapRect)
-            val holeCrop = if (isHoleValid && holeIntersect.width() > 20 && holeIntersect.height() > 20) {
-                try { Bitmap.createBitmap(cleanBitmap!!, holeIntersect.left, holeIntersect.top, holeIntersect.width(), holeIntersect.height()) } catch(e: Exception) { null }
-            } else null
-            
-            suspend fun scanBox(crop: Bitmap?, out: MutableList<Card>) {
-                if (crop == null || crop.width == 0 || crop.height == 0) return
-                val maxScaledWidth = 1200f
-                val scale = minOf(3.0f, maxScaledWidth / crop.width.toFloat()) 
-                val scaledSizeW = (crop.width * scale).toInt()
-                val scaledSizeH = (crop.height * scale).toInt()
-                if (scaledSizeW <= 0 || scaledSizeH <= 0) return
-                
-                val scaled = Bitmap.createScaledBitmap(crop, scaledSizeW, scaledSizeH, true)
-                val inputCropImage = InputImage.fromBitmap(scaled, 0)
-                val cropResult = recognizer.process(inputCropImage).await()
-                
-                var sortedElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
-                for (block in cropResult.textBlocks) {
-                    for (line in block.lines) {
-                        for (element in line.elements) {
-                            sortedElements.add(element)
-                        }
-                    }
-                }
-                sortedElements.sortBy { it.boundingBox?.left ?: 0 }
-
-                for (element in sortedElements) {
-                    val parsedRanks = findCardsInText(element.text)
-                    val box = element.boundingBox ?: continue
-                    for (rank in parsedRanks) {
-                        val suit = robustDetectSuit(crop, (box.centerX() / scale).toInt(), (box.centerY() / scale).toInt())
-                        out.add(Card(rank, suit))
-                    }
-                }
-                scaled.recycle()
-            }
-
+            // 2. EXTRACT CARDS BY BOUNDING BOX INTERSECT
             val tempCommCards = mutableListOf<Card>()
             val tempHoleCards = mutableListOf<Card>()
             
-            scanBox(commCrop, tempCommCards)
-            scanBox(holeCrop, tempHoleCards)
-            
-            commCrop?.recycle()
-            holeCrop?.recycle()
+            val commElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
+            val holeElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
 
+            for (block in result.textBlocks) {
+                for (line in block.lines) {
+                    for (element in line.elements) {
+                        val box = element.boundingBox ?: continue
+                        if (commRect.width() > 20 && android.graphics.Rect.intersects(commRect, box)) {
+                            commElements.add(element)
+                        } else if (holeRect.width() > 20 && android.graphics.Rect.intersects(holeRect, box)) {
+                            holeElements.add(element)
+                        }
+                    }
+                }
+            }
+            
+            commElements.sortBy { it.boundingBox?.left ?: 0 }
+            holeElements.sortBy { it.boundingBox?.left ?: 0 }
+
+            for (element in commElements) {
+                val parsedRanks = findCardsInText(element.text)
+                val box = element.boundingBox ?: continue
+                for (rank in parsedRanks) {
+                    val suit = robustDetectSuit(cleanBitmap, box.centerX(), box.centerY())
+                    tempCommCards.add(Card(rank, suit))
+                }
+            }
+            
+            for (element in holeElements) {
+                val parsedRanks = findCardsInText(element.text)
+                val box = element.boundingBox ?: continue
+                for (rank in parsedRanks) {
+                    val suit = robustDetectSuit(cleanBitmap, box.centerX(), box.centerY())
+                    tempHoleCards.add(Card(rank, suit))
+                }
+            }
+            
             val foundCommCards = tempCommCards.distinct()
             val foundHoleCards = tempHoleCards.distinct()
 
@@ -250,7 +234,7 @@ class ScreenScanner(
             scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} Ops:${finalOpponents.size}<br>" +
                                "Board: ${finalBoard.take(5).joinToString("") { it?.toHtmlString() ?: "[?]" }}"
             
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             android.util.Log.e("ScreenScanner", "Process Error", e)
             scanStatus.value = "Scan Error: ${e.message}"
         } finally {

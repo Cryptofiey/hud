@@ -95,7 +95,14 @@ class ScannerBoxesView(context: Context) : View(context) {
             invalidate()
         }
 
+    var isHidden: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     override fun onDraw(canvas: Canvas) {
+        if (isHidden) return
         super.onDraw(canvas)
 
         val w = width.toFloat()

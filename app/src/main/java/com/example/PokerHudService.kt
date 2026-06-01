@@ -763,10 +763,7 @@ class PokerHudService : Service() {
         }
 
         // 5c. LISTEN TO CALIBRATION BOX TOGGLES FOR OVERLAYS
-        serviceScope.launch { PokerHudSharedState.showCommBox.collect { updateBoxOverlays() } }
-        serviceScope.launch { PokerHudSharedState.showHoleBox.collect { updateBoxOverlays() } }
-        serviceScope.launch { PokerHudSharedState.showProbsBox.collect { updateBoxOverlays() } }
-        serviceScope.launch { PokerHudSharedState.showScannerBoxes.collect { updateBoxOverlays() } }
+        // (Removed redundant separate collectors since they are handled via combine operator above)
 
         // 6. OBSERVE PROGRAMMATIC CONTROL COMMANDS VIA BROADCASTS (e.g. from Termux scripts)
         var backgroundSimulationJob: kotlinx.coroutines.Job? = null
@@ -989,14 +986,6 @@ class PokerHudService : Service() {
                 }
             }
         }
-        floatingScannerOverlay?.let { v ->
-            if (v.visibility == View.VISIBLE) {
-                val params = v.layoutParams as? WindowManager.LayoutParams
-                if (params != null) {
-                    rects.add(android.graphics.Rect(params.x, params.y, params.x + v.width, params.y + v.height))
-                }
-            }
-        }
         return rects
     }
 
@@ -1097,76 +1086,76 @@ class PokerHudService : Service() {
     }
 
     private fun animScanLaser(laserLine: View, heightPx: Int): ValueAnimator {
-        return ValueAnimator.ofInt(0, heightPx - dpToPx(3f)).apply {
+        return ValueAnimator.ofFloat(0f, (heightPx - dpToPx(3f)).toFloat()).apply {
             duration = 1500
             repeatMode = ValueAnimator.REVERSE
             repeatCount = ValueAnimator.INFINITE
             addUpdateListener { animator ->
-                val value = animator.animatedValue as Int
-                val lp = laserLine.layoutParams as FrameLayout.LayoutParams
-                lp.topMargin = value
-                laserLine.layoutParams = lp
+                val value = animator.animatedValue as Float
+                laserLine.translationY = value
             }
         }
     }
 
     private fun showScannerOutlinesOverlay() {
-        if (floatingScannerOverlay == null) {
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                } else {
-                    @Suppress("DEPRECATION")
-                    WindowManager.LayoutParams.TYPE_PHONE
-                },
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                android.graphics.PixelFormat.TRANSLUCENT
-            )
-            val view = ScannerBoxesView(this)
-            try {
-                windowManager?.addView(view, params)
-                floatingScannerOverlay = view
-            } catch (e: Exception) {
-                Log.e("PokerHudService", "Failed to add scanner outlines overlay view: ${e.message}", e)
+        if (floatingScannerOverlay != null) return
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            android.graphics.PixelFormat.TRANSLUCENT
+        )
+        val view = ScannerBoxesView(this)
+        try {
+            windowManager?.addView(view, params)
+            floatingScannerOverlay = view
+        } catch (e: Throwable) {
+            Log.e("PokerHudService", "Failed to add scanner outlines overlay view: ${e.message}", e)
+        }
+        
+        scannerOverlayJob?.cancel()
+        scannerOverlayJob = serviceScope.launch {
+            launch {
+                PokerHudSharedState.uiState.collect { state ->
+                    floatingScannerOverlay?.state = state
+                }
             }
-            
-            scannerOverlayJob?.cancel()
-            scannerOverlayJob = serviceScope.launch {
-                launch {
-                    PokerHudSharedState.uiState.collect { state ->
-                        floatingScannerOverlay?.state = state
-                    }
+            launch {
+                PokerHudSharedState.scannerOffsetX.collect { dx ->
+                    floatingScannerOverlay?.offsetX = dx
                 }
-                launch {
-                    PokerHudSharedState.scannerOffsetX.collect { dx ->
-                        floatingScannerOverlay?.offsetX = dx
-                    }
+            }
+            launch {
+                PokerHudSharedState.scannerOffsetY.collect { dy ->
+                    floatingScannerOverlay?.offsetY = dy
                 }
-                launch {
-                    PokerHudSharedState.scannerOffsetY.collect { dy ->
-                        floatingScannerOverlay?.offsetY = dy
-                    }
-                }
-                launch {
-                    combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
-                        scanning && !interacting
-                    }.collect { hide ->
-                        floatingScannerOverlay?.visibility = if (hide) View.GONE else View.VISIBLE
-                    }
+            }
+            launch {
+                combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
+                    scanning && !interacting
+                }.collect { hide ->
+                    floatingScannerOverlay?.isHidden = hide
                 }
             }
         }
-        floatingScannerOverlay?.visibility = View.VISIBLE
+        floatingScannerOverlay?.isHidden = false
     }
 
     private fun hideScannerOutlinesOverlay() {
         scannerOverlayJob?.cancel()
         scannerOverlayJob = null
-        floatingScannerOverlay?.visibility = View.GONE
+        floatingScannerOverlay?.let {
+            try { windowManager?.removeView(it) } catch (ignored: Throwable) {}
+        }
+        floatingScannerOverlay = null
     }
 
     private fun showCommOverlay() {
@@ -1281,6 +1270,7 @@ class PokerHudService : Service() {
 
         commLaserAnim?.cancel()
         val anim = animScanLaser(laserLine, dpToPx(115f))
+        anim.start()
         commLaserAnim = anim
 
         commJob?.cancel()
@@ -1289,12 +1279,7 @@ class PokerHudService : Service() {
                 combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
                     scanning && !interacting
                 }.collect { hide ->
-                    frame.visibility = if (hide) View.INVISIBLE else View.VISIBLE
-                    if (hide) {
-                        try { anim.start() } catch (ignored: Exception) {}
-                    } else {
-                        try { anim.cancel() } catch (ignored: Exception) {}
-                    }
+                    frame.alpha = if (hide) 0f else 1f
                 }
             }
             launch {
@@ -1438,6 +1423,7 @@ class PokerHudService : Service() {
 
         holeLaserAnim?.cancel()
         val anim = animScanLaser(laserLine, dpToPx(90f))
+        anim.start()
         holeLaserAnim = anim
 
         holeJob?.cancel()
@@ -1446,12 +1432,7 @@ class PokerHudService : Service() {
                 combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
                     scanning && !interacting
                 }.collect { hide ->
-                    frame.visibility = if (hide) View.INVISIBLE else View.VISIBLE
-                    if (hide) {
-                        try { anim.start() } catch (ignored: Exception) {}
-                    } else {
-                        try { anim.cancel() } catch (ignored: Exception) {}
-                    }
+                    frame.alpha = if (hide) 0f else 1f
                 }
             }
             launch {
@@ -1654,7 +1635,7 @@ class PokerHudService : Service() {
                 combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
                     scanning && !interacting
                 }.collect { hide ->
-                    frame.visibility = if (hide) View.GONE else View.VISIBLE
+                    frame.alpha = if (hide) 0f else 1f
                 }
             }
             var lastHero1: Card? = null

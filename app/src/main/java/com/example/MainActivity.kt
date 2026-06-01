@@ -106,12 +106,24 @@ class MainActivity : ComponentActivity() {
 
     fun requestScreenCapture() {
         if (ScannerConfig.isProjectionGranted.value) return
-        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        mediaProjectionLauncher.launch(projectionManager.createScreenCaptureIntent())
+        try {
+            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            mediaProjectionLauncher.launch(projectionManager.createScreenCaptureIntent())
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Screen capture not supported", e)
+            android.widget.Toast.makeText(this, "Screen capture not supported on this device.", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("AndroidRuntime", "FATAL UNCAUGHT EXCEPTION in thread ${thread.name}", throwable)
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+        
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
