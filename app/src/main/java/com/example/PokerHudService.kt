@@ -1012,13 +1012,13 @@ class PokerHudService : Service() {
     fun getCommRect(): android.graphics.Rect {
         val view = floatingCommOverlay ?: return android.graphics.Rect(0, 0, 0, 0)
         val params = view.layoutParams as? WindowManager.LayoutParams ?: return android.graphics.Rect(0, 0, 0, 0)
-        return android.graphics.Rect(params.x, params.y, params.x + view.width, params.y + view.height)
+        return android.graphics.Rect(params.x, params.y, params.x + params.width, params.y + params.height)
     }
 
     fun getHoleRect(): android.graphics.Rect {
         val view = floatingHoleOverlay ?: return android.graphics.Rect(0, 0, 0, 0)
         val params = view.layoutParams as? WindowManager.LayoutParams ?: return android.graphics.Rect(0, 0, 0, 0)
-        return android.graphics.Rect(params.x, params.y, params.x + view.width, params.y + view.height)
+        return android.graphics.Rect(params.x, params.y, params.x + params.width, params.y + params.height)
     }
 
     private fun setupDragListener(view: View, params: WindowManager.LayoutParams) {
@@ -1063,6 +1063,7 @@ class PokerHudService : Service() {
         resizeHandle.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    notifyInteraction()
                     initialWidth = containerFrame.width
                     initialHeight = containerFrame.height
                     initialTouchX = event.rawX
@@ -1282,7 +1283,6 @@ class PokerHudService : Service() {
                 combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
                     scanning && !interacting
                 }.collect { hide ->
-                    laserLine.visibility = View.GONE
                     frame.visibility = if (hide) View.GONE else View.VISIBLE
                     if (hide) {
                         try { anim.start() } catch (ignored: Exception) {}
@@ -1440,7 +1440,6 @@ class PokerHudService : Service() {
                 combine(PokerHudSharedState.isScanning, PokerHudSharedState.isUserInteracting) { scanning, interacting ->
                     scanning && !interacting
                 }.collect { hide ->
-                    laserLine.visibility = View.GONE
                     frame.visibility = if (hide) View.GONE else View.VISIBLE
                     if (hide) {
                         try { anim.start() } catch (ignored: Exception) {}

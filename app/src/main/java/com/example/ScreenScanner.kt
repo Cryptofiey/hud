@@ -79,7 +79,7 @@ class ScreenScanner(
                 delay(400) // Small delay to allow UI to update and hide overlays
                 while (isActive) {
                     processLatestImage()
-                    delay(1200) // Scan more frequently (1.2s)
+                    delay(800) // Scan even more frequently (0.8s)
                 }
             }
         } catch (e: Exception) {
@@ -96,7 +96,7 @@ class ScreenScanner(
         var image: Image? = null
         try {
             withContext(Dispatchers.Main) { PokerHudSharedState.isScanning.value = true }
-            delay(80) // Faster hide delay
+            delay(50) // Ultra fast hide delay
             image = imageReader?.acquireLatestImage()
             withContext(Dispatchers.Main) { PokerHudSharedState.isScanning.value = false }
             
