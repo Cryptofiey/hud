@@ -1013,8 +1013,8 @@ class PokerHudService : Service() {
         val view = floatingCommOverlay ?: return android.graphics.Rect(0, 0, 0, 0)
         val pos = IntArray(2)
         view.getLocationOnScreen(pos)
-        val w = if (view.width > 30) view.width else (view.layoutParams.width.takeIf { it > 30 } ?: dpToPx(200f))
-        val h = if (view.height > 30) view.height else (view.layoutParams.height.takeIf { it > 30 } ?: dpToPx(120f))
+        val w = if (view.width > 30) view.width else (view.layoutParams?.width?.takeIf { it > 30 } ?: dpToPx(200f))
+        val h = if (view.height > 30) view.height else (view.layoutParams?.height?.takeIf { it > 30 } ?: dpToPx(120f))
         return android.graphics.Rect(pos[0], pos[1], pos[0] + w, pos[1] + h)
     }
 
@@ -1022,8 +1022,8 @@ class PokerHudService : Service() {
         val view = floatingHoleOverlay ?: return android.graphics.Rect(0, 0, 0, 0)
         val pos = IntArray(2)
         view.getLocationOnScreen(pos)
-        val w = if (view.width > 30) view.width else (view.layoutParams.width.takeIf { it > 30 } ?: dpToPx(150f))
-        val h = if (view.height > 30) view.height else (view.layoutParams.height.takeIf { it > 30 } ?: dpToPx(100f))
+        val w = if (view.width > 30) view.width else (view.layoutParams?.width?.takeIf { it > 30 } ?: dpToPx(150f))
+        val h = if (view.height > 30) view.height else (view.layoutParams?.height?.takeIf { it > 30 } ?: dpToPx(100f))
         return android.graphics.Rect(pos[0], pos[1], pos[0] + w, pos[1] + h)
     }
 
@@ -1123,7 +1123,8 @@ class PokerHudService : Service() {
                 },
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 android.graphics.PixelFormat.TRANSLUCENT
             )
             val view = ScannerBoxesView(this)
