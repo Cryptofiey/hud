@@ -192,11 +192,10 @@ class ScreenScanner(
                 val rawText = element.text.trim().uppercase(java.util.Locale.US)
                 if (rawText.contains("OK") || rawText.contains("WAIT") || rawText.contains("COIN")) continue
 
-                if (!isCardBackground(cleanBitmap!!, box)) continue
-
+                // Removed isCardBackground to avoid missing shiny/shadowed cards
                 val parsedRanks = findCardsInText(element.text)
                 for (rank in parsedRanks) {
-                    val suit = robustDetectSuit(cleanBitmap, box.centerX(), box.centerY())
+                    val suit = robustDetectSuit(cleanBitmap, box)
                     val xOffset = box.left + (parsedRanks.indexOf(rank) * 10)
                     tempCommCards.add(Pair(Card(rank, suit), xOffset))
                 }
@@ -220,7 +219,7 @@ class ScreenScanner(
 
                 val parsedRanks = findCardsInText(element.text)
                 for (rank in parsedRanks) {
-                    val suit = robustDetectSuit(cleanBitmap, box.centerX(), box.centerY())
+                    val suit = robustDetectSuit(cleanBitmap, box)
                     // If multiple ranks are in same text block, offset the X coordinate slightly to preserve their read order
                     val xOffset = box.left + (parsedRanks.indexOf(rank) * 10) 
                     tempHoleCards.add(Pair(Card(rank, suit), xOffset))
@@ -281,62 +280,7 @@ class ScreenScanner(
         }
     }
 
-    private fun isCardBackground(bitmap: Bitmap, box: android.graphics.Rect): Boolean {
-        // Simple sign of a card: the area just above or around the rank has a relatively solid, uniform color (the card face background).
-        // The table felt, on the other hand, is usually heavily textured (high variance) or very dark.
-        // We'll sample a small horizontal line just above the bounding box (where the card background should be plain).
-        val w = bitmap.width
-        val h = bitmap.height
-        
-        val y = Math.min(h - 1, Math.max(0, box.top - 5))
-        val startX = Math.min(w - 1, Math.max(0, box.left))
-        val endX = Math.min(w - 1, Math.max(0, box.right))
-        
-        if (startX >= endX) return true
-        
-        var sumR = 0; var sumG = 0; var sumB = 0
-        var count = 0
-        val pixels = mutableListOf<Int>()
-        
-        for (x in startX..endX) {
-            val p = bitmap.getPixel(x, y)
-            pixels.add(p)
-            sumR += android.graphics.Color.red(p)
-            sumG += android.graphics.Color.green(p)
-            sumB += android.graphics.Color.blue(p)
-            count++
-        }
-        
-        if (count == 0) return true
-        
-        val avgR = sumR / count
-        val avgG = sumG / count
-        val avgB = sumB / count
-        
-        // Calculate variance
-        var varR = 0f; var varG = 0f; var varB = 0f
-        for (p in pixels) {
-            val r = android.graphics.Color.red(p)
-            val g = android.graphics.Color.green(p)
-            val b = android.graphics.Color.blue(p)
-            varR += (r - avgR) * (r - avgR)
-            varG += (g - avgG) * (g - avgG)
-            varB += (b - avgB) * (b - avgB)
-        }
-        
-        val totalStdDev = Math.sqrt(((varR + varG + varB) / count).toDouble())
-        
-        // If the color is very bright (white/light grey), it's almost certainly a card face.
-        if (avgR > 180 && avgG > 180 && avgB > 180) return true
-        
-        // Too dark to be a standard card face (even dark Spades are usually > 25)
-        if (avgR < 25 && avgG < 25 && avgB < 25) return false
-        
-        // If it's very textured (StdDev > 35), it's likely felt or background noise, not a flat card face.
-        if (totalStdDev > 35.0) return false
-        
-        return true
-    }
+    // isCardBackground removed because it was aggressively dropping cards with shiny or dark backgrounds
 
     private fun findCardsInText(text: String): List<Rank> {
         val found = mutableListOf<Rank>()
@@ -359,35 +303,37 @@ class ScreenScanner(
         return found
     }
 
-    private fun robustDetectSuit(crop: Bitmap, x: Int, y: Int): Suit {
+    private fun robustDetectSuit(crop: Bitmap, rankBox: android.graphics.Rect): Suit {
         val w = crop.width
         val h = crop.height
         
         var rC = 0; var gC = 0; var bC = 0; var blkC = 0
         
-        val left = maxOf(0, x - 50)
-        val right = minOf(w - 1, x + 50)
-        val top = maxOf(0, y - 50)
-        val bottom = minOf(h - 1, y + 100)
+        // Scan around and mostly below the rank's bounding box
+        val left = maxOf(0, rankBox.left - rankBox.width())
+        val right = minOf(w - 1, rankBox.right + rankBox.width())
+        val top = maxOf(0, rankBox.top - rankBox.height() / 2)
+        val bottom = minOf(h - 1, rankBox.bottom + rankBox.height() * 2)
         
-        for (px in left..right step 4) {
-            for (py in top..bottom step 4) {
+        for (px in left..right step 2) {
+            for (py in top..bottom step 2) {
                 val p = crop.getPixel(px, py)
                 val r = android.graphics.Color.red(p)
                 val g = android.graphics.Color.green(p)
                 val b = android.graphics.Color.blue(p)
                 
-                // Ignore text/icon bright pixels
-                if (r > 160 && g > 160 && b > 160) continue
-                // Ignore extremely dark edge pixels
-                if (r < 25 && g < 25 && b < 25) continue
+                // Ignore text/icon bright pixels (white background)
+                if (r > 180 && g > 180 && b > 180) continue
+                // Ignore pitch black background shadows
+                if (r < 15 && g < 15 && b < 15) continue
                 
                 val max = maxOf(r, g, b)
                 val min = minOf(r, g, b)
                 val saturation = max - min
                 
-                if (saturation < 20) {
-                    blkC++ // grayscale/spades
+                if (saturation < 30) {
+                    // Very low saturation = gray/black -> Spades (or Clubs in 2-color)
+                    blkC++
                 } else {
                     if (r == max) {
                         rC++
