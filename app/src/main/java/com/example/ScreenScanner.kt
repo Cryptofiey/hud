@@ -255,8 +255,25 @@ class ScreenScanner(
             val foundCommCardsRaw = tempCommCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
             val foundHoleCardsRaw = tempHoleCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
             
+            val rawAll = foundHoleCardsRaw + foundCommCardsRaw
+            if (rawAll.size != rawAll.toSet().size) {
+                // Invalid frame detection, duplicates found
+                scanStatus.value = "Error: Duplicate cards detected. Ignoring frame."
+                return
+            }
+
             var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, windowSize = 3)
             var smoothedComm = getSmoothedCards(commHistory, foundCommCardsRaw, windowSize = 3)
+            
+            val smoothedAll = smoothedHole + smoothedComm
+            if (smoothedAll.size != smoothedAll.toSet().size) {
+                // Invalid smoothed detection
+                // Clear history to recover
+                holeHistory.clear()
+                commHistory.clear()
+                scanStatus.value = "Error: Invalid duplicate cards in smoothed state."
+                return
+            }
 
             // Board never shrinks during a hand. If we saw N cards, and now see fewer (but >0), keep N cards if possible.
             // If it drops to 0, getSmoothedCards will eventually clear it (after 2 empty frames).
