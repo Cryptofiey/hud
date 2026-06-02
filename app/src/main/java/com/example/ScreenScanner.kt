@@ -302,11 +302,11 @@ class ScreenScanner(
         // If the color is very bright (white/light grey), it's almost certainly a card face.
         if (avgR > 180 && avgG > 180 && avgB > 180) return true
         
-        // Too dark to be a standard card face
-        if (avgR < 80 && avgG < 80 && avgB < 80) return false
+        // Too dark to be a standard card face (even dark Spades are usually > 25)
+        if (avgR < 25 && avgG < 25 && avgB < 25) return false
         
-        // If it's very textured (StdDev > 25), it's likely felt or background noise, not a flat card face.
-        if (totalStdDev > 25.0) return false
+        // If it's very textured (StdDev > 35), it's likely felt or background noise, not a flat card face.
+        if (totalStdDev > 35.0) return false
         
         return true
     }
@@ -387,18 +387,20 @@ class ScreenScanner(
         
         if (t.length > 3) return null
 
-        if (t == "10" || t == "IO" || t == "IQ" || t == "1O" || t == "1Q") return Rank.TEN
+        if (t == "10" || t == "IO" || t == "IQ" || t == "1O" || t == "1Q" || t == "I0" || t == "L0" || t == "LO") return Rank.TEN
         
-        // Only allow length 1 (exact match) or length 2 (first char is rank, second char is a non-alphanumeric or a suit char that got misread).
-        // For length 2, let's just check the first character and ensure the second character is not another rank or letter (unless it's 'c','s','h','d').
-        // Actually, the simplest strict match is that the string is exactly 1 character for everything except 10.
         if (t.length > 2) return null
         
-        if (t.length == 2 && t.last().isLetterOrDigit() && t.last() != 'S' && t.last() != 'C' && t.last() != 'H' && t.last() != 'D' && t.last() != 'O' && t.last() != 'X') {
-            return null
+        // If it's a 2 character match, make sure the second char isn't another valid rank number like '2', '3' (which would mean a stack size)
+        // But we allow it if the first is 'Q' and second is '0' or 'Q'.
+        // Let's just match based on the very first character for all single letters.
+        val firstChar = t.firstOrNull() ?: return null
+        
+        // Exclude clear numbers > 10 that were read as ranks (e.g. 50, 40 etc.)
+        if (t.length == 2 && firstChar.isDigit() && t[1].isDigit()) {
+            return null // Like "50", "25", "42" - these are not single ranks
         }
 
-        val firstChar = t.firstOrNull() ?: return null
         return when (firstChar) {
             'A' -> Rank.ACE
             'K', 'X' -> Rank.KING
