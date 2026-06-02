@@ -92,9 +92,11 @@ class ScreenScanner(
     private var consecutiveEmptyHole = 0
     private var consecutiveEmptyComm = 0
 
+    private var cachedTotalBitmap: Bitmap? = null
+    private var cachedCleanBitmap: Bitmap? = null
+
     private suspend fun processLatestImage() {
         var image: Image? = null
-        var cleanBitmap: Bitmap? = null
         try {
             // Empty the ImageReader queue to get a NEW frame
             while (true) {
@@ -117,15 +119,28 @@ class ScreenScanner(
             val rowPadding = rowStride - pixelStride * width
             val totalWidth = width + rowPadding / pixelStride
 
-            val bitmap = Bitmap.createBitmap(totalWidth, height, Bitmap.Config.ARGB_8888)
-            bitmap.copyPixelsFromBuffer(buffer)
+            if (cachedTotalBitmap == null || cachedTotalBitmap!!.width != totalWidth || cachedTotalBitmap!!.height != height) {
+                cachedTotalBitmap?.recycle()
+                cachedTotalBitmap = Bitmap.createBitmap(totalWidth, height, Bitmap.Config.ARGB_8888)
+            }
+            
+            buffer.position(0)
+            cachedTotalBitmap!!.copyPixelsFromBuffer(buffer)
             image.close()
             image = null
 
-            cleanBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height)
-            if (cleanBitmap != bitmap) {
-                bitmap.recycle()
+            if (cachedCleanBitmap == null || cachedCleanBitmap!!.width != width || cachedCleanBitmap!!.height != height) {
+                cachedCleanBitmap?.recycle()
+                cachedCleanBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             }
+            
+            // Draw cropped area into clean bitmap
+            val canvas = android.graphics.Canvas(cachedCleanBitmap!!)
+            val srcRect = android.graphics.Rect(0, 0, width, height)
+            val destRect = android.graphics.Rect(0, 0, width, height)
+            canvas.drawBitmap(cachedTotalBitmap!!, srcRect, destRect, null)
+
+            val cleanBitmap = cachedCleanBitmap!!
 
             val rects = withContext(Dispatchers.Main) {
                 Triple(pokerHudService.getCommRect(), pokerHudService.getHoleRect(), pokerHudService.getHudRects())
@@ -173,8 +188,6 @@ class ScreenScanner(
                 val lowerCount = element.text.count { it.isLowerCase() }
                 if (lowerCount >= 2) continue
 
-                if (!isCardBackground(cleanBitmap!!, box)) continue
-
                 val parsedRanks = findCardsInText(element.text)
                 for (rank in parsedRanks) {
                     val suit = robustDetectSuit(cleanBitmap, box.centerX(), box.centerY())
@@ -189,8 +202,6 @@ class ScreenScanner(
                 
                 val lowerCount = element.text.count { it.isLowerCase() }
                 if (lowerCount >= 2) continue
-
-                if (!isCardBackground(cleanBitmap!!, box)) continue
 
                 val parsedRanks = findCardsInText(element.text)
                 for (rank in parsedRanks) {
@@ -249,7 +260,6 @@ class ScreenScanner(
             android.util.Log.e("ScreenScanner", "Process Error", e)
             scanStatus.value = "Scan Error: ${e.message}"
         } finally {
-            cleanBitmap?.recycle()
             try { image?.close() } catch(ignored: Exception) {}
         }
     }
@@ -385,19 +395,18 @@ class ScreenScanner(
     private fun matchRank(text: String): Rank? {
         val t = text.uppercase(java.util.Locale.US).replace(" ", "").replace("|", "I").replace("(", "").replace(")", "").replace(":", "").trim()
         
+        if (t.isEmpty()) return null
+
         if (t.length > 3) return null
 
-        if (t == "10" || t == "IO" || t == "IQ" || t == "1O" || t == "1Q" || t == "I0" || t == "L0" || t == "LO") return Rank.TEN
+        if (t.startsWith("10") || t.startsWith("IO") || t.startsWith("IQ") || t.startsWith("1O") || t.startsWith("1Q") || t.startsWith("I0") || t.startsWith("L0") || t.startsWith("LO")) {
+            return Rank.TEN
+        }
         
-        if (t.length > 2) return null
-        
-        // If it's a 2 character match, make sure the second char isn't another valid rank number like '2', '3' (which would mean a stack size)
-        // But we allow it if the first is 'Q' and second is '0' or 'Q'.
-        // Let's just match based on the very first character for all single letters.
         val firstChar = t.firstOrNull() ?: return null
         
         // Exclude clear numbers > 10 that were read as ranks (e.g. 50, 40 etc.)
-        if (t.length == 2 && firstChar.isDigit() && t[1].isDigit()) {
+        if (t.length >= 2 && firstChar.isDigit() && t[1].isDigit()) {
             return null // Like "50", "25", "42" - these are not single ranks
         }
 
@@ -434,6 +443,10 @@ class ScreenScanner(
                 virtualDisplay = null
                 imageReader?.close()
                 imageReader = null
+                cachedTotalBitmap?.recycle()
+                cachedTotalBitmap = null
+                cachedCleanBitmap?.recycle()
+                cachedCleanBitmap = null
             } catch (e: Exception) {
                 android.util.Log.e("ScreenScanner", "Error stopping scanner", e)
             }
