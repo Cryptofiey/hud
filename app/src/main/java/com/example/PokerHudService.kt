@@ -1193,11 +1193,7 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
 
-        val title = TextView(this).apply {
-            text = "COMMUNITY CARDS CROP BOX"
-            setTextColor(AndroidColor.parseColor("#FF2196F3"))
-            textSize = 8f
-            typeface = Typeface.DEFAULT_BOLD
+        val spacerTitle = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
@@ -1209,27 +1205,23 @@ class PokerHudService : Service() {
             }
         }
 
-        header.addView(title)
+        header.addView(spacerTitle)
         header.addView(closeBtn)
         commHeader = header
         content.addView(header)
 
-        val spacer = View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(2f))
-        }
-        content.addView(spacer)
-        
         val txtCardsInfo = TextView(this).apply {
-            text = "SCANNING"
+            text = "⏳"
             setTextColor(AndroidColor.WHITE)
-            textSize = 8f
+            textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.CENTER_VERTICAL or Gravity.END
+            }
             setShadowLayer(4f, 0f, 2f, AndroidColor.BLACK)
         }
         commTxt = txtCardsInfo
-        content.addView(txtCardsInfo)
 
         val laserLine = View(this).apply {
             setBackgroundColor(AndroidColor.parseColor("#FF00FFCC"))
@@ -1249,6 +1241,7 @@ class PokerHudService : Service() {
         }
 
         frame.addView(content)
+        frame.addView(txtCardsInfo)
         frame.addView(laserLine)
         frame.addView(resizeHandle)
 
@@ -1274,11 +1267,9 @@ class PokerHudService : Service() {
                     try {
                         val cards = state.board.filterNotNull()
                         if (cards.isNotEmpty()) {
-                            txtCardsInfo.text = "OK"
-                            txtCardsInfo.setTextColor(AndroidColor.parseColor("#FF2196F3"))
+                            txtCardsInfo.text = "✅"
                         } else {
-                            txtCardsInfo.text = "WAIT"
-                            txtCardsInfo.setTextColor(AndroidColor.GRAY)
+                            txtCardsInfo.text = "⏳"
                         }
                     } catch (e: Exception) {
                         android.util.Log.e("PokerHudService", "Error in commOverlay collect", e)
@@ -1343,11 +1334,7 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
 
-        val title = TextView(this).apply {
-            text = "HOLE CARDS CROP BOX"
-            setTextColor(AndroidColor.parseColor("#FFE53935"))
-            textSize = 8f
-            typeface = Typeface.DEFAULT_BOLD
+        val spacerTitle = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
@@ -1359,27 +1346,23 @@ class PokerHudService : Service() {
             }
         }
 
-        header.addView(title)
+        header.addView(spacerTitle)
         header.addView(closeBtn)
         holeHeader = header
         content.addView(header)
 
-        val spacer = View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(2f))
-        }
-        content.addView(spacer)
-        
         val txtCardsInfo = TextView(this).apply {
-            text = "SCANNING"
+            text = "⏳"
             setTextColor(AndroidColor.WHITE)
-            textSize = 8f
+            textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.CENTER_VERTICAL or Gravity.END
+            }
             setShadowLayer(4f, 0f, 2f, AndroidColor.BLACK)
         }
         holeTxt = txtCardsInfo
-        content.addView(txtCardsInfo)
 
         val laserLine = View(this).apply {
             setBackgroundColor(AndroidColor.parseColor("#FF00FFCC"))
@@ -1399,6 +1382,7 @@ class PokerHudService : Service() {
         }
 
         frame.addView(content)
+        frame.addView(txtCardsInfo)
         frame.addView(laserLine)
         frame.addView(resizeHandle)
 
@@ -1423,11 +1407,9 @@ class PokerHudService : Service() {
                 PokerHudSharedState.uiState.collect { state ->
                     try {
                         if (state.heroCard1 != null && state.heroCard2 != null) {
-                            txtCardsInfo.text = "OK"
-                            txtCardsInfo.setTextColor(AndroidColor.parseColor("#4CAF50"))
+                            txtCardsInfo.text = "✅"
                         } else {
-                            txtCardsInfo.text = "WAIT"
-                            txtCardsInfo.setTextColor(AndroidColor.GRAY)
+                            txtCardsInfo.text = "⏳"
                         }
                     } catch(e: Exception) {
                         android.util.Log.e("PokerHudService", "Error in holeOverlay collect", e)
