@@ -184,9 +184,17 @@ class ScreenScanner(
                 if (box.width() > box.height() * 2.5f) continue
                 if (element.text.trim().length > 3) continue
                 
+                // Minimum size threshold to filter out small text like pot size
+                if (box.height() < commRect.height() * 0.08f) continue
+                
                 // If it contains mostly lowercase, it's a word.
                 val lowerCount = element.text.count { it.isLowerCase() }
                 if (lowerCount >= 2) continue
+                
+                val rawText = element.text.trim().uppercase(java.util.Locale.US)
+                if (rawText.contains("OK") || rawText.contains("WAIT") || rawText.contains("COIN")) continue
+
+                if (!isCardBackground(cleanBitmap!!, box)) continue
 
                 val parsedRanks = findCardsInText(element.text)
                 for (rank in parsedRanks) {
@@ -200,8 +208,16 @@ class ScreenScanner(
                 if (box.width() > box.height() * 2.5f) continue
                 if (element.text.trim().length > 3) continue
                 
+                // Minimum size threshold to filter out tiny text
+                if (box.height() < holeRect.height() * 0.08f) continue
+                
                 val lowerCount = element.text.count { it.isLowerCase() }
                 if (lowerCount >= 2) continue
+                
+                val rawText = element.text.trim().uppercase(java.util.Locale.US)
+                if (rawText.contains("OK") || rawText.contains("WAIT") || rawText.contains("COIN")) continue
+
+                if (!isCardBackground(cleanBitmap!!, box)) continue
 
                 val parsedRanks = findCardsInText(element.text)
                 for (rank in parsedRanks) {
@@ -413,7 +429,7 @@ class ScreenScanner(
         return when (firstChar) {
             'A' -> Rank.ACE
             'K', 'X' -> Rank.KING
-            'Q', '0', 'O' -> Rank.QUEEN
+            'Q', '0', 'O', 'C', 'D' -> Rank.QUEEN
             'J', 'I', 'L', '1' -> Rank.JACK
             'T' -> Rank.TEN
             '9', 'G' -> Rank.NINE
