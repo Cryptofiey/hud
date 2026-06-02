@@ -92,20 +92,11 @@ class ScreenScanner(
     private var consecutiveEmptyHole = 0
     private var consecutiveEmptyComm = 0
 
-    private var cachedTotalBitmap: Bitmap? = null
     private var cachedCleanBitmap: Bitmap? = null
 
     private suspend fun processLatestImage() {
         var image: Image? = null
         try {
-            // Empty the ImageReader queue to get a NEW frame
-            while (true) {
-                val img = try { imageReader?.acquireLatestImage() } catch(e: Exception) { null } ?: break
-                img.close()
-            }
-            
-            // Allow a small window for the next frame to be captured
-            delay(60)
             image = imageReader?.acquireLatestImage()
 
             if (image == null) return
@@ -116,31 +107,38 @@ class ScreenScanner(
             val buffer = planes[0].buffer
             val pixelStride = planes[0].pixelStride
             val rowStride = planes[0].rowStride
-            val rowPadding = rowStride - pixelStride * width
-            val totalWidth = width + rowPadding / pixelStride
-
-            if (cachedTotalBitmap == null || cachedTotalBitmap!!.width != totalWidth || cachedTotalBitmap!!.height != height) {
-                cachedTotalBitmap?.recycle()
-                cachedTotalBitmap = Bitmap.createBitmap(totalWidth, height, Bitmap.Config.ARGB_8888)
-            }
-            
-            buffer.position(0)
-            cachedTotalBitmap!!.copyPixelsFromBuffer(buffer)
-            image.close()
-            image = null
 
             if (cachedCleanBitmap == null || cachedCleanBitmap!!.width != width || cachedCleanBitmap!!.height != height) {
                 cachedCleanBitmap?.recycle()
                 cachedCleanBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             }
-            
-            // Draw cropped area into clean bitmap
-            val canvas = android.graphics.Canvas(cachedCleanBitmap!!)
-            val srcRect = android.graphics.Rect(0, 0, width, height)
-            val destRect = android.graphics.Rect(0, 0, width, height)
-            canvas.drawBitmap(cachedTotalBitmap!!, srcRect, destRect, null)
-
             val cleanBitmap = cachedCleanBitmap!!
+
+            buffer.position(0)
+            if (pixelStride == 4 && rowStride == width * 4) {
+                cleanBitmap.copyPixelsFromBuffer(buffer)
+            } else {
+                val rowPixels = IntArray(width)
+                for (row in 0 until height) {
+                    buffer.position(row * rowStride)
+                    val rowBuffer = buffer.asIntBuffer()
+                    rowBuffer.get(rowPixels, 0, width)
+                    for (i in 0 until width) {
+                        val p = rowPixels[i]
+                        val r = (p and 0xFF) shl 16
+                        val b = (p and 0xFF0000) shr 16
+                        val ag = p and 0xFF00FF00.toInt()
+                        rowPixels[i] = ag or r or b
+                    }
+                    cleanBitmap.setPixels(rowPixels, 0, width, 0, row, width, 1)
+                }
+            }
+            // Must clear limit and position changes
+            buffer.clear()
+            
+            // Release the frame quickly so Producer can queue next frames
+            image.close()
+            image = null
 
             val rects = withContext(Dispatchers.Main) {
                 Triple(pokerHudService.getCommRect(), pokerHudService.getHoleRect(), pokerHudService.getHudRects())
@@ -419,6 +417,14 @@ class ScreenScanner(
             return Rank.TEN
         }
         
+        if (t.length == 2) {
+            val second = t[1]
+            val allowedSeconds = listOf('S', 'C', 'H', 'D', 'O', '0', 'X', '♠', '♣', '♥', '♦', 'G', 'Q')
+            if (second.isLetterOrDigit() && second !in allowedSeconds) {
+                return null
+            }
+        }
+        
         val firstChar = t.firstOrNull() ?: return null
         
         // Exclude clear numbers > 10 that were read as ranks (e.g. 50, 40 etc.)
@@ -459,8 +465,6 @@ class ScreenScanner(
                 virtualDisplay = null
                 imageReader?.close()
                 imageReader = null
-                cachedTotalBitmap?.recycle()
-                cachedTotalBitmap = null
                 cachedCleanBitmap?.recycle()
                 cachedCleanBitmap = null
             } catch (e: Exception) {
