@@ -125,6 +125,9 @@ class ScannerBoxesView(context: Context) : View(context) {
             canvas.drawPath(path, zoneFillPaint)
             canvas.drawPath(path, zoneOutlinePaint)
 
+            textPaint.textSize = 34f
+            textOutlinePaint.textSize = 34f
+
             for (opp in state.opponents) {
                 val box = opp.boundingBox
                 if (box != null) {
@@ -173,9 +176,21 @@ class ScannerBoxesView(context: Context) : View(context) {
             canvas.drawRect(actualBox, profileFillPaint)
             canvas.drawRect(actualBox, profileBoxPaint)
             
-            // Draw parsed value above the box
-            canvas.drawText(box.label, actualBox.left.toFloat(), actualBox.top.toFloat() - 5f, textOutlinePaint)
-            canvas.drawText(box.label, actualBox.left.toFloat(), actualBox.top.toFloat() - 5f, textPaint)
+            // Set text size to match the height of the bounding box
+            val boxHeight = actualBox.height().toFloat()
+            val textSz = java.lang.Math.max(1f, boxHeight * 0.95f)
+            textPaint.textSize = textSz // Almost full height for precise fit
+            textOutlinePaint.textSize = textSz
+            
+            // Draw text exactly starting from the left edge of the bounding box
+            val xPos = actualBox.left.toFloat()
+            
+            // Baseline calculation: align the bottom of the text with the bottom of the box
+            // The descent is the portion below the baseline.
+            val yPos = actualBox.bottom.toFloat() - textPaint.descent()
+            
+            canvas.drawText(box.label, xPos, yPos, textOutlinePaint)
+            canvas.drawText(box.label, xPos, yPos, textPaint)
         }
     }
 }

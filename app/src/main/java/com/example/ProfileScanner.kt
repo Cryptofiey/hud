@@ -49,9 +49,9 @@ object ProfileScanner {
                 val p = extractPercentInLine(lines[i])
                 if (p != null) {
                     res = p
-                    lineBoxes[i]?.let { matchedBoxes.add(ScannedBox(it, "$label: ${p.toInt()}%")) }
+                    lineBoxes[i]?.let { matchedBoxes.add(ScannedBox(it, lines[i])) }
                     // Also underline the label itself for visual confirmation
-                    if (i != index) lineBoxes[index]?.let { matchedBoxes.add(ScannedBox(it, label)) }
+                    if (i != index) lineBoxes[index]?.let { matchedBoxes.add(ScannedBox(it, lines[index])) }
                     break
                 }
             }
@@ -61,7 +61,7 @@ object ProfileScanner {
         val extractPercentInLineWithBox: (String, Int, Int, String) -> Float? = { line, i, matchIndex, label ->
             val res = extractPercentInLine(line, matchIndex)
             if (res != null) {
-                lineBoxes[i]?.let { matchedBoxes.add(ScannedBox(it, "$label: ${res.toInt()}%")) }
+                lineBoxes[i]?.let { matchedBoxes.add(ScannedBox(it, lines[i])) }
             }
             res
         }
@@ -128,7 +128,7 @@ object ProfileScanner {
                 if (matches.size >= 2) {
                     wtsd = matches[0].groupValues[1].toFloatOrNull()
                     wsd = matches[1].groupValues[1].toFloatOrNull()
-                    lineBoxes[i]?.let { matchedBoxes.add(ScannedBox(it, "WTSD/WSD: ${wtsd?.toInt()}% / ${wsd?.toInt()}%")) }
+                    lineBoxes[i]?.let { matchedBoxes.add(ScannedBox(it, lines[i])) }
                 }
             }
         }

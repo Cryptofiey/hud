@@ -164,8 +164,18 @@ class ScreenScanner(
             holeElements.sortBy { it.boundingBox?.left ?: 0 }
 
             for (element in commElements) {
-                val parsedRanks = findCardsInText(element.text)
                 val box = element.boundingBox ?: continue
+                // Card ranks represent a single character (or '10'). They shouldn't be very wide.
+                if (box.width() > box.height() * 2.5f) continue
+                if (element.text.trim().length > 3) continue
+                
+                // If it contains mostly lowercase, it's a word.
+                val lowerCount = element.text.count { it.isLowerCase() }
+                if (lowerCount >= 2) continue
+
+                if (!isCardBackground(cleanBitmap!!, box)) continue
+
+                val parsedRanks = findCardsInText(element.text)
                 for (rank in parsedRanks) {
                     val suit = robustDetectSuit(cleanBitmap, box.centerX(), box.centerY())
                     tempCommCards.add(Card(rank, suit))
@@ -173,8 +183,16 @@ class ScreenScanner(
             }
             
             for (element in holeElements) {
-                val parsedRanks = findCardsInText(element.text)
                 val box = element.boundingBox ?: continue
+                if (box.width() > box.height() * 2.5f) continue
+                if (element.text.trim().length > 3) continue
+                
+                val lowerCount = element.text.count { it.isLowerCase() }
+                if (lowerCount >= 2) continue
+
+                if (!isCardBackground(cleanBitmap!!, box)) continue
+
+                val parsedRanks = findCardsInText(element.text)
                 for (rank in parsedRanks) {
                     val suit = robustDetectSuit(cleanBitmap, box.centerX(), box.centerY())
                     tempHoleCards.add(Card(rank, suit))
@@ -229,6 +247,60 @@ class ScreenScanner(
             cleanBitmap?.recycle()
             try { image?.close() } catch(ignored: Exception) {}
         }
+    }
+
+    private fun isCardBackground(bitmap: Bitmap, box: android.graphics.Rect): Boolean {
+        // Simple sign of a card: the area just above or around the rank has a relatively solid, uniform color (the card face background).
+        // The table felt, on the other hand, is usually heavily textured (high variance) or very dark.
+        // We'll sample a small horizontal line just above the bounding box (where the card background should be plain).
+        val w = bitmap.width
+        val h = bitmap.height
+        
+        val y = Math.max(0, box.top - 5)
+        val startX = Math.max(0, box.left)
+        val endX = Math.min(w - 1, box.right)
+        
+        if (startX >= endX) return true
+        
+        var sumR = 0; var sumG = 0; var sumB = 0
+        var count = 0
+        val pixels = mutableListOf<Int>()
+        
+        for (x in startX..endX) {
+            val p = bitmap.getPixel(x, y)
+            pixels.add(p)
+            sumR += android.graphics.Color.red(p)
+            sumG += android.graphics.Color.green(p)
+            sumB += android.graphics.Color.blue(p)
+            count++
+        }
+        
+        if (count == 0) return true
+        
+        val avgR = sumR / count
+        val avgG = sumG / count
+        val avgB = sumB / count
+        
+        // Calculate variance
+        var varR = 0f; var varG = 0f; var varB = 0f
+        for (p in pixels) {
+            val r = android.graphics.Color.red(p)
+            val g = android.graphics.Color.green(p)
+            val b = android.graphics.Color.blue(p)
+            varR += (r - avgR) * (r - avgR)
+            varG += (g - avgG) * (g - avgG)
+            varB += (b - avgB) * (b - avgB)
+        }
+        
+        val totalStdDev = Math.sqrt(((varR + varG + varB) / count).toDouble())
+        
+        // If the color is very bright (white/light grey), it's almost certainly a card.
+        if (avgR > 180 && avgG > 180 && avgB > 180) return true
+        
+        // If it's very textured (StdDev > 25), it's likely felt or background noise, not a flat card face.
+        if (totalStdDev > 30.0) return false
+        
+        return true
     }
 
     private fun findCardsInText(text: String): List<Rank> {
@@ -292,42 +364,35 @@ class ScreenScanner(
     private fun matchRank(text: String): Rank? {
         val t = text.uppercase(java.util.Locale.US).replace(" ", "").replace("|", "I").replace("(", "").replace(")", "").replace(":", "").trim()
         
-        if (t.contains("10")) return Rank.TEN
+        if (t.length > 3) return null
+
+        if (t == "10" || t == "IO" || t == "IQ" || t == "1O" || t == "1Q") return Rank.TEN
         
-        return when {
-            t.contains("A") -> Rank.ACE
-            t.contains("K") || (t.length == 1 && t == "X") -> Rank.KING
-            t.contains("Q") -> Rank.QUEEN
-            t.contains("J") -> Rank.JACK
-            t.contains("9") || (t.length == 1 && t == "G") -> Rank.NINE
-            t.contains("8") || t.contains("B") -> Rank.EIGHT
-            t.contains("7") -> Rank.SEVEN
-            t.contains("6") -> Rank.SIX
-            t.contains("5") || t.contains("S") -> Rank.FIVE
-            t.contains("4") -> Rank.FOUR
-            t.contains("3") -> Rank.THREE
-            t.contains("2") || t.contains("Z") -> Rank.TWO
-            t.contains("T") || t.contains("IO") || t.contains("IQ") -> Rank.TEN
-            else -> {
-                if (t.length == 1) {
-                    when (t[0]) {
-                        'A' -> Rank.ACE
-                        'K','X' -> Rank.KING
-                        'Q','0','O' -> Rank.QUEEN
-                        'J','I','L','1' -> Rank.JACK
-                        '9','G' -> Rank.NINE
-                        '8','B' -> Rank.EIGHT
-                        '7' -> Rank.SEVEN
-                        '6' -> Rank.SIX
-                        '5','S' -> Rank.FIVE
-                        '4' -> Rank.FOUR
-                        '3' -> Rank.THREE
-                        '2','Z' -> Rank.TWO
-                        'T' -> Rank.TEN
-                        else -> null
-                    }
-                } else null
-            }
+        // Only allow length 1 (exact match) or length 2 (first char is rank, second char is a non-alphanumeric or a suit char that got misread).
+        // For length 2, let's just check the first character and ensure the second character is not another rank or letter (unless it's 'c','s','h','d').
+        // Actually, the simplest strict match is that the string is exactly 1 character for everything except 10.
+        if (t.length > 2) return null
+        
+        if (t.length == 2 && t.last().isLetterOrDigit() && t.last() != 'S' && t.last() != 'C' && t.last() != 'H' && t.last() != 'D' && t.last() != 'O' && t.last() != 'X') {
+            return null
+        }
+
+        val firstChar = t.firstOrNull() ?: return null
+        return when (firstChar) {
+            'A' -> Rank.ACE
+            'K', 'X' -> Rank.KING
+            'Q', '0', 'O' -> Rank.QUEEN
+            'J', 'I', 'L', '1' -> Rank.JACK
+            'T' -> Rank.TEN
+            '9', 'G' -> Rank.NINE
+            '8', 'B' -> Rank.EIGHT
+            '7' -> Rank.SEVEN
+            '6' -> Rank.SIX
+            '5', 'S' -> Rank.FIVE
+            '4' -> Rank.FOUR
+            '3' -> Rank.THREE
+            '2', 'Z' -> Rank.TWO
+            else -> null
         }
     }
 
