@@ -204,9 +204,8 @@ class ScreenScanner(
 
             for (element in commElements) {
                 val box = element.boundingBox ?: continue
-                // Card ranks represent a single character (or '10'). They shouldn't be very wide.
-                if (box.width() > box.height() * 2.5f) continue
-                if (element.text.trim().length > 3) continue
+                // Card ranks might be merged, but still shouldn't be extremely wide like a full sentence.
+                if (box.width() > box.height() * 4.0f) continue
                 
                 // Minimum size threshold to filter out small text like pot size
                 if (box.height() < commRect.height() * 0.08f) continue
@@ -229,8 +228,7 @@ class ScreenScanner(
             
             for (element in holeElements) {
                 val box = element.boundingBox ?: continue
-                if (box.width() > box.height() * 2.5f) continue
-                if (element.text.trim().length > 3) continue
+                if (box.width() > box.height() * 4.0f) continue
                 
                 // Minimum size threshold to filter out tiny text. Hole cards usually large.
                 if (box.height() < holeRect.height() * 0.05f) continue
@@ -333,20 +331,72 @@ class ScreenScanner(
 
     private fun findCardsInText(text: String): List<Rank> {
         val found = mutableListOf<Rank>()
-        val t = text.uppercase(java.util.Locale.US)
+        // Keep only letters, digits, and suit symbols to form a dense string
+        val raw = text.uppercase(java.util.Locale.US)
+            .replace(Regex("[^A-Z0-9\u2660\u2663\u2665\u2666]"), "")
+            
+        if (raw.length > 6) return emptyList() // Too long to be just 1-2 cards
+        if (raw.isEmpty()) return emptyList()
         
-        // Split the text into potential card tokens (e.g. "K", "10", "A")
-        // We look for all possible rank occurrences in the string
-        val parts = t.split(Regex("[^A-Z0-9]")).filter { it.isNotEmpty() }
-        for (part in parts) {
-            val rank = matchRank(part)
-            if (rank != null) found.add(rank)
+        // Ignore obvious standalone numbers/stacks unless they are a single 10, or two 10s
+        val digits = raw.count { it.isDigit() }
+        if (digits >= 2) {
+            val hasTen = Regex("10|I0|1O|IO").containsMatchIn(raw)
+            if (!hasTen) return emptyList() // E.g., "50", "25", "42"
         }
-        
-        // If we found nothing by split, try the whole text (it might have symbols)
-        if (found.isEmpty()) {
-            val rank = matchRank(t)
-            if (rank != null) found.add(rank)
+
+        var i = 0
+        while (i < raw.length) {
+            var matched = false
+            
+            // Check for 10 first
+            if (i + 1 < raw.length) {
+                val sub = raw.substring(i, i + 2)
+                if (sub == "10" || sub == "I0" || sub == "1O" || sub == "IO" || sub == "IQ" || sub == "1Q" || sub == "L0" || sub == "LO") {
+                    found.add(Rank.TEN)
+                    i += 2
+                    matched = true
+                }
+            }
+            
+            if (!matched) {
+                val c = raw[i]
+                val r = when (c) {
+                    'A' -> Rank.ACE
+                    'K', 'X' -> Rank.KING
+                    'Q', 'D', '0', 'O' -> Rank.QUEEN
+                    'J', 'L', '1', 'I' -> Rank.JACK
+                    '9', 'G' -> Rank.NINE
+                    '8', 'B' -> Rank.EIGHT
+                    '7' -> Rank.SEVEN
+                    '6' -> Rank.SIX
+                    '5', 'S' -> Rank.FIVE
+                    '4' -> Rank.FOUR
+                    '3' -> Rank.THREE
+                    '2', 'Z' -> Rank.TWO
+                    else -> null
+                }
+                
+                if (r != null) {
+                    found.add(r)
+                    i++
+                    matched = true
+                }
+            }
+            
+            if (!matched) {
+                // If it's not a rank, it might be a suit symbol or harmless noise
+                val c = raw[i]
+                val validSuitsOrNoise = setOf('♠', '♣', '♥', '♦', 'C', 'H')
+                if (c in validSuitsOrNoise) {
+                    i++
+                } else {
+                    // Invalid character encountered in this block.
+                    // To prevent random letters in words from being parsed as cards,
+                    // we invalidate the ENTIRE block.
+                    return emptyList()
+                }
+            }
         }
         
         return found
@@ -404,49 +454,7 @@ class ScreenScanner(
     }
 
 
-    private fun matchRank(text: String): Rank? {
-        val t = text.uppercase(java.util.Locale.US).replace(" ", "").replace("|", "I").replace("(", "").replace(")", "").replace(":", "").trim()
-        
-        if (t.isEmpty()) return null
 
-        if (t.length > 3) return null
-
-        if (t.startsWith("10") || t.startsWith("IO") || t.startsWith("IQ") || t.startsWith("1O") || t.startsWith("1Q") || t.startsWith("I0") || t.startsWith("L0") || t.startsWith("LO")) {
-            return Rank.TEN
-        }
-        
-        if (t.length == 2) {
-            val second = t[1]
-            val allowedSeconds = listOf('S', 'C', 'H', 'D', 'O', '0', 'X', '♠', '♣', '♥', '♦', 'G', 'Q')
-            if (second.isLetterOrDigit() && second !in allowedSeconds) {
-                return null
-            }
-        }
-        
-        val firstChar = t.firstOrNull() ?: return null
-        
-        // Exclude clear numbers > 10 that were read as ranks (e.g. 50, 40 etc.)
-        if (t.length >= 2 && firstChar.isDigit() && t[1].isDigit()) {
-            return null // Like "50", "25", "42" - these are not single ranks
-        }
-
-        return when (firstChar) {
-            'A' -> Rank.ACE
-            'K', 'X' -> Rank.KING
-            'Q', '0', 'O', 'C', 'D' -> Rank.QUEEN
-            'J', 'I', 'L', '1' -> Rank.JACK
-            'T' -> Rank.TEN
-            '9', 'G' -> Rank.NINE
-            '8', 'B' -> Rank.EIGHT
-            '7' -> Rank.SEVEN
-            '6' -> Rank.SIX
-            '5', 'S' -> Rank.FIVE
-            '4' -> Rank.FOUR
-            '3' -> Rank.THREE
-            '2', 'Z' -> Rank.TWO
-            else -> null
-        }
-    }
 
     fun stop() {
         PokerHudSharedState.isScanning.value = false
