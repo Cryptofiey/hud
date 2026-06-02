@@ -1273,10 +1273,10 @@ class PokerHudService : Service() {
                     try {
                         val cards = state.board.filterNotNull()
                         if (cards.isNotEmpty()) {
-                            txtCardsInfo.text = cards.joinToString(" ") { "${it.rank.symbol}${it.suit.symbol}" }
+                            txtCardsInfo.text = "OK"
                             txtCardsInfo.setTextColor(AndroidColor.parseColor("#FF2196F3"))
                         } else {
-                            txtCardsInfo.text = "NOT FOUND"
+                            txtCardsInfo.text = "WAIT"
                             txtCardsInfo.setTextColor(AndroidColor.GRAY)
                         }
                     } catch (e: Exception) {
@@ -1422,10 +1422,10 @@ class PokerHudService : Service() {
                 PokerHudSharedState.uiState.collect { state ->
                     try {
                         if (state.heroCard1 != null && state.heroCard2 != null) {
-                            txtCardsInfo.text = "${state.heroCard1.rank.symbol}${state.heroCard1.suit.symbol} ${state.heroCard2.rank.symbol}${state.heroCard2.suit.symbol}"
+                            txtCardsInfo.text = "OK"
                             txtCardsInfo.setTextColor(AndroidColor.parseColor("#4CAF50"))
                         } else {
-                            txtCardsInfo.text = "NOT FOUND"
+                            txtCardsInfo.text = "WAIT"
                             txtCardsInfo.setTextColor(AndroidColor.GRAY)
                         }
                     } catch(e: Exception) {
