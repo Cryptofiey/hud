@@ -330,32 +330,40 @@ class ScreenScanner(
         
         var rC = 0; var gC = 0; var bC = 0; var blkC = 0
         
-        // Sample in a 40x60 area starting slightly left of the rank and going down
-        val left = maxOf(0, x - 15)
-        val top = maxOf(0, y) 
+        val left = maxOf(0, x - 30)
+        val right = minOf(w - 1, x + 30)
+        val top = maxOf(0, y - 20)
+        val bottom = minOf(h - 1, y + 80)
         
-        for (i in 0 until 40 step 2) {
-            for (j in 0 until 60 step 2) {
-                val px = left + i
-                val py = top + j
-                if (px < w && py < h) {
-                    val p = crop.getPixel(px, py)
-                    val r = android.graphics.Color.red(p)
-                    val g = android.graphics.Color.green(p)
-                    val b = android.graphics.Color.blue(p)
-                    
-                    if (r > 150 && r > g + 70 && r > b + 70) rC++
-                    else if (g > 130 && g > r + 60 && g > b + 50) gC++
-                    else if (b > 120 && b > r + 60 && b > g + 15) bC++
-                    else if (r < 80 && g < 80 && b < 80) blkC++
+        for (px in left..right step 3) {
+            for (py in top..bottom step 3) {
+                val p = crop.getPixel(px, py)
+                val r = android.graphics.Color.red(p)
+                val g = android.graphics.Color.green(p)
+                val b = android.graphics.Color.blue(p)
+                
+                // Ignore text/icon bright pixels
+                if (r > 170 && g > 170 && b > 170) continue
+                // Ignore extremely dark edge pixels
+                if (r < 15 && g < 15 && b < 15) continue
+                
+                if (r > g + 20 && r > b + 20) {
+                    rC++
+                } else if (b > r + 20 && b > g + 10) {
+                    bC++
+                } else if (g > r + 20 && g > b + 20) {
+                    gC++
+                } else if (r < 100 && g < 100 && b < 100) {
+                    val maxDiff = maxOf(r - g, r - b, g - r, g - b, b - r, b - g)
+                    if (maxDiff < 20) blkC++
                 }
             }
         }
         
         return when {
-            rC > gC && rC > bC && rC > 2 -> Suit.HEARTS
-            gC > rC && gC > bC && gC > 2 -> Suit.CLUBS
-            bC > rC && bC > gC && bC > 2 -> Suit.DIAMONDS
+            rC > gC && rC > bC && rC > blkC -> Suit.HEARTS
+            bC > rC && bC > gC && bC > blkC -> Suit.DIAMONDS
+            gC > rC && gC > bC && gC > blkC -> Suit.CLUBS
             else -> Suit.SPADES
         }
     }
