@@ -89,8 +89,34 @@ class ScreenScanner(
         }
     }
 
-    private var consecutiveEmptyHole = 0
-    private var consecutiveEmptyComm = 0
+    private val holeHistory = mutableListOf<List<Card>>()
+    private val commHistory = mutableListOf<List<Card>>()
+
+    private fun getSmoothedCards(history: MutableList<List<Card>>, newCards: List<Card>, windowSize: Int = 4): List<Card> {
+        history.add(newCards)
+        if (history.size > windowSize) {
+            history.removeAt(0)
+        }
+        
+        // If last 2 frames were completely empty, reset history
+        if (history.size >= 2 && history.takeLast(2).all { it.isEmpty() }) {
+            history.clear()
+            return emptyList()
+        }
+        
+        val maxLen = history.maxOfOrNull { it.size } ?: 0
+        val result = mutableListOf<Card>()
+        
+        for (i in 0 until maxLen) {
+            val cardsAtI = history.mapNotNull { it.getOrNull(i) }
+            if (cardsAtI.isEmpty()) continue
+            val modeCount = cardsAtI.groupingBy { it }.eachCount().maxByOrNull { it.value }
+            if (modeCount != null) {
+                result.add(modeCount.key)
+            }
+        }
+        return result.distinct()
+    }
 
     private var cachedCleanBitmap: Bitmap? = null
 
@@ -226,21 +252,27 @@ class ScreenScanner(
                 }
             }
             
-            val foundCommCards = tempCommCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
-            val foundHoleCards = tempHoleCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
-
-            if (foundHoleCards.size < 2) consecutiveEmptyHole++ else consecutiveEmptyHole = 0
-            if (foundCommCards.isEmpty()) consecutiveEmptyComm++ else consecutiveEmptyComm = 0
+            val foundCommCardsRaw = tempCommCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
+            val foundHoleCardsRaw = tempHoleCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
             
-            val useOldHole = consecutiveEmptyHole < 3
-            val useOldComm = consecutiveEmptyComm < 3
+            var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, windowSize = 3)
+            var smoothedComm = getSmoothedCards(commHistory, foundCommCardsRaw, windowSize = 3)
 
-            val finalH1 = foundHoleCards.getOrNull(0) ?: if (useOldHole) currentState.heroCard1 else null
-            // Only fallback for H2 if H1 was also successfully recovered or found. If we only found 1 card today and our fallback is expired, don't use old H2.
-            val finalH2 = foundHoleCards.getOrNull(1) ?: if (useOldHole) currentState.heroCard2 else null
+            // Board never shrinks during a hand. If we saw N cards, and now see fewer (but >0), keep N cards if possible.
+            // If it drops to 0, getSmoothedCards will eventually clear it (after 2 empty frames).
+            val currentComm = currentState.board.filterNotNull()
+            if (smoothedComm.isNotEmpty() && smoothedComm.size < currentComm.size) {
+                // Temporary drop in detected cards. Use previous known board if it's larger length.
+                smoothedComm = currentComm
+                // Overwrite the last history entry to keep it alive
+                if (commHistory.isNotEmpty()) commHistory[commHistory.lastIndex] = currentComm
+            }
+            
+            val finalH1 = smoothedHole.getOrNull(0)
+            val finalH2 = smoothedHole.getOrNull(1)
             
             val finalBoard = List(5) { i ->
-                foundCommCards.getOrNull(i) ?: if (useOldComm) currentState.board.getOrNull(i) else null
+                smoothedComm.getOrNull(i)
             }
             
             val scannedOpponents = OpponentScanner.scan(result, cleanBitmap!!, hudRects)
@@ -269,7 +301,7 @@ class ScreenScanner(
                 ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight, updateProfileBoxes = (profileBoxesToHighlight != null))
             )
             
-            scanStatus.value = "H:${foundHoleCards.size} C:${foundCommCards.size} Ops:${finalOpponents.size}<br>" +
+            scanStatus.value = "H:${smoothedHole.size}(${foundHoleCardsRaw.size}) C:${smoothedComm.size}(${foundCommCardsRaw.size}) Ops:${finalOpponents.size}<br>" +
                                "Board: ${finalBoard.take(5).joinToString("") { it?.toHtmlString() ?: "[?]" }}"
             
         } catch (e: Throwable) {
