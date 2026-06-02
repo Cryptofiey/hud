@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Build Debug APK
+    name: Build Release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -34,12 +34,12 @@ jobs:
           validate-wrappers: false
 
       - name: Build APK
-        run: gradle assembleDebug --build-cache --parallel --no-daemon -Porg.gradle.caching=true
+        run: gradle assembleRelease --build-cache --parallel --no-daemon -Porg.gradle.caching=true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: poker-equity-hud-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14
