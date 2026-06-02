@@ -1639,12 +1639,26 @@ class PokerHudService : Service() {
                     val recommendationChanged = rec != lastRecommendation || advRec != lastAdvRecommendation
 
                     if (heroCardsChanged || boardChanged || simResultChanged) {
+                        // Render Board independent of Hero cards
+                        val boardStr = state.board.filterNotNull().joinToString(" ") { it.toHtmlString() }
+                        txtBoardCards.text = if (boardStr.isEmpty()) "Борд: --" 
+                                               else android.text.Html.fromHtml("Борд: $boardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
+                                               
+                        val allVisible = (listOf(state.heroCard1, state.heroCard2) + state.board).filterNotNull()
+                        if (allVisible.size >= 5) {
+                            val bestHand = HandEvaluator.findBest5CardHand(allVisible)
+                            txtHandRank.text = "Комбо: ${bestHand.category.displayNameRu}"
+                        } else if (allVisible.isNotEmpty()) {
+                            val partialHand = HandEvaluator.findBestHand(allVisible)
+                            txtHandRank.text = "Комбо: ${partialHand.category.displayNameRu}"
+                        } else {
+                            txtHandRank.text = "Комбо: --"
+                        }
+
                         if (state.heroCard1 == null || state.heroCard2 == null) {
                             txtWin.text = "Победа: 0.0%"
                             txtAdvWin.text = "Победа (L3): 0.0%"
                             txtHeroCards.text = "Карты: --"
-                            txtBoardCards.text = "Борд: --"
-                            txtHandRank.text = "Комбо: --"
                         } else {
                             if (res != null) {
                                 val combinedWin = res.heroWinPct + res.heroTiePct
@@ -1661,22 +1675,6 @@ class PokerHudService : Service() {
                             }
                             
                             txtHeroCards.text = android.text.Html.fromHtml("Карты: ${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}", android.text.Html.FROM_HTML_MODE_LEGACY)
-                            
-                            val boardStr = state.board.filterNotNull().joinToString(" ") { it.toHtmlString() }
-                            txtBoardCards.text = if (boardStr.isEmpty()) "Борд: --" 
-                                                   else android.text.Html.fromHtml("Борд: $boardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
-
-                            // Hand evaluation
-                            val allVisible = (listOf(state.heroCard1, state.heroCard2) + state.board).filterNotNull()
-                            if (allVisible.size >= 5) {
-                                val bestHand = HandEvaluator.findBest5CardHand(allVisible)
-                                txtHandRank.text = "Комбо: ${bestHand.category.displayNameRu}"
-                            } else if (allVisible.size >= 2 && state.board.none { it != null }) {
-                                txtHandRank.text = "Комбо: Пре-флоп"
-                            } else {
-                                val partialHand = HandEvaluator.findBestHand(allVisible)
-                                txtHandRank.text = if (allVisible.isEmpty()) "Комбо: --" else "Комбо: ${partialHand.category.displayNameRu}"
-                            }
                         }
                     }
 

@@ -105,11 +105,12 @@ class ScannerBoxesView(context: Context) : View(context) {
         if (isHidden) return
         super.onDraw(canvas)
 
-        val w = width.toFloat()
-        val h = height.toFloat()
+        try {
+            val w = width.toFloat()
+            val h = height.toFloat()
 
-        // Draw the search zone (Horseshoe) - only if not specifically drawing profile boxes
-        if (state.profileBoxes == null && PokerHudSharedState.showScannerBoxes.value) {
+            // Draw the search zone (Horseshoe) - only if not specifically drawing profile boxes
+            if (state.profileBoxes == null && PokerHudSharedState.showScannerBoxes.value) {
             val path = Path()
             path.moveTo(0f, h)
             path.lineTo(0f, 0f)
@@ -191,6 +192,9 @@ class ScannerBoxesView(context: Context) : View(context) {
             
             canvas.drawText(box.label, xPos, yPos, textOutlinePaint)
             canvas.drawText(box.label, xPos, yPos, textPaint)
+        }
+        } catch (e: Throwable) {
+            android.util.Log.e("ScannerBoxesView", "Error drawing scanner boxes", e)
         }
     }
 }

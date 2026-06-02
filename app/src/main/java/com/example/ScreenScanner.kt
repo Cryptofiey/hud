@@ -76,10 +76,10 @@ class ScreenScanner(
             )
 
             scanJob = scope.launch {
-                delay(400) // Small delay to allow UI to update and hide overlays
+                delay(200) // Small delay to allow UI to update and hide overlays
                 while (isActive) {
                     processLatestImage()
-                    delay(1100) // Slightly slower scan for better UX (less flicker)
+                    delay(500) // Lower delay for faster reaction (was 1100)
                 }
             }
         } catch (e: Throwable) {
