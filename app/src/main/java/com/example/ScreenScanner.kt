@@ -154,8 +154,8 @@ class ScreenScanner(
             val result = recognizer.process(inputImage).await()
 
             // 2. EXTRACT CARDS BY BOUNDING BOX INTERSECT
-            val tempCommCards = mutableListOf<Card>()
-            val tempHoleCards = mutableListOf<Card>()
+            val tempCommCards = mutableListOf<Pair<Card, Int>>()
+            val tempHoleCards = mutableListOf<Pair<Card, Int>>()
             
             val commElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
             val holeElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
@@ -197,7 +197,8 @@ class ScreenScanner(
                 val parsedRanks = findCardsInText(element.text)
                 for (rank in parsedRanks) {
                     val suit = robustDetectSuit(cleanBitmap, box.centerX(), box.centerY())
-                    tempCommCards.add(Card(rank, suit))
+                    val xOffset = box.left + (parsedRanks.indexOf(rank) * 10)
+                    tempCommCards.add(Pair(Card(rank, suit), xOffset))
                 }
             }
             
@@ -206,8 +207,8 @@ class ScreenScanner(
                 if (box.width() > box.height() * 2.5f) continue
                 if (element.text.trim().length > 3) continue
                 
-                // Minimum size threshold to filter out tiny text
-                if (box.height() < holeRect.height() * 0.08f) continue
+                // Minimum size threshold to filter out tiny text. Hole cards usually large.
+                if (box.height() < holeRect.height() * 0.05f) continue
                 
                 val lowerCount = element.text.count { it.isLowerCase() }
                 if (lowerCount >= 2) continue
@@ -215,17 +216,19 @@ class ScreenScanner(
                 val rawText = element.text.trim().uppercase(java.util.Locale.US)
                 if (rawText.contains("OK") || rawText.contains("WAIT") || rawText.contains("COIN")) continue
 
-                if (!isCardBackground(cleanBitmap!!, box)) continue
+                // We skip isCardBackground for hole cards because they can be covered by player graphics or shadows.
 
                 val parsedRanks = findCardsInText(element.text)
                 for (rank in parsedRanks) {
                     val suit = robustDetectSuit(cleanBitmap, box.centerX(), box.centerY())
-                    tempHoleCards.add(Card(rank, suit))
+                    // If multiple ranks are in same text block, offset the X coordinate slightly to preserve their read order
+                    val xOffset = box.left + (parsedRanks.indexOf(rank) * 10) 
+                    tempHoleCards.add(Pair(Card(rank, suit), xOffset))
                 }
             }
             
-            val foundCommCards = tempCommCards.distinct()
-            val foundHoleCards = tempHoleCards.distinct()
+            val foundCommCards = tempCommCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
+            val foundHoleCards = tempHoleCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
 
             if (foundHoleCards.size < 2) consecutiveEmptyHole++ else consecutiveEmptyHole = 0
             if (foundCommCards.isEmpty()) consecutiveEmptyComm++ else consecutiveEmptyComm = 0
