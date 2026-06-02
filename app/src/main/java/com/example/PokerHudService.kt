@@ -995,7 +995,8 @@ class PokerHudService : Service() {
         if (PokerHudSharedState.showCommBox.value && !gameMode) showCommOverlay() else hideCommOverlay()
         if (PokerHudSharedState.showHoleBox.value && !gameMode) showHoleOverlay() else hideHoleOverlay()
         if (PokerHudSharedState.showProbsBox.value && !gameMode) showProbsOverlay() else hideProbsOverlay()
-        if (PokerHudSharedState.showScannerBoxes.value || PokerHudSharedState.uiState.value.profileBoxes != null) showScannerOutlinesOverlay() else hideScannerOutlinesOverlay()
+        
+        if (!gameMode) showScannerOutlinesOverlay() else hideScannerOutlinesOverlay()
     }
 
     fun getCommRect(): android.graphics.Rect {

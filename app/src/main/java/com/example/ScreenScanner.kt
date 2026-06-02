@@ -202,13 +202,18 @@ class ScreenScanner(
             val foundCommCards = tempCommCards.distinct()
             val foundHoleCards = tempHoleCards.distinct()
 
-            if (foundHoleCards.isEmpty()) consecutiveEmptyHole++ else consecutiveEmptyHole = 0
+            if (foundHoleCards.size < 2) consecutiveEmptyHole++ else consecutiveEmptyHole = 0
             if (foundCommCards.isEmpty()) consecutiveEmptyComm++ else consecutiveEmptyComm = 0
             
-            val finalH1 = foundHoleCards.getOrNull(0) ?: if (consecutiveEmptyHole < 3) currentState.heroCard1 else null
-            val finalH2 = foundHoleCards.getOrNull(1) ?: if (consecutiveEmptyHole < 3) currentState.heroCard2 else null
+            val useOldHole = consecutiveEmptyHole < 3
+            val useOldComm = consecutiveEmptyComm < 3
+
+            val finalH1 = foundHoleCards.getOrNull(0) ?: if (useOldHole) currentState.heroCard1 else null
+            // Only fallback for H2 if H1 was also successfully recovered or found. If we only found 1 card today and our fallback is expired, don't use old H2.
+            val finalH2 = foundHoleCards.getOrNull(1) ?: if (useOldHole) currentState.heroCard2 else null
+            
             val finalBoard = List(5) { i ->
-                foundCommCards.getOrNull(i) ?: if (consecutiveEmptyComm < 3) currentState.board.getOrNull(i) else null
+                foundCommCards.getOrNull(i) ?: if (useOldComm) currentState.board.getOrNull(i) else null
             }
             
             val scannedOpponents = OpponentScanner.scan(result, cleanBitmap!!, hudRects)
@@ -256,9 +261,9 @@ class ScreenScanner(
         val w = bitmap.width
         val h = bitmap.height
         
-        val y = Math.max(0, box.top - 5)
-        val startX = Math.max(0, box.left)
-        val endX = Math.min(w - 1, box.right)
+        val y = Math.min(h - 1, Math.max(0, box.top - 5))
+        val startX = Math.min(w - 1, Math.max(0, box.left))
+        val endX = Math.min(w - 1, Math.max(0, box.right))
         
         if (startX >= endX) return true
         
@@ -294,11 +299,14 @@ class ScreenScanner(
         
         val totalStdDev = Math.sqrt(((varR + varG + varB) / count).toDouble())
         
-        // If the color is very bright (white/light grey), it's almost certainly a card.
+        // If the color is very bright (white/light grey), it's almost certainly a card face.
         if (avgR > 180 && avgG > 180 && avgB > 180) return true
         
+        // Too dark to be a standard card face
+        if (avgR < 80 && avgG < 80 && avgB < 80) return false
+        
         // If it's very textured (StdDev > 25), it's likely felt or background noise, not a flat card face.
-        if (totalStdDev > 30.0) return false
+        if (totalStdDev > 25.0) return false
         
         return true
     }
@@ -330,32 +338,37 @@ class ScreenScanner(
         
         var rC = 0; var gC = 0; var bC = 0; var blkC = 0
         
-        val left = maxOf(0, x - 30)
-        val right = minOf(w - 1, x + 30)
-        val top = maxOf(0, y - 20)
-        val bottom = minOf(h - 1, y + 80)
+        val left = maxOf(0, x - 50)
+        val right = minOf(w - 1, x + 50)
+        val top = maxOf(0, y - 50)
+        val bottom = minOf(h - 1, y + 100)
         
-        for (px in left..right step 3) {
-            for (py in top..bottom step 3) {
+        for (px in left..right step 4) {
+            for (py in top..bottom step 4) {
                 val p = crop.getPixel(px, py)
                 val r = android.graphics.Color.red(p)
                 val g = android.graphics.Color.green(p)
                 val b = android.graphics.Color.blue(p)
                 
                 // Ignore text/icon bright pixels
-                if (r > 170 && g > 170 && b > 170) continue
+                if (r > 160 && g > 160 && b > 160) continue
                 // Ignore extremely dark edge pixels
-                if (r < 15 && g < 15 && b < 15) continue
+                if (r < 25 && g < 25 && b < 25) continue
                 
-                if (r > g + 20 && r > b + 20) {
-                    rC++
-                } else if (b > r + 20 && b > g + 10) {
-                    bC++
-                } else if (g > r + 20 && g > b + 20) {
-                    gC++
-                } else if (r < 100 && g < 100 && b < 100) {
-                    val maxDiff = maxOf(r - g, r - b, g - r, g - b, b - r, b - g)
-                    if (maxDiff < 20) blkC++
+                val max = maxOf(r, g, b)
+                val min = minOf(r, g, b)
+                val saturation = max - min
+                
+                if (saturation < 20) {
+                    blkC++ // grayscale/spades
+                } else {
+                    if (r == max) {
+                        rC++
+                    } else if (g == max) {
+                        gC++
+                    } else {
+                        bC++
+                    }
                 }
             }
         }
