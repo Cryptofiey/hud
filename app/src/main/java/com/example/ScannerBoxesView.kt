@@ -112,16 +112,15 @@ class ScannerBoxesView(context: Context) : View(context) {
             // Draw the search zone (Horseshoe) - only if not specifically drawing profile boxes
             if (state.profileBoxes == null && PokerHudSharedState.showScannerBoxes.value) {
             val path = Path()
-            path.moveTo(0f, h)
-            path.lineTo(0f, 0f)
-            path.lineTo(w, 0f)
-            path.lineTo(w, h)
-            // Inner cutout (matching the parameters in OpponentScanner)
-            path.lineTo(w * 0.65f, h)
-            path.lineTo(w * 0.65f, h * 0.35f)
-            path.lineTo(w * 0.35f, h * 0.35f)
-            path.lineTo(w * 0.35f, h)
-            path.close()
+            path.fillType = Path.FillType.EVEN_ODD
+            // Whole screen
+            path.addRect(0f, 0f, w, h, Path.Direction.CW)
+            // Exclude Top Header
+            path.addRect(0f, 0f, w, h * 0.11f, Path.Direction.CW)
+            // Exclude Community Cards
+            path.addRect(w * 0.18f, h * 0.38f, w * 0.82f, h * 0.68f, Path.Direction.CW)
+            // Exclude Hero Hole Cards
+            path.addRect(w * 0.53f, h * 0.68f, w * 0.95f, h * 0.93f, Path.Direction.CW)
 
             canvas.drawPath(path, zoneFillPaint)
             canvas.drawPath(path, zoneOutlinePaint)

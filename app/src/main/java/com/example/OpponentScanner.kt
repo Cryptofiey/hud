@@ -81,8 +81,12 @@ object OpponentScanner {
             val x = box.centerX().toFloat()
             val y = box.centerY().toFloat()
             
-            // Widen the edge zones to 35% from left and right to ensure we capture all names.
-            val inSearchZone = (x < width * 0.35f || x > width * 0.65f || y < height * 0.35f)
+            // Define exclusion zones based on the new layout
+            val inTopHeader = y < height * 0.11f
+            val inCommunityCards = x > width * 0.18f && x < width * 0.82f && y > height * 0.38f && y < height * 0.68f
+            val inHeroCards = x > width * 0.53f && x < width * 0.95f && y > height * 0.68f && y < height * 0.93f
+            
+            val inSearchZone = !(inTopHeader || inCommunityCards || inHeroCards)
             inSearchZone && isValidPlayerName(block.text)
         }
 

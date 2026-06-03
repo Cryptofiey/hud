@@ -366,10 +366,10 @@ object AdvisorEngine {
         }
 
         val confidence = when(action) {
-            "RAISE", "ALL-IN" -> ((rawScore - 0.5f) / 0.5f).coerceIn(0f, 1f) * 100f
-            "FOLD" -> ((0.3f - rawScore) / 0.3f).coerceIn(0f, 1f) * 100f
-            "CALL" -> (1.0f - kotlin.math.abs(rawScore - 0.5f) / 0.5f).coerceIn(0f, 1f) * 100f
-            "CHECK" -> if (rawScore < 0.3f) ((0.3f - rawScore)/0.3f).coerceIn(0f, 1f) * 100f else (1.0f - kotlin.math.abs(rawScore - 0.5f) / 0.5f).coerceIn(0f, 1f) * 100f
+            "RAISE", "ALL-IN" -> ((rawScore - 0.5f) / 0.5f).coerceAtLeast(0f) * 100f
+            "FOLD" -> ((0.3f - rawScore) / 0.3f).coerceAtLeast(0f) * 100f
+            "CALL" -> (1.0f - kotlin.math.abs(rawScore - 0.5f) / 0.5f).coerceAtLeast(0f) * 100f
+            "CHECK" -> if (rawScore < 0.3f) ((0.3f - rawScore)/0.3f).coerceAtLeast(0f) * 100f else (1.0f - kotlin.math.abs(rawScore - 0.5f) / 0.5f).coerceAtLeast(0f) * 100f
             else -> 50f
         }
 
@@ -474,7 +474,7 @@ object AdvisorEngine {
         when {
             adjustedScore > 0.7f -> {
                 action = "RAISE"
-                confidence = (adjustedScore * 100f).coerceIn(0f, 100f)
+                confidence = (adjustedScore * 100f).coerceAtLeast(0f)
                 explanation = "Adv: сильное эквити диапазона ${String.format("%.0f", adjustedScore*100)}%"
             }
             adjustedScore > 0.5f -> {
