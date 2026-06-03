@@ -92,6 +92,85 @@ class ScreenScanner(
     private val holeHistory = mutableListOf<List<Card>>()
     private val commHistory = mutableListOf<List<Card>>()
 
+    private fun findCardSlots(bitmap: Bitmap, rect: android.graphics.Rect, expectedMaxCards: Int): List<android.graphics.Rect> {
+        if (rect.width() <= 0 || rect.height() <= 0) return emptyList()
+        val w = rect.width()
+        val h = rect.height()
+        val startX = rect.left
+        val topY = rect.top
+
+        val yStart = topY + (h * 0.3).toInt()
+        val yEnd = topY + (h * 0.7).toInt()
+
+        if (yEnd <= yStart) return emptyList()
+        if (startX + w > bitmap.width || yEnd > bitmap.height) return emptyList()
+
+        val columnActivity = IntArray(w)
+        for (x in 0 until w) {
+            var activity = 0
+            for (y in yStart..yEnd step 3) {
+                val p = bitmap.getPixel(startX + x, y)
+                val r = android.graphics.Color.red(p)
+                val g = android.graphics.Color.green(p)
+                val b = android.graphics.Color.blue(p)
+                activity += maxOf(r, maxOf(g, b))
+            }
+            columnActivity[x] = activity
+        }
+
+        var minA = Int.MAX_VALUE
+        var maxA = Int.MIN_VALUE
+        for (a in columnActivity) {
+            if (a < minA) minA = a
+            if (a > maxA) maxA = a
+        }
+
+        val ySteps = ((yEnd - yStart) / 3) + 1
+        if (maxA / ySteps < 40) return emptyList() // Max pixel intensity is < 40 on average, definitely just dark table
+
+        val threshold = minA + (maxA - minA) / 4
+        
+        val columnIsCard = BooleanArray(w)
+        for (x in 0 until w) {
+            val avgPixel = columnActivity[x] / ySteps
+            columnIsCard[x] = columnActivity[x] > threshold && avgPixel > 35
+        }
+
+        val rawSlots = mutableListOf<android.graphics.Rect>()
+        var inCard = false
+        var cardStartX = 0
+
+        for (x in 0 until w) {
+            if (columnIsCard[x] && !inCard) {
+                inCard = true
+                cardStartX = x
+            } else if (!columnIsCard[x] && inCard) {
+                inCard = false
+                val cardEndX = x - 1
+                rawSlots.add(android.graphics.Rect(startX + cardStartX, rect.top, startX + cardEndX, rect.bottom))
+            }
+        }
+        if (inCard) {
+            rawSlots.add(android.graphics.Rect(startX + cardStartX, rect.top, startX + w - 1, rect.bottom))
+        }
+
+        val validSlots = rawSlots.filter { it.width() > w * 0.03f }
+
+        val finalSlots = mutableListOf<android.graphics.Rect>()
+        val expectedCardWidth = if (expectedMaxCards > 0) w / expectedMaxCards else w
+        for (slot in validSlots) {
+            val count = maxOf(1, Math.round(slot.width().toFloat() / expectedCardWidth.toFloat()))
+            val splitWidth = slot.width() / count
+            for (i in 0 until count) {
+                val subLeft = slot.left + i * splitWidth
+                val subRight = if (i == count - 1) slot.right else subLeft + splitWidth
+                finalSlots.add(android.graphics.Rect(subLeft, slot.top, subRight, slot.bottom))
+            }
+        }
+        
+        return finalSlots.take(expectedMaxCards)
+    }
+
     private fun getSmoothedCards(history: MutableList<List<Card>>, newCards: List<Card>, windowSize: Int = 4): List<Card> {
         history.add(newCards)
         if (history.size > windowSize) {
@@ -250,8 +329,48 @@ class ScreenScanner(
                 }
             }
             
-            val foundCommCardsRaw = tempCommCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
-            val foundHoleCardsRaw = tempHoleCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
+            val commSlots = findCardSlots(cleanBitmap, commRect, 5)
+            val holeSlots = findCardSlots(cleanBitmap, holeRect, 2)
+            
+            val physicalHoleCount = holeSlots.size
+            if (physicalHoleCount == 1) {
+                scanStatus.value = "Error: 1 hole card slot detected, physically impossible."
+                return
+            }
+
+            val physicalCommCount = commSlots.size
+            if (physicalCommCount == 1 || physicalCommCount == 2 || physicalCommCount > 5) {
+                scanStatus.value = "Error: Invalid number of community slots: $physicalCommCount"
+                return
+            }
+
+            val foundCommCardsRaw = mutableListOf<Card>()
+            for (slot in commSlots) {
+                // Expanded match zone slightly to accommodate OCR box variations
+                val matched = tempCommCards.filter { it.second >= slot.left - 15 && it.second <= slot.right + 15 }
+                if (matched.isNotEmpty()) {
+                    foundCommCardsRaw.add(matched.first().first)
+                }
+            }
+
+            val foundHoleCardsRaw = mutableListOf<Card>()
+            if (physicalHoleCount == 2) {
+                for (slot in holeSlots) {
+                    val matched = tempHoleCards.filter { it.second >= slot.left - 20 && it.second <= slot.right + 20 }
+                    if (matched.isNotEmpty()) {
+                        foundHoleCardsRaw.add(matched.first().first)
+                    }
+                }
+            }
+
+            if (foundCommCardsRaw.size != physicalCommCount) {
+                 scanStatus.value = "Warning: OCR missed comm cards (${foundCommCardsRaw.size}/$physicalCommCount). Frame skipped."
+                 return
+            }
+            if (foundHoleCardsRaw.size != physicalHoleCount) {
+                 scanStatus.value = "Warning: OCR missed hole cards (${foundHoleCardsRaw.size}/$physicalHoleCount). Frame skipped."
+                 return
+            }
             
             val rawAll = foundHoleCardsRaw + foundCommCardsRaw
             if (rawAll.size != rawAll.toSet().size) {
