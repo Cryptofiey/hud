@@ -1155,6 +1155,9 @@ class PokerHudService : Service() {
     private fun showCommOverlay() {
         if (floatingCommOverlay != null) return
 
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+
         val params = WindowManager.LayoutParams(
             dpToPx(280f),
             dpToPx(115f),
@@ -1168,8 +1171,8 @@ class PokerHudService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = dpToPx(15f)
-            y = dpToPx(150f)
+            x = (screenWidth - dpToPx(280f)) / 2
+            y = (screenHeight * 0.42f).toInt()
         }
 
         val frame = FrameLayout(this).apply {
@@ -1296,6 +1299,9 @@ class PokerHudService : Service() {
     private fun showHoleOverlay() {
         if (floatingHoleOverlay != null) return
 
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+
         val params = WindowManager.LayoutParams(
             dpToPx(85f),
             dpToPx(85f),
@@ -1309,8 +1315,8 @@ class PokerHudService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = dpToPx(15f)
-            y = dpToPx(290f)
+            x = (screenWidth - dpToPx(85f)) / 2
+            y = (screenHeight * 0.75f).toInt()
         }
 
         val frame = FrameLayout(this).apply {
@@ -1452,7 +1458,7 @@ class PokerHudService : Service() {
             y = dpToPx(150f)
         }
         val frame = FrameLayout(this).apply {
-            background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 10f, dpToPx(1.5f), AndroidColor.parseColor("#FF1E88E5"))
+            background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 10f, dpToPx(1.5f), AndroidColor.parseColor("#FF4CAF50"))
             setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
         }
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1463,7 +1469,7 @@ class PokerHudService : Service() {
             gravity = Gravity.CENTER_VERTICAL
         }
         val title = TextView(this).apply {
-            text = "LIVE HUD DASHBOARD"
+            text = "LHD"
             setTextColor(AndroidColor.parseColor("#FFFFD54F"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -1488,32 +1494,13 @@ class PokerHudService : Service() {
         })
         
         // 1. PROBABILITIES SECTION
-        val txtWin = TextView(this).apply {
-            text = "Победа: 0.0%"
-            setTextColor(AndroidColor.parseColor("#00FFC8")) // Neon Cyan
-            textSize = 9f
-            typeface = Typeface.DEFAULT_BOLD
-            setShadowLayer(12f, 0f, 0f, AndroidColor.parseColor("#BB00FFC8")) // Distinct neon glow
-        }
-        val txtAdvWin = TextView(this).apply {
-            text = "Победа (L3): 0.0%"
-            setTextColor(AndroidColor.parseColor("#FF00FFCC")) // Neon Greenish Cyan
-            textSize = 9f
-            typeface = Typeface.DEFAULT_BOLD
-            setShadowLayer(12f, 0f, 0f, AndroidColor.parseColor("#BB00FFCC"))
-        }
-        val txtHeroCards = TextView(this).apply {
-            text = "Карты: --"
+        val txtCardsBoard = TextView(this).apply {
+            text = "Карты: -- | Борд: --"
             setTextColor(AndroidColor.parseColor("#FFD54F"))
             textSize = 8f
         }
-        val txtBoardCards = TextView(this).apply {
-            text = "Борд: --"
-            setTextColor(AndroidColor.parseColor("#FFB74D"))
-            textSize = 8f
-        }
-        val txtHandRank = TextView(this).apply {
-            text = "Комбо: --"
+        val txtHandRankStrength = TextView(this).apply {
+            text = "Комбо: -- | Сила: --"
             setTextColor(AndroidColor.parseColor("#90CAF9"))
             textSize = 9f
             typeface = Typeface.DEFAULT_BOLD
@@ -1524,22 +1511,13 @@ class PokerHudService : Service() {
                 topMargin = dpToPx(2f)
             }
         }
-        val txtStrength = TextView(this).apply {
-            text = "Сила: --"
-            setTextColor(AndroidColor.parseColor("#FF00FFCC"))
-            textSize = 8f
-        }
         val txtSklan = TextView(this).apply {
             text = "Склански: --"
             setTextColor(AndroidColor.parseColor("#FFFF7043"))
             textSize = 8f
         }
-        content.addView(txtWin)
-        content.addView(txtAdvWin)
-        content.addView(txtHeroCards)
-        content.addView(txtBoardCards)
-        content.addView(txtHandRank)
-        content.addView(txtStrength)
+        content.addView(txtCardsBoard)
+        content.addView(txtHandRankStrength)
         content.addView(txtSklan)
         
         // 2. ACTION ADVISOR SECTION
@@ -1601,6 +1579,13 @@ class PokerHudService : Service() {
             var lastRecommendation: Recommendation? = null
             var lastAdvRecommendation: Recommendation? = null
 
+            var currentHandRank = "--"
+            var currentStrength = "--"
+            var currentCardsStr = "--"
+            var currentBoardStr = "--"
+            var currentWin = "0.0%"
+            var currentAdvWin = "0.0%"
+
             PokerHudSharedState.uiState.collect { state ->
                 try {
                     // 1. Update Probabilities & Cards
@@ -1617,40 +1602,39 @@ class PokerHudService : Service() {
                     if (heroCardsChanged || boardChanged || simResultChanged) {
                         // Render Board independent of Hero cards
                         val boardStr = state.board.filterNotNull().joinToString(" ") { it.toHtmlString() }
-                        txtBoardCards.text = if (boardStr.isEmpty()) "Борд: --" 
-                                               else android.text.Html.fromHtml("Борд: $boardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
+                        currentBoardStr = if (boardStr.isEmpty()) "--" else boardStr
                                                
                         val allVisible = (listOf(state.heroCard1, state.heroCard2) + state.board).filterNotNull()
                         if (allVisible.size >= 5) {
                             val bestHand = HandEvaluator.findBest5CardHand(allVisible)
-                            txtHandRank.text = "Комбо: ${bestHand.category.displayNameRu}"
+                            currentHandRank = bestHand.category.displayNameRu
                         } else if (allVisible.isNotEmpty()) {
                             val partialHand = HandEvaluator.findBestHand(allVisible)
-                            txtHandRank.text = "Комбо: ${partialHand.category.displayNameRu}"
+                            currentHandRank = partialHand.category.displayNameRu
                         } else {
-                            txtHandRank.text = "Комбо: --"
+                            currentHandRank = "--"
                         }
 
                         if (state.heroCard1 == null || state.heroCard2 == null) {
-                            txtWin.text = "Победа: 0.0%"
-                            txtAdvWin.text = "Победа (L3): 0.0%"
-                            txtHeroCards.text = "Карты: --"
+                            currentWin = "0.0%"
+                            currentAdvWin = "0.0%"
+                            currentCardsStr = "--"
                         } else {
                             if (res != null) {
                                 val combinedWin = res.heroWinPct + res.heroTiePct
-                                txtWin.text = String.format(Locale.US, "Победа: %.1f%%", combinedWin)
+                                currentWin = String.format(Locale.US, "%.1f%%", combinedWin)
                             } else {
-                                txtWin.text = "Победа: Ждем..."
+                                currentWin = "Ждем..."
                             }
 
                             if (advRes != null) {
                                 val combinedWin = advRes.heroWinPct + advRes.heroTiePct
-                                txtAdvWin.text = String.format(Locale.US, "Победа (L3): %.1f%%", combinedWin)
+                                currentAdvWin = String.format(Locale.US, "%.1f%%", combinedWin)
                             } else {
-                                txtAdvWin.text = "Победа (L3): Ждем..."
+                                currentAdvWin = "Ждем..."
                             }
                             
-                            txtHeroCards.text = android.text.Html.fromHtml("Карты: ${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}", android.text.Html.FROM_HTML_MODE_LEGACY)
+                            currentCardsStr = "${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}"
                         }
                     }
 
@@ -1673,11 +1657,17 @@ class PokerHudService : Service() {
                             }
                             
                             val relativePos = if (groupNum <= sRange) "Впереди диапазона" else "Позади диапазона"
-                            txtStrength.text = "Сила: $strengthDesc ($relativePos)"
+                            currentStrength = "$strengthDesc ($relativePos)"
                         } else {
                             txtSklan.text = "Группа: [Нет карт]"
-                            txtStrength.text = "Сила: --"
+                            currentStrength = "--"
                         }
+                    }
+
+                    if (heroCardsChanged || boardChanged || simResultChanged || opponentsChanged) {
+                        title.text = "LHD | Поб: $currentWin | L3: $currentAdvWin"
+                        txtCardsBoard.text = android.text.Html.fromHtml("<b>Карты:</b> $currentCardsStr | <b>Борд:</b> $currentBoardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
+                        txtHandRankStrength.text = "Комбо: $currentHandRank | Сила: $currentStrength"
                     }
                     
                     if (recommendationChanged) {
@@ -1778,13 +1768,12 @@ class PokerHudService : Service() {
         
         serviceScope.launch(probsJob!!) {
             PokerHudSharedState.winProbToggle.collect { isVisible ->
-                txtWin.visibility = if (isVisible) View.VISIBLE else View.GONE
-                txtAdvWin.visibility = if (isVisible) View.VISIBLE else View.GONE
+                // Merged into header
             }
         }
         serviceScope.launch(probsJob!!) {
             PokerHudSharedState.handStrengthToggle.collect { isVisible ->
-                txtStrength.visibility = if (isVisible) View.VISIBLE else View.GONE
+                // Merged into txtHandRankStrength
             }
         }
         serviceScope.launch(probsJob!!) {
@@ -1807,10 +1796,14 @@ class PokerHudService : Service() {
         }
         
         serviceScope.launch(probsJob!!) {
-            PokerHudSharedState.winProbScale.collect { scale -> txtWin.textSize = 8f * scale }
+            PokerHudSharedState.winProbScale.collect { scale -> 
+                // Merged into header
+            }
         }
         serviceScope.launch(probsJob!!) {
-            PokerHudSharedState.handStrengthScale.collect { scale -> txtStrength.textSize = 8f * scale }
+            PokerHudSharedState.handStrengthScale.collect { scale -> 
+                // Merged into txtHandRankStrength
+            }
         }
         serviceScope.launch(probsJob!!) {
             PokerHudSharedState.sklanskyScale.collect { scale -> txtSklan.textSize = 8f * scale }
