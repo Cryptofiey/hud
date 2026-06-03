@@ -1684,7 +1684,7 @@ class PokerHudService : Service() {
                         // Update original recommendation
                         if (rec != null) {
                             val actName = translateAction(rec.action)
-                            txtAdvisor.text = "Совет: $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)})"
+                            txtAdvisor.text = "Совет: $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)}) - ${rec.explanation}"
                             setRecommendationColor(txtAdvisor, rec.action)
                         } else {
                             txtAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "Совет: Ждем..." else "Совет: Введите карты"
@@ -1694,7 +1694,7 @@ class PokerHudService : Service() {
                         // Update advanced recommendation
                         if (advRec != null) {
                             val actName = translateAction(advRec.action)
-                            txtAdvAdvisor.text = "Совет (L3): $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)})"
+                            txtAdvAdvisor.text = "Совет (L3): $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)}) - ${advRec.explanation}"
                             setRecommendationColor(txtAdvAdvisor, advRec.action)
                         } else {
                             txtAdvAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "Совет (L3): Ждем..." else ""
