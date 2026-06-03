@@ -341,13 +341,7 @@ class ScreenScanner(
             }
             
             val commSlots = findCardSlots(cleanBitmap, commRect, 5)
-            val holeSlots = findCardSlots(cleanBitmap, holeRect, 2)
             
-            val physicalHoleCount = holeSlots.size
-            if (physicalHoleCount == 1) {
-                scanStatus.value = "Warning: 1 hole card slot detected, physically impossible. Trusting OCR."
-            }
-
             val physicalCommCount = commSlots.size
             if (physicalCommCount == 1 || physicalCommCount == 2 || physicalCommCount > 5) {
                 scanStatus.value = "Warning: Invalid number of community slots: $physicalCommCount. Trusting OCR."
@@ -371,19 +365,40 @@ class ScreenScanner(
                 foundCommCardsRaw = tempCommCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }.toMutableList()
             }
 
-            if (physicalHoleCount == 2) {
-                for (slot in holeSlots) {
-                    val elementsInSlot = tempHoleCards.filter { it.second >= slot.left - 20 && it.second <= slot.right + 20 }
-                    if (elementsInSlot.isNotEmpty()) {
-                        val ranks = elementsInSlot.map { it.first.rank }
-                        val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
-                        val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                        val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot)
-                        foundHoleCardsRaw.add(Card(finalRank, suit))
+            // Hole cards are fixed to exactly 2 cards max.
+            // Since they overlap, we cluster OCR results by their X coordinate instead of measuring background slots.
+            if (tempHoleCards.isNotEmpty()) {
+                val sortedHole = tempHoleCards.sortedBy { it.second }
+                val cluster1 = mutableListOf<Pair<Card, Int>>()
+                val cluster2 = mutableListOf<Pair<Card, Int>>()
+                
+                cluster1.add(sortedHole.first())
+                
+                for (i in 1 until sortedHole.size) {
+                    val item = sortedHole[i]
+                    // If the item is significantly to the right of the first card's text, it's the second card.
+                    if (item.second - cluster1.first().second > holeRect.width() * 0.25f) {
+                        cluster2.add(item)
+                    } else {
+                        cluster1.add(item)
                     }
                 }
-            } else {
-                foundHoleCardsRaw = tempHoleCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }.toMutableList()
+                
+                if (cluster1.isNotEmpty()) {
+                    val ranks = cluster1.map { it.first.rank }
+                    val finalRank = ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                    val suits = cluster1.map { it.first.suit }
+                    val finalSuit = suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                    foundHoleCardsRaw.add(Card(finalRank, finalSuit))
+                }
+                
+                if (cluster2.isNotEmpty()) {
+                    val ranks = cluster2.map { it.first.rank }
+                    val finalRank = ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                    val suits = cluster2.map { it.first.suit }
+                    val finalSuit = suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                    foundHoleCardsRaw.add(Card(finalRank, finalSuit))
+                }
             }
 
             // If physical slot logic was valid, use it to deduplicate or constraint OCR
@@ -393,13 +408,6 @@ class ScreenScanner(
             if (physicalCommCount == 0 && foundCommCardsRaw.size <= 2) {
                  // Empty table, clear ghost texts
                  foundCommCardsRaw.clear()
-            }
-
-            if (physicalHoleCount == 2 && foundHoleCardsRaw.size < 2) {
-                 scanStatus.value = "Info: Physical hole slots (2) > OCR (${foundHoleCardsRaw.size})."
-            }
-            if (physicalHoleCount == 0 && foundHoleCardsRaw.isNotEmpty()) {
-                 foundHoleCardsRaw.clear()
             }
 
             var rawAll = foundHoleCardsRaw + foundCommCardsRaw
