@@ -275,6 +275,10 @@ class ScreenScanner(
             
             val commElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
             val holeElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
+            val actionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
+
+            // We look for action buttons in the bottom 25% of the screen
+            val bottomZoneTop = cleanBitmap!!.height * 0.75
 
             for (block in result.textBlocks) {
                 for (line in block.lines) {
@@ -285,10 +289,25 @@ class ScreenScanner(
                         } else if (holeRect.width() > 20 && android.graphics.Rect.intersects(holeRect, box)) {
                             holeElements.add(element)
                         }
+                        
+                        if (box.top > bottomZoneTop) {
+                            val txt = element.text.uppercase()
+                            if (txt.contains("FOLD") || txt.contains("ФОЛД") ||
+                                txt.contains("CHECK") || txt.contains("ЧЕК") ||
+                                txt.contains("CALL") || txt.contains("КОЛЛ") ||
+                                txt.contains("BET") || txt.contains("БЕТ") ||
+                                txt.contains("RAISE") || txt.contains("РЕЙЗ") ||
+                                txt.contains("ALL-IN") || txt.contains("ОЛЛ-ИН")) {
+                                actionButtonsMap[txt] = box
+                            }
+                        }
                     }
                 }
             }
             
+            // Pass action buttons to RobotPlayer
+            RobotPlayer.availableActionButtons = actionButtonsMap
+
             commElements.sortBy { it.boundingBox?.left ?: 0 }
             holeElements.sortBy { it.boundingBox?.left ?: 0 }
 

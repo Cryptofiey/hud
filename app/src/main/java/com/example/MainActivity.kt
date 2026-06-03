@@ -720,31 +720,47 @@ fun SettingsLayout(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "🤖 Auto-Clicker Gestures",
+                                    text = "🤖 Auto-Player Robot Mode",
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 9.sp
+                                    fontSize = 11.sp
                                 )
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(Color(0xFF555555))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "MCP PLANNED",
-                                        color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
+                                
+                                val context = LocalContext.current
+                                val isAutoPlayerConnected = AutoPlayerService.instance != null
+                                val isRobotModeEnabled by RobotPlayer.isRobotModeEnabled.collectAsState()
+                                
+                                if (!isAutoPlayerConnected) {
+                                    Button(
+                                        onClick = {
+                                            context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(24.dp)
+                                    ) {
+                                        Text("ENABLE SERVICE", fontSize = 9.sp, color = Color.White)
+                                    }
+                                } else {
+                                    Switch(
+                                        checked = isRobotModeEnabled,
+                                        onCheckedChange = { 
+                                            RobotPlayer.isRobotModeEnabled.value = it
+                                            if (it) RobotPlayer.start() else RobotPlayer.stop()
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color(0xFF4CAF50),
+                                            checkedTrackColor = Color(0x884CAF50)
+                                        )
                                     )
                                 }
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Awaiting MCP integration for Android Control. Background AI will dispatch clicks directly to the agent side.",
+                                text = "Local background auto-player. Simulates human drag/clicks based on optimal L3 Advisor hints. Depends on Accessibility privileges.",
                                 color = Color(0xFFEEEEEE),
                                 fontSize = 9.sp,
-                                lineHeight = 9.sp
+                                lineHeight = 11.sp
                             )
                         }
                     }
