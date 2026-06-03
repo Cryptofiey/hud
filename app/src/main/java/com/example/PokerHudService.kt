@@ -1566,7 +1566,7 @@ class PokerHudService : Service() {
         content.addView(txtAdvisor)
         content.addView(txtAdvAdvisor)
         
-        // 3. LIVE OPPONENTS SECTION
+        // 3. EQUALIZER SECTION
         val oppDivider = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
                 topMargin = dpToPx(2f)
@@ -1574,20 +1574,14 @@ class PokerHudService : Service() {
             }
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
         }
-        val txtOppHeader = TextView(this).apply {
-            text = "LIVE OPPONENT PROFILE"
-            setTextColor(AndroidColor.parseColor("#FF90CAF9"))
-            textSize = 8f
-            typeface = Typeface.DEFAULT_BOLD
-        }
-        val oppStatsTxt = TextView(this).apply {
-            text = "Loading opponents..."
-            setTextColor(AndroidColor.WHITE)
-            textSize = 9f
+        val equalizerView = EqualizerView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
+                topMargin = dpToPx(4f)
+                bottomMargin = dpToPx(4f)
+            }
         }
         content.addView(oppDivider)
-        content.addView(txtOppHeader)
-        content.addView(oppStatsTxt)
+        content.addView(equalizerView)
         
         frame.addView(content)
         setupDragListener(frame, params)
@@ -1708,30 +1702,60 @@ class PokerHudService : Service() {
                         }
                     }
 
-                    if (opponentsChanged) {
-                        val sb = StringBuilder()
-                        val activeOpps = state.opponents.filter { it.isActive }
-                        if (activeOpps.isEmpty()) {
-                            sb.append("No active opponents tracked.")
-                        } else {
-                            activeOpps.forEachIndexed { index, opp ->
-                                val prefix = if (index > 0) "\n" else ""
-                                val nameToShow = if (opp.nickname.length > 10) opp.nickname.take(9) + ".." else opp.nickname
-                                val actStr = if (opp.currentAction != "NONE") " (${opp.currentAction})" else ""
-                                val balanceStr = if (opp.stackSize > 0) " \$${opp.stackSize}" else ""
-                                val betStr = if (opp.betSize > 0) " Bet: \$${opp.betSize}" else ""
-                                
-                                val vpipVal = opp.stats?.vpip?.toInt() ?: 0
-                                val pfrVal = opp.stats?.pfr?.toInt() ?: 0
-                                val hands = opp.stats?.handsPlayed ?: 0
-                                
-                                sb.append("${prefix}${nameToShow}${actStr}${balanceStr}${betStr}")
-                                if (hands > 0 || vpipVal > 0 || pfrVal > 0) {
-                                     sb.append(" | VPIP:${vpipVal}% PFR:${pfrVal}%")
+                    if (opponentsChanged || heroCardsChanged || boardChanged) {
+                        try {
+                            val heroOk = state.heroCard1 != null && state.heroCard2 != null
+                            val commCount = state.board.filterNotNull().size
+                            var l1Fill = if (heroOk) (0.6f + commCount * 0.08f) else 0.1f
+                            if (l1Fill > 1f) l1Fill = 1f
+                            val l1Color = if (l1Fill >= 1f) AndroidColor.GREEN else if (l1Fill > 0.2f) AndroidColor.YELLOW else AndroidColor.RED
+
+                            val activeOppsCount = state.opponents.count { it.isActive }
+                            val potOk = state.potSize > 0
+                            val oppFill = minOf(activeOppsCount / 5f, 1f) * 0.75f
+                            val l2Fill = oppFill + if (potOk) 0.25f else 0f
+                            val l2Color = if (l2Fill >= 0.8f) AndroidColor.GREEN else if (l2Fill > 0.1f) AndroidColor.YELLOW else AndroidColor.RED
+
+                            val l3Segments = mutableListOf<Int>()
+                            val activeOpps = state.opponents.filter { it.isActive }
+                            for (i in 0 until 6) {
+                                if (i < activeOpps.size) {
+                                    val stats = activeOpps[i].stats
+                                    if (stats == null) {
+                                        l3Segments.add(AndroidColor.WHITE)
+                                    } else {
+                                        val nonNullCount = listOf(stats.histVpip, stats.histPfr, stats.hist3Bet, stats.histFoldTo3Bet, stats.histCBet, stats.histFoldToCBet, stats.histSteal, stats.histCheckRaise, stats.histWtsd, stats.histWsd).count { it != null }
+                                        if (nonNullCount >= 10 || stats.handsPlayed > 0) l3Segments.add(AndroidColor.GREEN)
+                                        else if (nonNullCount > 0) l3Segments.add(AndroidColor.YELLOW)
+                                        else l3Segments.add(AndroidColor.YELLOW)
+                                    }
+                                } else {
+                                    l3Segments.add(AndroidColor.parseColor("#44FFFFFF"))
                                 }
                             }
+
+                            val robotConnected = AutoPlayerService.instance != null
+                            val robotEnabled = RobotPlayer.isRobotModeEnabled.value
+                            val robotActions = RobotPlayer.availableActionButtons.isNotEmpty()
+
+                            val l4Fill = if (robotConnected && robotEnabled) {
+                                if (robotActions) 1f else 0.5f
+                            } else if (robotConnected) {
+                                0.2f
+                            } else {
+                                0f
+                            }
+
+                            val l4Color = if (l4Fill >= 1f) AndroidColor.GREEN 
+                                else if (l4Fill >= 0.2f) AndroidColor.YELLOW 
+                                else AndroidColor.RED
+
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                equalizerView.updateState(EqualizerState(l1Fill, l1Color, l2Fill, l2Color, l3Segments, l4Fill, l4Color))
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("Equalizer", "Error updating equalizer", e)
                         }
-                        oppStatsTxt.text = sb.toString()
                     }
                     
                     lastHero1 = state.heroCard1
@@ -1774,8 +1798,7 @@ class PokerHudService : Service() {
         serviceScope.launch(probsJob!!) {
             PokerHudSharedState.advStatsToggle.collect { isVisible ->
                 oppDivider.visibility = if (isVisible) View.VISIBLE else View.GONE
-                txtOppHeader.visibility = if (isVisible) View.VISIBLE else View.GONE
-                oppStatsTxt.visibility = if (isVisible) View.VISIBLE else View.GONE
+                equalizerView.visibility = if (isVisible) View.VISIBLE else View.GONE
             }
         }
         
@@ -1794,9 +1817,9 @@ class PokerHudService : Service() {
                 txtAdvAdvisor.textSize = 8f * scale
             }
         }
-        serviceScope.launch(probsJob!!) {
-            PokerHudSharedState.advStatsScale.collect { scale -> oppStatsTxt.textSize = 9f * scale }
-        }
+        // serviceScope.launch(probsJob!!) {
+        //     PokerHudSharedState.advStatsScale.collect { scale -> oppStatsTxt.textSize = 9f * scale }
+        // }
     }
 
     private fun translateAction(action: String): String {
