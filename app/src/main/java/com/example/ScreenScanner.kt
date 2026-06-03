@@ -345,51 +345,41 @@ class ScreenScanner(
             var foundCommCardsRaw = mutableListOf<Card>()
             var foundHoleCardsRaw = mutableListOf<Card>()
 
-            // We use OCR Top-half elements to count cards, bypassing pixel scanning reliability issues on black cards.
-            val topElements = tempCommCards.filter { it.second.centerY() < commRect.centerY() + commRect.height() * 0.1f }
-            val sortedTopElements = topElements.sortedBy { it.second.left }
-            
-            // Group top elements logically: if they are extremely close in X, they are the same card
-            val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
-            for (elem in sortedTopElements) {
-                var added = false
-                for (cluster in clusters) {
-                    val minX = cluster.minOf { it.second.left }
-                    if (elem.second.left - minX < commRect.width() * 0.05f) {
-                        cluster.add(elem)
-                        added = true
-                        break
-                    }
-                }
-                if (!added) {
-                    clusters.add(mutableListOf(elem))
-                }
+            // A standard Texas Hold'em board has up to 5 community cards.
+            // When drawn fully, the commRect comfortably holds 5 cards side-by-side. 
+            // We divide the zone into 5 equal slots and assign OCR hits to the nearest slot.
+            val expectedCardW = commRect.width() / 5.0f
+            val commSlots = List(5) { i ->
+                android.graphics.Rect(
+                    (commRect.left + i * expectedCardW).toInt(),
+                    commRect.top,
+                    (commRect.left + (i + 1) * expectedCardW).toInt(),
+                    commRect.bottom
+                )
             }
             
-            // Identify each card cluster
-            for (cluster in clusters) {
-                val minX = cluster.minOf { it.second.left }
-                val maxX = cluster.maxOf { it.second.right }
-                
-                // Add any bottom elements that belong to this card's column to verify the rank
-                val relatedBottoms = tempCommCards.filter { 
-                    it.second.centerY() >= commRect.centerY() + commRect.height() * 0.1f &&
-                    it.second.left >= minX - commRect.width() * 0.05f && 
-                    it.second.left <= maxX + commRect.width() * 0.20f 
+            // Assign each OCR hit to the theoretical slot its center is closest to
+            val elementsBySlot = tempCommCards.groupBy { elem ->
+                val cx = elem.second.centerX()
+                commSlots.minByOrNull { Math.abs(cx - it.centerX()) }
+            }
+            
+            // Evaluate each slot independently
+            for (slot in commSlots) {
+                val elementsInSlot = elementsBySlot[slot] ?: emptyList()
+                if (elementsInSlot.isNotEmpty()) {
+                    val ranks = elementsInSlot.map { it.first.rank }
+                    val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
+                    val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                    
+                    // Sample suit from the center area of the slot to avoid picking up table color from margins
+                    val synLeft = slot.left + (slot.width() * 0.15f).toInt()
+                    val synRight = slot.right - (slot.width() * 0.15f).toInt()
+                    val synSlot = android.graphics.Rect(synLeft, slot.top, synRight, slot.bottom)
+                    val suit = detectSuitFromSlotBackground(cleanBitmap!!, synSlot)
+                    
+                    foundCommCardsRaw.add(Card(finalRank, suit))
                 }
-                val allCardElements = cluster + relatedBottoms
-                
-                val ranks = allCardElements.map { it.first.rank }
-                val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
-                val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                
-                // Create a synthetic slot for reliable suit detection
-                val slotW = (commRect.width() * 0.18f).toInt()
-                val synLeft = maxOf(commRect.left, minX - (commRect.width() * 0.02f).toInt())
-                val synSlot = android.graphics.Rect(synLeft, commRect.top, synLeft + slotW, commRect.bottom)
-                val suit = detectSuitFromSlotBackground(cleanBitmap!!, synSlot)
-                
-                foundCommCardsRaw.add(Card(finalRank, suit))
             }
 
             // Hole cards are fixed to exactly 2 cards max.
