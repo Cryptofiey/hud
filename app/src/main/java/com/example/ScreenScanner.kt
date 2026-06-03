@@ -351,8 +351,14 @@ class ScreenScanner(
             var foundHoleCardsRaw = mutableListOf<Card>()
 
             if (physicalCommCount in 3..5) {
+                // Assign each OCR element to the slot whose center is closest to the element
+                val elementsBySlot = tempCommCards.groupBy { element ->
+                    commSlots.minByOrNull { slot ->
+                        Math.abs(element.second + 15 - (slot.left + slot.right) / 2)
+                    }
+                }
                 for (slot in commSlots) {
-                    val elementsInSlot = tempCommCards.filter { it.second >= slot.left - 20 && it.second <= slot.right + 20 }
+                    val elementsInSlot = elementsBySlot[slot] ?: emptyList()
                     if (elementsInSlot.isNotEmpty()) {
                         val ranks = elementsInSlot.map { it.first.rank }
                         val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
@@ -366,37 +372,41 @@ class ScreenScanner(
             }
 
             // Hole cards are fixed to exactly 2 cards max.
-            // Since they overlap, we cluster OCR results by their X coordinate instead of measuring background slots.
+            // Since the first card is partially covered, we split them by their relative X position in the bounding box.
             if (tempHoleCards.isNotEmpty()) {
-                val sortedHole = tempHoleCards.sortedBy { it.second }
-                val cluster1 = mutableListOf<Pair<Card, Int>>()
-                val cluster2 = mutableListOf<Pair<Card, Int>>()
+                val card1Elements = mutableListOf<Pair<Card, Int>>()
+                val card2Elements = mutableListOf<Pair<Card, Int>>()
                 
-                cluster1.add(sortedHole.first())
-                
-                for (i in 1 until sortedHole.size) {
-                    val item = sortedHole[i]
-                    // If the item is significantly to the right of the first card's text, it's the second card.
-                    if (item.second - cluster1.first().second > holeRect.width() * 0.25f) {
-                        cluster2.add(item)
+                for (item in tempHoleCards) {
+                    val relativeX = (item.second - holeRect.left).toFloat() / holeRect.width()
+                    // Card 1's rank is typically at 0% - 15%. Card 2 is fully visible, its left rank is around 25% - 40%.
+                    if (relativeX < 0.26f) {
+                        card1Elements.add(item)
                     } else {
-                        cluster1.add(item)
+                        card2Elements.add(item)
                     }
                 }
                 
-                if (cluster1.isNotEmpty()) {
-                    val ranks = cluster1.map { it.first.rank }
+                if (card1Elements.isNotEmpty()) {
+                    val ranks = card1Elements.map { it.first.rank }
                     val finalRank = ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    val suits = cluster1.map { it.first.suit }
-                    val finalSuit = suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                    // Extract synthetic slot for robust suit detection
+                    val minX = card1Elements.minOf { it.second }
+                    val slotW = (holeRect.width() * 0.25f).toInt()
+                    val synSlot = android.graphics.Rect(minX, holeRect.top, minX + slotW, holeRect.bottom)
+                    val finalSuit = detectSuitFromSlotBackground(cleanBitmap!!, synSlot)
                     foundHoleCardsRaw.add(Card(finalRank, finalSuit))
                 }
                 
-                if (cluster2.isNotEmpty()) {
-                    val ranks = cluster2.map { it.first.rank }
-                    val finalRank = ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    val suits = cluster2.map { it.first.suit }
-                    val finalSuit = suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                if (card2Elements.isNotEmpty()) {
+                    val ranks = card2Elements.map { it.first.rank }
+                    // Look for duplicate ranks to confirm
+                    val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
+                    val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                    val minX = card2Elements.minOf { it.second }
+                    val slotW = (holeRect.width() * 0.35f).toInt()
+                    val synSlot = android.graphics.Rect(minX, holeRect.top, minX + slotW, holeRect.bottom)
+                    val finalSuit = detectSuitFromSlotBackground(cleanBitmap!!, synSlot)
                     foundHoleCardsRaw.add(Card(finalRank, finalSuit))
                 }
             }
