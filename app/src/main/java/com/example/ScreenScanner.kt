@@ -353,9 +353,38 @@ class ScreenScanner(
                 scanStatus.value = "Warning: Invalid number of community slots: $physicalCommCount. Trusting OCR."
             }
 
-            // By default use pure OCR text
-            var foundCommCardsRaw = tempCommCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
-            var foundHoleCardsRaw = tempHoleCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
+            var foundCommCardsRaw = mutableListOf<Card>()
+            var foundHoleCardsRaw = mutableListOf<Card>()
+
+            if (physicalCommCount in 3..5) {
+                for (slot in commSlots) {
+                    val elementsInSlot = tempCommCards.filter { it.second >= slot.left - 20 && it.second <= slot.right + 20 }
+                    if (elementsInSlot.isNotEmpty()) {
+                        val ranks = elementsInSlot.map { it.first.rank }
+                        val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
+                        val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                        val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot)
+                        foundCommCardsRaw.add(Card(finalRank, suit))
+                    }
+                }
+            } else {
+                foundCommCardsRaw = tempCommCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }.toMutableList()
+            }
+
+            if (physicalHoleCount == 2) {
+                for (slot in holeSlots) {
+                    val elementsInSlot = tempHoleCards.filter { it.second >= slot.left - 20 && it.second <= slot.right + 20 }
+                    if (elementsInSlot.isNotEmpty()) {
+                        val ranks = elementsInSlot.map { it.first.rank }
+                        val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
+                        val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                        val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot)
+                        foundHoleCardsRaw.add(Card(finalRank, suit))
+                    }
+                }
+            } else {
+                foundHoleCardsRaw = tempHoleCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }.toMutableList()
+            }
 
             // If physical slot logic was valid, use it to deduplicate or constraint OCR
             if (physicalCommCount in 3..5 && physicalCommCount > foundCommCardsRaw.size) {
@@ -363,21 +392,21 @@ class ScreenScanner(
             }
             if (physicalCommCount == 0 && foundCommCardsRaw.size <= 2) {
                  // Empty table, clear ghost texts
-                 foundCommCardsRaw = emptyList()
+                 foundCommCardsRaw.clear()
             }
 
             if (physicalHoleCount == 2 && foundHoleCardsRaw.size < 2) {
                  scanStatus.value = "Info: Physical hole slots (2) > OCR (${foundHoleCardsRaw.size})."
             }
             if (physicalHoleCount == 0 && foundHoleCardsRaw.isNotEmpty()) {
-                 foundHoleCardsRaw = emptyList()
+                 foundHoleCardsRaw.clear()
             }
 
             var rawAll = foundHoleCardsRaw + foundCommCardsRaw
             if (rawAll.size != rawAll.toSet().size) {
                 scanStatus.value = "Warning: Duplicate cards detected. Ignoring duplicates in this frame."
-                foundCommCardsRaw = foundCommCardsRaw.distinct()
-                foundHoleCardsRaw = foundHoleCardsRaw.filter { it !in foundCommCardsRaw }.distinct()
+                foundCommCardsRaw = foundCommCardsRaw.distinct().toMutableList()
+                foundHoleCardsRaw = foundHoleCardsRaw.filter { it !in foundCommCardsRaw }.distinct().toMutableList()
             }
 
             var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, windowSize = 3)
@@ -520,6 +549,61 @@ class ScreenScanner(
         }
         
         return found
+    }
+
+    private fun detectSuitFromSlotBackground(crop: Bitmap, slot: android.graphics.Rect): Suit {
+        val w = crop.width
+        val h = crop.height
+        
+        var rC = 0; var gC = 0; var bC = 0; var blkC = 0
+        
+        // Sample points across the whole slot horizontally, but restrict vertically to middle
+        // to avoid top/bottom shadows or non-card background if the slot is slightly large.
+        val left = maxOf(0, slot.left + (slot.width() * 0.1).toInt())
+        val right = minOf(w - 1, slot.right - (slot.width() * 0.1).toInt())
+        val top = maxOf(0, slot.top + (slot.height() * 0.2).toInt())
+        val bottom = minOf(h - 1, slot.bottom - (slot.height() * 0.2).toInt())
+        
+        if (left >= right || top >= bottom) return Suit.SPADES
+        
+        for (px in left..right step 3) {
+            for (py in top..bottom step 3) {
+                val p = crop.getPixel(px, py)
+                val r = android.graphics.Color.red(p)
+                val g = android.graphics.Color.green(p)
+                val b = android.graphics.Color.blue(p)
+                
+                // Ignore text/icon bright pixels (white text on face)
+                if (r > 160 && g > 160 && b > 160) continue
+                // Ignore pitch black background shadows
+                if (r < 25 && g < 25 && b < 25) continue
+                
+                val max = maxOf(r, g, b)
+                val min = minOf(r, g, b)
+                val saturation = if (max == 0) 0 else (max - min) * 255 / max
+                
+                // For solid color cards:
+                // Red = Hearts, Blue = Diamonds, Green = Clubs, Dark grey/Black = Spades
+                if (saturation < 30) {
+                    blkC++
+                } else if (r == max && r - g > 30 && r - b > 30) {
+                    rC++ // Red -> Hearts
+                } else if (g == max && g - r > 20 && g - b > 20) {
+                    gC++ // Green -> Clubs
+                } else if (b == max && b - r > 20 && b - g > 20) {
+                    bC++ // Blue -> Diamonds
+                } else {
+                    blkC++ // Fallback
+                }
+            }
+        }
+        
+        return when {
+            rC > gC && rC > bC && rC > blkC -> Suit.HEARTS
+            bC > rC && bC > gC && bC > blkC -> Suit.DIAMONDS
+            gC > rC && gC > bC && gC > blkC -> Suit.CLUBS
+            else -> Suit.SPADES
+        }
     }
 
     private fun robustDetectSuit(crop: Bitmap, rankBox: android.graphics.Rect): Suit {
