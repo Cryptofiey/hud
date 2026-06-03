@@ -427,39 +427,76 @@ object AdvisorEngine {
             val wtsd = profile.histWtsd ?: 30f
             val wsd = profile.histWsd ?: 50f
 
-            // 1 & 2. VPIP/PFR Profile
-            val gap = vpip - pfr
-            if (gap > 25f) adjustedScore += 0.05f // Loose/Passive (Fish): Value bet more
-            else if (gap < 8f && vpip < 20f) adjustedScore -= 0.05f // Tight/Aggressive (Reg): Respect their bets
-
-            // 3 & 4. 3-Bet logic
-            if (fold3 > 60f) adjustedScore += 0.07f // Exploit by 3-betting
-            if (bet3 > 12f && betToCall > (bigBlind * 2)) adjustedScore -= 0.05f // Careful against high 3-betters
-
-            // 5 & 6. C-Bet logic
-            if (foldCbet > 60f) adjustedScore += 0.08f // Automatic C-bet candidate
-            if (cbet > 75f) adjustedScore += 0.03f // They C-bet too much, we can float or check/raise
-
-            // 7. Steal Defense
-            if (steal > 45f && (position == TablePosition.SB || position == TablePosition.BB)) {
-                adjustedScore += 0.08f // Defend blinds aggressively
+            val isPreflop = board.filterNotNull().isEmpty()
+            val isPostflop = !isPreflop
+            var exploitReason = ""
+            
+            // Эксплуатационная машина на основе 10 параметров:
+            
+            // 1. Поздняя позиция и защита блайндов (Steal)
+            if (isPreflop && (position == TablePosition.SB || position == TablePosition.BB) && steal > 40f) {
+                adjustedScore += 0.15f
+                if (exploitReason.isEmpty()) exploitReason = "Steal >40% (Авто-Защита)"
             }
-
-            // 8. Check/Raise Aggression
-            if (cr > 15f) adjustedScore -= 0.06f // Respect their check-raises
-
-            // 9 & 10. Showdown reliability
-            if (wtsd > 35f && wsd < 45f) adjustedScore += 0.1f // Calling station: pure value
-            else if (wtsd < 25f && wsd > 55f) adjustedScore -= 0.1f // Nit: no bluffs, only nuts
-
-            // Sklansky Range Info
+            
+            // 2. Эксплойт Фолд эквити (Fold to 3-Bet, Fold to C-Bet)
+            if (isPreflop && fold3 > 60f) {
+                if (adjustedScore < 0.6f && betToCall > 0) {
+                    adjustedScore += 0.20f // бустим для возможного блеф-рейза
+                    if (exploitReason.isEmpty()) exploitReason = "Оверфолд на 3-Bet (>60%)"
+                }
+            } else if (isPostflop && betToCall == 0f && foldCbet > 55f) {
+                if (adjustedScore < 0.5f) {
+                    adjustedScore += 0.20f
+                    if (exploitReason.isEmpty()) exploitReason = "Авто-блеф (Fold to CB >55%)"
+                }
+            }
+            
+            // 3. Вычисляем тип оппонента (Archetypes) и подстраиваем общую ширину
+            val gap = vpip - pfr
+            if (wtsd > 32f || (gap > 20f && vpip > 35f)) {
+                // Calling Station (Телефон) - Не блефуем, только велью
+                if (adjustedScore < 0.5f) {
+                    adjustedScore -= 0.15f // Понижаем силу слабых рук (нет фолд эквити)
+                } else {
+                    adjustedScore += 0.15f // Улучшаем силу велью-бета (шире велью)
+                }
+                if (exploitReason.isEmpty()) exploitReason = "Опп - телефон (Нет блефам)"
+            } else if (wtsd < 25f && wsd > 55f) {
+                // Nit (Скала)
+                if (betToCall > bigBlind) {
+                    adjustedScore -= 0.20f // Скала ставит - у него натс, сильно занижаем наше эквити
+                    if (exploitReason.isEmpty()) exploitReason = "Респект агрессии (Скала)"
+                } else if (betToCall == 0f && adjustedScore < 0.7f) {
+                    adjustedScore += 0.10f // Можно пытаться подблефовывать мелкие банки
+                }
+            }
+            
+            // 4. Реагируем на C-Bet оппонента
+            if (isPostflop && betToCall > 0 && cbet > 70f) {
+                // Он ставит контбет слишком часто - можно флотить.
+                if (adjustedScore in 0.35f..0.6f) {
+                    adjustedScore += 0.15f // Не падаем с маргинальным эквити
+                    if (exploitReason.isEmpty()) exploitReason = "Флоат против шир. CB"
+                }
+            }
+            
+            // 5. Уважение чек-рейза
+            if (isPostflop && cr > 15f && betToCall > 0) {
+                adjustedScore -= 0.15f // Осторожно
+                if (exploitReason.isEmpty()) exploitReason = "Агрессивный Чек-Рейз!"
+            }
+            
+            // 6. Учет диапазонов Sklansky
             val sRange = getSklanskyRangeForVpip(vpip)
             val mySGroup = getSklanskyGroup(heroCard1, heroCard2)
-            val rangeMsg = "Range: Gr. 1-$sRange (Opp VPIP: ${vpip.toInt()}%)"
+            if (mySGroup <= sRange && adjustedScore > 0.4f) {
+                 adjustedScore += 0.05f 
+            }
             
-            // Influence score based on how our hand group compares to their VPIP range
-            if (mySGroup <= sRange) adjustedScore += 0.1f
-            else adjustedScore -= 0.05f
+            // Pass the exploitReason back through the system implicitly... wait, we need it in explanation.
+            // Let's store it so we can append it later.
+            // But we don't have a way to pass it down easily outside the if(profile != null) block.
         }
 
         val activePot = potSize.toFloat() + betToCall
@@ -469,29 +506,65 @@ object AdvisorEngine {
         
         val action: String
         val confidence: Float
-        val explanation: String
+        var explanation: String
         
         when {
             adjustedScore > 0.7f -> {
                 action = "RAISE"
                 confidence = (adjustedScore * 100f).coerceAtLeast(0f)
-                explanation = "Adv: сильное эквити диапазона ${String.format("%.0f", adjustedScore*100)}%"
+                explanation = "Adv: мощное EV ${String.format("%.0f", adjustedScore*100)}%"
             }
             adjustedScore > 0.5f -> {
                 action = if (betToCall > 0) "CALL" else "CHECK"
                 confidence = 70f
-                explanation = "Adv: выгодный колл/чек"
+                explanation = "Adv: прибыльный колл/чек"
             }
             isProfitable -> {
                 action = if (betToCall > 0) "CALL" else "CHECK"
                 confidence = 55f
-                explanation = "Adv: минимальная прибыль"
+                explanation = "Adv: маргинально, EV>0"
             }
             else -> {
                 action = if (betToCall > 0) "FOLD" else "CHECK"
                 confidence = 80f
                 explanation = "Adv: отрицательное EV"
             }
+        }
+        
+        // Retrieve exploit reason if available
+        var expReason = ""
+        if (profile != null) {
+            val isPreflop = board.filterNotNull().isEmpty()
+            val isPostflop = !isPreflop
+            val steal = profile.histSteal ?: 35f
+            val fold3 = profile.histFoldTo3Bet ?: 45f
+            val foldCbet = profile.histFoldToCBet ?: 45f
+            val gap = (profile.histVpip ?: profile.vpip) - (profile.histPfr ?: profile.pfr)
+            val wtsd = profile.histWtsd ?: 30f
+            val wsd = profile.histWsd ?: 50f
+            val cr = profile.histCheckRaise ?: 10f
+            val cbet = profile.histCBet ?: 55f
+            val vpip = profile.histVpip ?: profile.vpip
+
+            if (isPreflop && (position == TablePosition.SB || position == TablePosition.BB) && steal > 40f) {
+                expReason = "Steal >40% авто-защита"
+            } else if (isPreflop && fold3 > 60f && adjustedScore >= 0.5f && action == "RAISE") {
+                expReason = "Оверфолд на 3-Bet"
+            } else if (isPostflop && betToCall == 0f && foldCbet > 55f && action != "FOLD") {
+                expReason = "Авто-блеф CB"
+            } else if (wtsd > 32f || (gap > 20f && vpip > 35f)) {
+                expReason = "Опп - телефон (респект)"
+            } else if (wtsd < 25f && wsd > 55f && betToCall > bigBlind) {
+                expReason = "Респект агрессии Скале!"
+            } else if (isPostflop && betToCall > 0 && cbet > 70f && action == "CALL") {
+                expReason = "Флоат против шир. CB"
+            } else if (isPostflop && cr > 15f && betToCall > 0) {
+                expReason = "Агрессивный Чек-Рейз!"
+            }
+        }
+        
+        if (expReason.isNotEmpty()) {
+            explanation = "$expReason | $explanation"
         }
 
         return Recommendation(action, confidence, explanation)
