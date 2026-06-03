@@ -126,7 +126,18 @@ class ScreenScanner(
         }
 
         val ySteps = ((yEnd - yStart) / 3) + 1
-        if (maxA / ySteps < 40) return emptyList() // Max pixel intensity is < 40 on average, definitely just dark table
+        val maxAvg = maxA / ySteps
+        val minAvg = minA / ySteps
+        
+        if (maxAvg < 40) return emptyList() // Max pixel intensity is < 40 on average, definitely just dark table
+        
+        // If there's barely any color variation across the row, don't chop it randomly.
+        // It could be all table, or all card.
+        if (maxAvg - minAvg < 15) {
+            // High intensity but no variation means it's likely a single solid block (e.g. zoomed in card)
+            // Just return one big slot covering the whole thing.
+            return listOf(android.graphics.Rect(startX, topY, startX + w, rect.bottom))
+        }
 
         val threshold = minA + (maxA - minA) / 4
         
@@ -334,49 +345,39 @@ class ScreenScanner(
             
             val physicalHoleCount = holeSlots.size
             if (physicalHoleCount == 1) {
-                scanStatus.value = "Error: 1 hole card slot detected, physically impossible."
-                return
+                scanStatus.value = "Warning: 1 hole card slot detected, physically impossible. Trusting OCR."
             }
 
             val physicalCommCount = commSlots.size
             if (physicalCommCount == 1 || physicalCommCount == 2 || physicalCommCount > 5) {
-                scanStatus.value = "Error: Invalid number of community slots: $physicalCommCount"
-                return
+                scanStatus.value = "Warning: Invalid number of community slots: $physicalCommCount. Trusting OCR."
             }
 
-            val foundCommCardsRaw = mutableListOf<Card>()
-            for (slot in commSlots) {
-                // Expanded match zone slightly to accommodate OCR box variations
-                val matched = tempCommCards.filter { it.second >= slot.left - 15 && it.second <= slot.right + 15 }
-                if (matched.isNotEmpty()) {
-                    foundCommCardsRaw.add(matched.first().first)
-                }
+            // By default use pure OCR text
+            var foundCommCardsRaw = tempCommCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
+            var foundHoleCardsRaw = tempHoleCards.distinctBy { it.first }.sortedBy { it.second }.map { it.first }
+
+            // If physical slot logic was valid, use it to deduplicate or constraint OCR
+            if (physicalCommCount in 3..5 && physicalCommCount > foundCommCardsRaw.size) {
+                 scanStatus.value = "Info: Physical slots ($physicalCommCount) > OCR (${foundCommCardsRaw.size}). May be missing cards."
+            }
+            if (physicalCommCount == 0 && foundCommCardsRaw.size <= 2) {
+                 // Empty table, clear ghost texts
+                 foundCommCardsRaw = emptyList()
             }
 
-            val foundHoleCardsRaw = mutableListOf<Card>()
-            if (physicalHoleCount == 2) {
-                for (slot in holeSlots) {
-                    val matched = tempHoleCards.filter { it.second >= slot.left - 20 && it.second <= slot.right + 20 }
-                    if (matched.isNotEmpty()) {
-                        foundHoleCardsRaw.add(matched.first().first)
-                    }
-                }
+            if (physicalHoleCount == 2 && foundHoleCardsRaw.size < 2) {
+                 scanStatus.value = "Info: Physical hole slots (2) > OCR (${foundHoleCardsRaw.size})."
+            }
+            if (physicalHoleCount == 0 && foundHoleCardsRaw.isNotEmpty()) {
+                 foundHoleCardsRaw = emptyList()
             }
 
-            if (foundCommCardsRaw.size != physicalCommCount) {
-                 scanStatus.value = "Warning: OCR missed comm cards (${foundCommCardsRaw.size}/$physicalCommCount). Frame skipped."
-                 return
-            }
-            if (foundHoleCardsRaw.size != physicalHoleCount) {
-                 scanStatus.value = "Warning: OCR missed hole cards (${foundHoleCardsRaw.size}/$physicalHoleCount). Frame skipped."
-                 return
-            }
-            
-            val rawAll = foundHoleCardsRaw + foundCommCardsRaw
+            var rawAll = foundHoleCardsRaw + foundCommCardsRaw
             if (rawAll.size != rawAll.toSet().size) {
-                // Invalid frame detection, duplicates found
-                scanStatus.value = "Error: Duplicate cards detected. Ignoring frame."
-                return
+                scanStatus.value = "Warning: Duplicate cards detected. Ignoring duplicates in this frame."
+                foundCommCardsRaw = foundCommCardsRaw.distinct()
+                foundHoleCardsRaw = foundHoleCardsRaw.filter { it !in foundCommCardsRaw }.distinct()
             }
 
             var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, windowSize = 3)
@@ -388,7 +389,7 @@ class ScreenScanner(
                 // Clear history to recover
                 holeHistory.clear()
                 commHistory.clear()
-                scanStatus.value = "Error: Invalid duplicate cards in smoothed state."
+                scanStatus.value = "Error: Invalid duplicate cards in smoothed state. Clearing history."
                 return
             }
 
