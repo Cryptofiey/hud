@@ -36,6 +36,7 @@ data class PlayerStats(
     val histCheckRaise: Float? = null,
     val histWtsd: Float? = null,
     val histWsd: Float? = null,
+    val lastUpdated: Long = 0L,
     @Transient var profileBoundingBoxes: List<ScannedBox>? = null
 ) {
     val vpip: Float get() = if (handsPlayed > 0) (vpipCount.toFloat() / handsPlayed * 100f) else 0f
@@ -552,7 +553,8 @@ class PreferencesManager(context: Context) {
             histSteal = if (prefs.contains("${prefix}histSteal")) prefs.getFloat("${prefix}histSteal", -1f) else null,
             histCheckRaise = if (prefs.contains("${prefix}histCheckRaise")) prefs.getFloat("${prefix}histCheckRaise", -1f) else null,
             histWtsd = if (prefs.contains("${prefix}histWtsd")) prefs.getFloat("${prefix}histWtsd", -1f) else null,
-            histWsd = if (prefs.contains("${prefix}histWsd")) prefs.getFloat("${prefix}histWsd", -1f) else null
+            histWsd = if (prefs.contains("${prefix}histWsd")) prefs.getFloat("${prefix}histWsd", -1f) else null,
+            lastUpdated = prefs.getLong("${prefix}lastUpdated", 0L)
         )
     }
 
@@ -580,6 +582,7 @@ class PreferencesManager(context: Context) {
             stats.histCheckRaise?.let { putFloat("${prefix}histCheckRaise", it) }
             stats.histWtsd?.let { putFloat("${prefix}histWtsd", it) }
             stats.histWsd?.let { putFloat("${prefix}histWsd", it) }
+            putLong("${prefix}lastUpdated", stats.lastUpdated)
             apply()
         }
     }

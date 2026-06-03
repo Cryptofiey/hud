@@ -9,7 +9,7 @@ import kotlinx.coroutines.isActive
 enum class Rank(val value: Int, val symbol: String) {
     TWO(2, "2"), THREE(3, "3"), FOUR(4, "4"), FIVE(5, "5"),
     SIX(6, "6"), SEVEN(7, "7"), EIGHT(8, "8"), NINE(9, "9"),
-    TEN(10, "T"), JACK(11, "J"), QUEEN(12, "Q"), KING(13, "K"), ACE(14, "A");
+    TEN(10, "10"), JACK(11, "J"), QUEEN(12, "Q"), KING(13, "K"), ACE(14, "A");
 
     companion object {
         fun fromValue(v: Int): Rank = values().firstOrNull { it.value == v } ?: TWO
@@ -17,10 +17,10 @@ enum class Rank(val value: Int, val symbol: String) {
 }
 
 enum class Suit(val index: Int, val symbol: String, val colorHex: String, val nameStr: String) {
-    SPADES(0, "♠", "#B0BEC5", "Spades"),       // Blue Grey for dark UI
-    HEARTS(1, "♥", "#E53935", "Hearts"),       // Crimson Red
-    DIAMONDS(2, "♦", "#1E88E5", "Diamonds"),   // Royal Blue (4-color deck)
-    CLUBS(3, "♣", "#43A047", "Clubs");         // Forest Green (4-color deck)
+    SPADES(0, "♠", "#ECEFF1", "Spades"),       // White/Light Grey for Spades (Black replacement)
+    HEARTS(1, "♥", "#EF5350", "Hearts"),       // Bright Red
+    DIAMONDS(2, "♦", "#4FC3F7", "Diamonds"),   // Bright Blue
+    CLUBS(3, "♣", "#66BB6A", "Clubs");         // Bright Green
 }
 
 data class Card(val rank: Rank, val suit: Suit) {

@@ -1724,8 +1724,12 @@ class PokerHudService : Service() {
                                     if (stats == null) {
                                         l3Segments.add(AndroidColor.WHITE)
                                     } else {
+                                        val now = System.currentTimeMillis()
+                                        val sevenDaysMs = 7L * 24 * 60 * 60 * 1000
+                                        val isRecent = stats.lastUpdated > 0 && (now - stats.lastUpdated) < sevenDaysMs
+
                                         val nonNullCount = listOf(stats.histVpip, stats.histPfr, stats.hist3Bet, stats.histFoldTo3Bet, stats.histCBet, stats.histFoldToCBet, stats.histSteal, stats.histCheckRaise, stats.histWtsd, stats.histWsd).count { it != null }
-                                        if (nonNullCount >= 10 || stats.handsPlayed > 0) l3Segments.add(AndroidColor.GREEN)
+                                        if (isRecent || nonNullCount >= 10 || stats.handsPlayed > 0) l3Segments.add(AndroidColor.GREEN)
                                         else if (nonNullCount > 0) l3Segments.add(AndroidColor.YELLOW)
                                         else l3Segments.add(AndroidColor.YELLOW)
                                     }

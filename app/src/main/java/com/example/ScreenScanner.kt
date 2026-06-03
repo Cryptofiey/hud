@@ -487,7 +487,16 @@ class ScreenScanner(
                     val existing = prefsManager.loadPlayerStats(scannedProfile.nickname)
                     val updated = existing.copy(
                         histVpip = scannedProfile.histVpip ?: existing.histVpip,
-                        histPfr = scannedProfile.histPfr ?: existing.histPfr
+                        histPfr = scannedProfile.histPfr ?: existing.histPfr,
+                        hist3Bet = scannedProfile.hist3Bet ?: existing.hist3Bet,
+                        histFoldTo3Bet = scannedProfile.histFoldTo3Bet ?: existing.histFoldTo3Bet,
+                        histCBet = scannedProfile.histCBet ?: existing.histCBet,
+                        histFoldToCBet = scannedProfile.histFoldToCBet ?: existing.histFoldToCBet,
+                        histSteal = scannedProfile.histSteal ?: existing.histSteal,
+                        histCheckRaise = scannedProfile.histCheckRaise ?: existing.histCheckRaise,
+                        histWtsd = scannedProfile.histWtsd ?: existing.histWtsd,
+                        histWsd = scannedProfile.histWsd ?: existing.histWsd,
+                        lastUpdated = System.currentTimeMillis()
                     )
                     prefsManager.savePlayerStats(updated)
                     withContext(Dispatchers.Main) {
