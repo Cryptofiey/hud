@@ -147,6 +147,7 @@ class PokerHudService : Service() {
 
     // Multi-Data Scanner fields
     private var txtScannerStatus: TextView? = null
+    private var txtEvoStats: TextView? = null
     private var scannerStatusBox: LinearLayout? = null
     private var txtPreText: TextView? = null
     private var togglesRow1: LinearLayout? = null
@@ -452,40 +453,40 @@ class PokerHudService : Service() {
         this.togglesRow1 = toggles1
 
         val commCheckBox = android.widget.CheckBox(this).apply {
-            text = "Борд"
-            textSize = 8f
+            text = "🃏"
+            textSize = 10f
             setTextColor(AndroidColor.WHITE)
             isChecked = PokerHudSharedState.showCommBox.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showCommBox.value = isChecked }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
+            setPadding(dpToPx(2f), dpToPx(4f), dpToPx(2f), dpToPx(4f))
         }
         val holeCheckBox = android.widget.CheckBox(this).apply {
-            text = "Карты"
-            textSize = 8f
+            text = "🎴"
+            textSize = 10f
             setTextColor(AndroidColor.WHITE)
             isChecked = PokerHudSharedState.showHoleBox.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showHoleBox.value = isChecked }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
+            setPadding(dpToPx(2f), dpToPx(4f), dpToPx(2f), dpToPx(4f))
         }
         val probsCheckBox = android.widget.CheckBox(this).apply {
-            text = "Шансы"
-            textSize = 8f
+            text = "📊"
+            textSize = 10f
             setTextColor(AndroidColor.WHITE)
             isChecked = PokerHudSharedState.showProbsBox.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showProbsBox.value = isChecked }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
+            setPadding(dpToPx(2f), dpToPx(4f), dpToPx(2f), dpToPx(4f))
         }
         val scannerCheckBox = android.widget.CheckBox(this).apply {
-            text = "Скан"
-            textSize = 8f
+            text = "🔍"
+            textSize = 10f
             setTextColor(AndroidColor.WHITE)
             isChecked = PokerHudSharedState.showScannerBoxes.value
             setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showScannerBoxes.value = isChecked }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
+            setPadding(dpToPx(2f), dpToPx(4f), dpToPx(2f), dpToPx(4f))
         }
         
         toggles1.addView(commCheckBox)
@@ -493,6 +494,30 @@ class PokerHudService : Service() {
         toggles1.addView(probsCheckBox)
         toggles1.addView(scannerCheckBox)
         expanded.addView(toggles1)
+
+        val evolutionMonitor = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(0, dpToPx(4f), 0, dpToPx(4f))
+            }
+            background = createBackgroundDrawable(AndroidColor.parseColor("#1AFFFFFF"), 4f)
+        }
+        val evoLabel = TextView(this).apply {
+            text = "🧬 Synthetic Genetics"
+            setTextColor(AndroidColor.parseColor("#B39DDB"))
+            textSize = 9f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        val evoStats = TextView(this).apply {
+            text = "Hunger: -- | Curiosity: --\nActive Mutants: -- / Synapses: --"
+            setTextColor(AndroidColor.LTGRAY)
+            textSize = 8f
+        }
+        evolutionMonitor.addView(evoLabel)
+        evolutionMonitor.addView(evoStats)
+        expanded.addView(evolutionMonitor)
+        this.txtEvoStats = evoStats
 
         val toggles3 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -662,6 +687,18 @@ class PokerHudService : Service() {
                 txtScannerStatus?.text = "🔍 $activeScannerStr Stage/Board: $boardStr\n" +
                         "Opponents: $oppsCount tracked\n" +
                         "Hero: $h1Raw $h2Raw"
+                
+                // --- SYNTHETIC GENETICS TICK & UPDATE ---
+                try {
+                    EvolutionFunnel.simulateExperience()
+                    val hunger = String.format(java.util.Locale.US, "%.0f%%", SyntheticGenome.biochemistry.getHungerLevel())
+                    val curiosity = String.format(java.util.Locale.US, "%.0f%%", SyntheticGenome.biochemistry.getCuriosityLevel())
+                    val genomeSize = SyntheticGenome.activeGenome.size
+                    val synapses = SyntheticGenome.synapsis.size
+                    txtEvoStats?.text = "Hunger: $hunger | Curiosity: $curiosity\nMutants: $genomeSize | Synapses: $synapses"
+                } catch (e: Exception) {
+                    txtEvoStats?.text = "Evolution suspended: ${e.message}"
+                }
                 
                 lastProfileBoxes = state.profileBoxes
             }

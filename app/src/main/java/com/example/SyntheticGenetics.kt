@@ -146,6 +146,8 @@ class BiochemistryEngine {
     }
     
     fun getCuriosityLevel() = drives[Drive.CURIOSITY] ?: 50f
+    fun getHungerLevel() = drives[Drive.HUNGER_EV] ?: 50f
+    fun getSurvivalLevel() = drives[Drive.SURVIVAL] ?: 50f
     fun satisfyCuriosity() {
         drives[Drive.CURIOSITY] = (drives.getValue(Drive.CURIOSITY) - 30f).coerceAtLeast(0f)
     }
