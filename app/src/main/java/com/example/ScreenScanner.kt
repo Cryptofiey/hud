@@ -91,6 +91,9 @@ class ScreenScanner(
 
     private val holeHistory = mutableListOf<List<Card?>>()
     private val commHistory = mutableListOf<List<Card?>>()
+    
+    private val confirmedHole = mutableListOf<Card?>()
+    private val confirmedComm = mutableListOf<Card?>()
 
     private fun findCardSlots(bitmap: Bitmap, rect: android.graphics.Rect, expectedMaxCards: Int): List<android.graphics.Rect> {
         if (rect.width() <= 0 || rect.height() <= 0) return emptyList()
@@ -182,7 +185,7 @@ class ScreenScanner(
         return finalSlots.take(expectedMaxCards)
     }
 
-    private fun getSmoothedCards(history: MutableList<List<Card?>>, newCards: List<Card?>, windowSize: Int = 4): List<Card?> {
+    private fun getSmoothedCards(history: MutableList<List<Card?>>, newCards: List<Card?>, confirmed: MutableList<Card?>, windowSize: Int = 4): List<Card?> {
         history.add(newCards)
         if (history.size > windowSize) {
             history.removeAt(0)
@@ -191,23 +194,43 @@ class ScreenScanner(
         // If last 2 frames were completely empty, reset history
         if (history.size >= 2 && history.takeLast(2).all { list -> list.all { it == null } }) {
             history.clear()
+            confirmed.clear()
             return emptyList()
         }
         
         val maxLen = history.maxOfOrNull { it.size } ?: 0
+        while (confirmed.size < maxLen) confirmed.add(null)
+        
         val result = mutableListOf<Card?>()
         
         for (i in 0 until maxLen) {
             val cardsAtI = history.mapNotNull { it.getOrNull(i) }
             if (cardsAtI.isEmpty()) {
                 result.add(null)
+                confirmed[i] = null
                 continue
             }
-            val modeCount = cardsAtI.groupingBy { it }.eachCount().maxByOrNull { it.value }
-            if (modeCount != null) {
-                result.add(modeCount.key)
+            val counts = cardsAtI.groupingBy { it }.eachCount()
+            val best = counts.maxByOrNull { it.value }
+            
+            val prevConfirmed = confirmed[i]
+            
+            if (best != null) {
+                // If seen twice, or if we have no history to build 2 votes yet
+                if (best.value >= 2 || history.size < 2) {
+                    result.add(best.key)
+                    confirmed[i] = best.key
+                } else {
+                    if (prevConfirmed != null) {
+                        result.add(prevConfirmed)
+                    } else {
+                        result.add(null)
+                        confirmed[i] = null
+                    }
+                }
             } else {
                 result.add(null)
+                confirmed[i] = null
             }
         }
         return result
@@ -369,8 +392,10 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
-                    val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
-                    tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
+                    val suit = robustDetectSuit(cleanBitmap, sliceBox)
+                    if (suit != null) {
+                        tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
+                    }
                 }
             }
             
@@ -404,8 +429,10 @@ class ScreenScanner(
                     val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
                     val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     
-                    val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot) ?: Suit.SPADES
-                    foundCommCardsRaw[index] = Card(finalRank, suit)
+                    val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot)
+                    if (suit != null) {
+                        foundCommCardsRaw[index] = Card(finalRank, suit)
+                    }
                 }
             }
 
@@ -471,8 +498,8 @@ class ScreenScanner(
                 }
             }
 
-            var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, windowSize = 3)
-            var smoothedComm = getSmoothedCards(commHistory, foundCommCardsRaw, windowSize = 3)
+            var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, confirmedHole, windowSize = 3)
+            var smoothedComm = getSmoothedCards(commHistory, foundCommCardsRaw, confirmedComm, windowSize = 3)
             
             val smoothedAll = (smoothedHole + smoothedComm).filterNotNull()
             if (smoothedAll.size != smoothedAll.toSet().size) {
@@ -586,7 +613,7 @@ class ScreenScanner(
             // Check for 10 first
             if (i + 1 < raw.length) {
                 val sub = raw.substring(i, i + 2)
-                if (sub == "10" || sub == "I0" || sub == "1O" || sub == "IO" || sub == "IQ" || sub == "1Q" || sub == "L0" || sub == "LO") {
+                if (sub == "10" || sub == "I0" || sub == "1O" || sub == "IQ" || sub == "1Q" || sub == "L0" || sub == "LO") {
                     found.add(Rank.TEN)
                     i += 2
                     matched = true
@@ -598,8 +625,8 @@ class ScreenScanner(
                 val r = when (c) {
                     'A' -> Rank.ACE
                     'K', 'X' -> Rank.KING
-                    'Q', 'D', '0', 'O' -> Rank.QUEEN
-                    'J', 'L', '1', 'I' -> Rank.JACK
+                    'Q', 'D', '0' -> Rank.QUEEN
+                    'J', 'L', 'I' -> Rank.JACK
                     '9', 'G' -> Rank.NINE
                     '8', 'B' -> Rank.EIGHT
                     '7' -> Rank.SEVEN
@@ -610,6 +637,9 @@ class ScreenScanner(
                     '2', 'Z' -> Rank.TWO
                     else -> null
                 }
+                
+                // Do not allow '1' acting as JACK or 'O' acting as QUEEN to prevent false numbers
+                // If it is 'O' or '1' standalone, they carry high risk of being non-cards compared to actual elements
                 
                 if (r != null) {
                     found.add(r)

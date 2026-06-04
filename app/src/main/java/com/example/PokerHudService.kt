@@ -150,6 +150,7 @@ class PokerHudService : Service() {
     private var txtEvoStats: TextView? = null
     private var scannerStatusBox: LinearLayout? = null
     private var txtPreText: TextView? = null
+    private var togglesRow1: LinearLayout? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -460,6 +461,46 @@ class PokerHudService : Service() {
         
         // Hide scanner logs from HUD: expanded.addView(scannerBoxLocal)
 
+        val toggles1 = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(0, dpToPx(4f), 0, dpToPx(4f))
+            }
+        }
+        this.togglesRow1 = toggles1
+
+        fun createToggleButton(icon: String, initialState: Boolean, onChange: (Boolean) -> Unit): TextView {
+            return TextView(this).apply {
+                text = icon
+                textSize = 10f
+                gravity = Gravity.CENTER
+                setTextColor(AndroidColor.WHITE)
+                background = createBackgroundDrawable(if (initialState) AndroidColor.parseColor("#FFD500F9") else AndroidColor.parseColor("#FF37474F"), 6f)
+                setPadding(0, dpToPx(4f), 0, dpToPx(4f))
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(dpToPx(2f), 0, dpToPx(2f), 0)
+                }
+                var state = initialState
+                setOnClickListener {
+                    state = !state
+                    background = createBackgroundDrawable(if (state) AndroidColor.parseColor("#FFD500F9") else AndroidColor.parseColor("#FF37474F"), 6f)
+                    onChange(state)
+                }
+            }
+        }
+
+        val commCheckBox = createToggleButton("Борд", PokerHudSharedState.showCommBox.value) { PokerHudSharedState.showCommBox.value = it }
+        val holeCheckBox = createToggleButton("Карты", PokerHudSharedState.showHoleBox.value) { PokerHudSharedState.showHoleBox.value = it }
+        val probsCheckBox = createToggleButton("Статы", PokerHudSharedState.showProbsBox.value) { PokerHudSharedState.showProbsBox.value = it }
+        val scannerCheckBox = createToggleButton("Рамки", PokerHudSharedState.showScannerBoxes.value) { PokerHudSharedState.showScannerBoxes.value = it }
+        
+        toggles1.addView(commCheckBox)
+        toggles1.addView(holeCheckBox)
+        toggles1.addView(probsCheckBox)
+        toggles1.addView(scannerCheckBox)
+        expanded.addView(toggles1)
+
         // Evolution Monitor
         val evolutionMonitor = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -714,6 +755,7 @@ class PokerHudService : Service() {
                 val visibilityMode = if (gameMode) View.GONE else View.VISIBLE
                 headerRow.visibility = visibilityMode
                 divider1.visibility = visibilityMode
+                togglesRow1?.visibility = visibilityMode
                 txtPreText?.visibility = visibilityMode
 
                 // Scanner status is completely hidden in game play to not draw any blocks on screen
@@ -726,7 +768,7 @@ class PokerHudService : Service() {
                         AndroidColor.parseColor("#F50D151D"),
                         10f,
                         dpToPx(2f),
-                        AndroidColor.parseColor("#FF2196F3")
+                        AndroidColor.parseColor("#FFD500F9")
                     )
                 }
                 updateBoxOverlays()
@@ -1151,7 +1193,7 @@ class PokerHudService : Service() {
                 AndroidColor.parseColor("#00000000"), // Transparent inside
                 8f,
                 dpToPx(1.5f),
-                AndroidColor.parseColor("#FF2196F3") // Visible border
+                AndroidColor.parseColor("#FFD500F9") // Visible purple border
             )
             setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
         }
@@ -1210,7 +1252,7 @@ class PokerHudService : Service() {
             layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
             }
-            setColorFilter(AndroidColor.parseColor("#FF2196F3"))
+            setColorFilter(AndroidColor.parseColor("#FFD500F9"))
             setPadding(0, 0, dpToPx(2f), dpToPx(2f)) 
         }
 
