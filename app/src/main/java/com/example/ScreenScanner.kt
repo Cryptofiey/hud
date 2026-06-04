@@ -668,12 +668,18 @@ class ScreenScanner(
                 val min = minOf(r, g, b)
                 val saturation = if (max == 0) 0 else (max - min) * 255 / max
                 
+                val isPurple = (r > g + 30 && b > g + 30 && r > 40 && b > 40)
+                val isOrange = (r > g + 20 && g > b + 20 && r > 80 && r - b > 50)
+                
                 // Must be strong enough to be a card suit
-                if (saturation > 40 && max > 50) {
-                    if (r == max && r - g > 30 && r - b > 30) rC++
+                if (saturation > 40 && max > 50 && !isPurple && !isOrange) {
+                    if (r == max && r - g > 30 && r - b > 30) {
+                        // Additional check to ensure Orange isn't counted as Red Hearts
+                        if (g < max * 0.7f) rC++
+                    }
                     else if (g == max && g - r > 20 && g - b > 20) gC++
                     else if (b == max && b - r > 20 && b - g > 20) bC++
-                } else if (max < 60 && saturation < 25) { 
+                } else if (max < 60 && saturation < 25 && !isPurple && !isOrange) { 
                     blkC++
                 }
             }
@@ -718,11 +724,17 @@ class ScreenScanner(
                 val min = minOf(r, g, b)
                 val saturation = if (max == 0) 0 else (max - min) * 255 / max
                 
-                if (saturation > 40 && max > 50) {
-                    if (r == max && r - g > 20 && r - b > 20) rC++
+                val isPurple = (r > g + 30 && b > g + 30 && r > 40 && b > 40)
+                val isOrange = (r > g + 20 && g > b + 20 && r > 80 && r - b > 50)
+                
+                if (saturation > 40 && max > 50 && !isPurple && !isOrange) {
+                    if (r == max && r - g > 20 && r - b > 20) {
+                        // Additional check to ensure Orange isn't counted as Red Hearts
+                        if (g < max * 0.7f) rC++
+                    }
                     else if (g == max && g - r > 20 && g - b > 20) gC++
                     else if (b == max && b - r > 20 && b - g > 20) bC++
-                } else if (max < 60 && saturation < 25) {
+                } else if (max < 60 && saturation < 25 && !isPurple && !isOrange) {
                     blkC++
                 }
             }
