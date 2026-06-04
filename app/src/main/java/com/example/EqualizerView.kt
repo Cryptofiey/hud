@@ -96,22 +96,19 @@ class EqualizerView(context: Context) : View(context) {
         val bgRect = RectF(left, 0f, right, height)
         canvas.drawRoundRect(bgRect, 4f, 4f, bgPaint)
 
-        // Draw segments vertically. 6 segments means 6 slots.
-        val segmentCount = segments.size.coerceAtLeast(1)
-        val segmentHeight = height / segmentCount
-        
-        // Let's draw them side-by-side instead of vertically, or vertically stacked. 
-        // A profile progress might look better as tiny vertical slices (like a segmented battery) side-by-side inside the block.
-        val segGap = 2f
-        val segWidth = (width - segGap * (segmentCount - 1)) / segmentCount
-        
-        for (i in 0 until segmentCount) {
-            val segLeft = left + i * (segWidth + segGap)
-            val segRight = segLeft + segWidth
-            val segRect = RectF(segLeft, 2f, segRight, height - 2f)
+        val segmentCount = segments.size
+        if (segmentCount > 0) {
+            val segGap = 2f
+            val segWidth = (width - segGap * (segmentCount - 1)) / segmentCount
             
-            fillPaint.color = segments[i]
-            canvas.drawRoundRect(segRect, 2f, 2f, fillPaint)
+            for (i in 0 until segmentCount) {
+                val segLeft = left + i * (segWidth + segGap)
+                val segRight = segLeft + segWidth
+                val segRect = RectF(segLeft, 2f, segRight, height - 2f)
+                
+                fillPaint.color = segments[i]
+                canvas.drawRoundRect(segRect, 2f, 2f, fillPaint)
+            }
         }
         
         val label = "L3"

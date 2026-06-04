@@ -24,6 +24,7 @@ object OpponentScanner {
         if (upper.isEmpty()) return false
         if (upper == "UNKNOWN") return false
         if (upper.length < 2 || upper.length > 20) return false
+        if (name.trim().split(Regex("\\s+")).size > 2) return false // Names usually are 1-2 words max
         
         // Ensure it doesn't have too many weird symbols
         val validCharCount = name.count { it.isLetterOrDigit() || it == '-' || it == '_' || it == ' ' }
@@ -108,7 +109,12 @@ object OpponentScanner {
                 val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < 150
                 
                 if (isBelow && isAlignedHorizontally) {
-                    val rawText = block.text.replace(Regex("[^0-9]"), "").trim()
+                    val textTrimmed = block.text.trim()
+                    // Reject if it contains generic letters (to avoid parsing chat messages as stack sizes)
+                    val genericLetterCount = textTrimmed.count { it.isLetter() && it.uppercaseChar() !in listOf('K', 'M', 'B') }
+                    if (genericLetterCount > 2) continue
+
+                    val rawText = textTrimmed.replace(Regex("[^0-9]"), "")
                     if (rawText.isNotEmpty()) {
                         stackValue = rawText.toIntOrNull() ?: 0
                         chipBox = box

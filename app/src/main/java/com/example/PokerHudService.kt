@@ -1708,23 +1708,26 @@ class PokerHudService : Service() {
 
                             val l3Segments = mutableListOf<Int>()
                             val activeOpps = state.opponents.filter { it.isActive }
-                            for (i in 0 until 6) {
-                                if (i < activeOpps.size) {
-                                    val stats = activeOpps[i].stats
-                                    if (stats == null) {
-                                        l3Segments.add(AndroidColor.WHITE)
-                                    } else {
-                                        val now = System.currentTimeMillis()
-                                        val sevenDaysMs = 7L * 24 * 60 * 60 * 1000
-                                        val isRecent = stats.lastUpdated > 0 && (now - stats.lastUpdated) < sevenDaysMs
-
-                                        val nonNullCount = listOf(stats.histVpip, stats.histPfr, stats.hist3Bet, stats.histFoldTo3Bet, stats.histCBet, stats.histFoldToCBet, stats.histSteal, stats.histCheckRaise, stats.histWtsd, stats.histWsd).count { it != null }
-                                        if (isRecent || nonNullCount >= 10 || stats.handsPlayed > 0) l3Segments.add(AndroidColor.GREEN)
-                                        else if (nonNullCount > 0) l3Segments.add(AndroidColor.YELLOW)
-                                        else l3Segments.add(AndroidColor.YELLOW)
-                                    }
+                            for (opp in activeOpps) {
+                                val stats = opp.stats
+                                if (stats == null) {
+                                    l3Segments.add(AndroidColor.WHITE)
                                 } else {
-                                    l3Segments.add(AndroidColor.parseColor("#44FFFFFF"))
+                                    val now = System.currentTimeMillis()
+                                    val sevenDaysMs = 7L * 24 * 60 * 60 * 1000
+                                    val isRecent = stats.lastUpdated > 0 && (now - stats.lastUpdated) < sevenDaysMs
+
+                                    val nonNullCount = listOf(stats.histVpip, stats.histPfr, stats.hist3Bet, stats.histFoldTo3Bet, stats.histCBet, stats.histFoldToCBet, stats.histSteal, stats.histCheckRaise, stats.histWtsd, stats.histWsd).count { it != null }
+                                    
+                                    if (isRecent || nonNullCount >= 10 || stats.handsPlayed >= 20) {
+                                        l3Segments.add(AndroidColor.GREEN) // Полная готовность
+                                    } else if (stats.handsPlayed >= 5 || nonNullCount >= 5) {
+                                        l3Segments.add(AndroidColor.parseColor("#81C784")) // Светло-зеленый
+                                    } else if (stats.handsPlayed > 0 || nonNullCount > 0) {
+                                        l3Segments.add(AndroidColor.parseColor("#FFF176")) // Желтый
+                                    } else {
+                                        l3Segments.add(AndroidColor.WHITE) // Нет ничего
+                                    }
                                 }
                             }
 

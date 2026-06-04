@@ -44,6 +44,45 @@ data class PlayerStats(
     val foldTo3bet: Float get() = if (handsPlayed > 0) (foldTo3betCount.toFloat() / handsPlayed * 100f) else 0f
     val showdownWinPct: Float get() = if (showdownTotal > 0) (showdownWins.toFloat() / showdownTotal * 100f) else 0f
     val aggressionFactor: Float get() = if (aggressionCalls > 0) (aggressionCount.toFloat() / aggressionCalls.toFloat()) else aggressionCount.toFloat()
+
+    // --- SYNTHETIC METRICS (Синтетические метрики) ---
+
+    // 1. Пассивный коридор (Calling Station Index)
+    // Разрыв между VPIP и PFR. Если разрыв >15%, значит оппонент много коллирует префлоп, играя пассивно.
+    val vpipPfrGap: Float get() {
+        val currVpip = histVpip ?: vpip
+        val currPfr = histPfr ?: pfr
+        return currVpip - currPfr
+    }
+
+    // 2. Индекс честности на шоудауне (Postflop Honesty Index)
+    // Разница между выигрышами (WSD) и доходами до вскрытия (WTSD).
+    // Высокий WTSD (>30%) и низкий WSD (<48%) (Индекс < 15-18) = Телефон/Автоответчик (коллирует с мусором).
+    // Низкий WTSD (<25%) и высокий WSD (>55%) (Индекс > 30) = Скала/Нит (показывает только сильные комбинации).
+    val honestyIndex: Float get() {
+        val wtsd = histWtsd ?: 30f
+        val wsd = histWsd ?: 50f
+        return wsd - wtsd
+    }
+
+    // 3. Частота префлоп-блефа / Опенрайза с мусором (Preflop Bluffing Tendency)
+    // Произведение частоты PFR на частоту фолда на 3-бет.
+    // Если оппонент делает много рейзов (высокий PFR, например 25%), но затем сдается на агрессию (>60%),
+    // значит он открывается очень широко с блефами. Коэффициент > 15 = лузово-агрессивный префлоп.
+    val preflopBluffingTendency: Float get() {
+        val currPfr = histPfr ?: pfr
+        val fold3 = histFoldTo3Bet ?: 45f
+        return currPfr * (fold3 / 100f)
+    }
+
+    // 4. Агрессия на нескольких улицах (Multi-Street Danger Index)
+    // Индекс опасности действий оппонента после флопа. Конт-бет (базовая агрессия) + 3x Check-Raise (экстремальная агрессия).
+    // Позволяет найти маньяков или регуляров, склонных к жесткому эксплойту на постфлопе.
+    val postflopDangerIndex: Float get() {
+        val cbet = histCBet ?: 55f
+        val cr = histCheckRaise ?: 10f
+        return (cbet * 0.7f) + (cr * 3f)
+    }
 }
 
 // 3. Recommendation Response Object
@@ -453,8 +492,10 @@ object AdvisorEngine {
             }
             
             // 3. Вычисляем тип оппонента (Archetypes) и подстраиваем общую ширину
-            val gap = vpip - pfr
-            if (wtsd > 32f || (gap > 20f && vpip > 35f)) {
+            val gap = profile.vpipPfrGap
+            val honesty = profile.honestyIndex
+            
+            if (wtsd > 32f || (gap > 20f && vpip > 35f) || honesty < 18f) {
                 // Calling Station (Телефон) - Не блефуем, только велью
                 if (adjustedScore < 0.5f) {
                     adjustedScore -= 0.15f // Понижаем силу слабых рук (нет фолд эквити)
@@ -462,7 +503,7 @@ object AdvisorEngine {
                     adjustedScore += 0.15f // Улучшаем силу велью-бета (шире велью)
                 }
                 if (exploitReason.isEmpty()) exploitReason = "Опп - телефон (Нет блефам)"
-            } else if (wtsd < 25f && wsd > 55f) {
+            } else if ((wtsd < 25f && wsd > 55f) || honesty > 30f) {
                 // Nit (Скала)
                 if (betToCall > bigBlind) {
                     adjustedScore -= 0.20f // Скала ставит - у него натс, сильно занижаем наше эквити
@@ -479,6 +520,14 @@ object AdvisorEngine {
                     adjustedScore += 0.15f // Не падаем с маргинальным эквити
                     if (exploitReason.isEmpty()) exploitReason = "Флоат против шир. CB"
                 }
+            }
+
+            // 5. Эксплойт агрессивных префлоперов, падающих на отпор
+            if (isPreflop && profile.preflopBluffingTendency > 15f && betToCall > 0) {
+                 if (adjustedScore in 0.45f..0.7f) {
+                     adjustedScore += 0.25f // Огромный буст под блеф 3-бет или пуш, так как он открывается широко и часто фолдит
+                     if (exploitReason.isEmpty()) exploitReason = "Опп открывает мусор (Блеф 3-бет/Пуш)"
+                 }
             }
             
             // 5. Уважение чек-рейза
