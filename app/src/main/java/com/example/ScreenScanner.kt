@@ -362,7 +362,7 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
-                    val suit = robustDetectSuit(cleanBitmap, sliceBox) // Not used for communtiy cards later, but stored
+                    val suit = robustDetectSuit(cleanBitmap, sliceBox)
                     if (suit != null) {
                         tempCommCards.add(Pair(Card(rank, suit), sliceBox))
                     }
@@ -625,8 +625,8 @@ class ScreenScanner(
                 val r = when (c) {
                     'A' -> Rank.ACE
                     'K', 'X' -> Rank.KING
-                    'Q', 'D', '0' -> Rank.QUEEN
-                    'J', 'L', 'I' -> Rank.JACK
+                    'Q', 'D', '0', 'O' -> Rank.QUEEN
+                    'J', 'L', '1', 'I' -> Rank.JACK
                     '9', 'G' -> Rank.NINE
                     '8', 'B' -> Rank.EIGHT
                     '7' -> Rank.SEVEN

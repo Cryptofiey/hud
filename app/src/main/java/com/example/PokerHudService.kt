@@ -390,6 +390,21 @@ class PokerHudService : Service() {
         }
         readProfileBtn.setOnClickListener {
             if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
+                val originalVisibility = floatingOverlayView?.visibility ?: View.VISIBLE
+                floatingOverlayView?.visibility = View.INVISIBLE
+                floatingCommOverlay?.visibility = View.INVISIBLE
+                floatingHoleOverlay?.visibility = View.INVISIBLE
+                floatingProbsOverlay?.visibility = View.INVISIBLE
+                floatingScannerOverlay?.visibility = View.INVISIBLE
+                
+                serviceScope.launch {
+                    kotlinx.coroutines.delay(2000)
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        floatingOverlayView?.visibility = originalVisibility
+                        updateBoxOverlays()
+                    }
+                }
+
                 if (screenScanner != null) {
                     screenScanner?.requestProfileScan = true
                 } else {
