@@ -33,6 +33,8 @@ class AutoPlayerService : AccessibilityService() {
     fun dispatchClick(x: Float, y: Float, duration: Long) {
         val path = Path()
         path.moveTo(x, y)
+        // Some systems ignore 0-length gestures, so we provide an epsilon line
+        path.lineTo(x + 1f, y + 1f)
         val gestureBuilder = GestureDescription.Builder()
         gestureBuilder.addStroke(GestureDescription.StrokeDescription(path, 0, duration))
         dispatchGesture(gestureBuilder.build(), object : GestureResultCallback() {

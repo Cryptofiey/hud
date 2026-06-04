@@ -63,8 +63,9 @@ object RobotPlayer {
                 // Wait, if we act, the action buttons will disappear in the next frame.
                 // But just in case, we add a check.
                 val commCardsSize = uiState.board.filterNotNull().size
-                val checkSignature = "${commCardsSize}_${canonicalAction}"
-                if (lastActedBoardCards == commCardsSize && lastActedAction == canonicalAction) {
+                val heroStr = (uiState.heroCard1?.toString() ?: "") + (uiState.heroCard2?.toString() ?: "")
+                val signature = "${heroStr}_${commCardsSize}_${canonicalAction}"
+                if (lastActedAction == signature) {
                     // Already acted for this phase
                     return@collectLatest
                 }
@@ -74,10 +75,10 @@ object RobotPlayer {
                 val targetRect = findButtonRect(canonicalAction) ?: return@collectLatest
                 
                 // Execute after humanizer delay
+                lastActedAction = signature
                 lastActedBoardCards = commCardsSize
-                lastActedAction = canonicalAction
                 
-                Log.d("RobotPlayer", "Executing AI Action: $canonicalAction on rectangle $targetRect")
+                Log.d("RobotPlayer", "Executing AI Action: $canonicalAction on rectangle $targetRect (sig: $signature)")
                 
                 delay(calculateHumanDelay(canonicalAction))
                 
@@ -95,13 +96,24 @@ object RobotPlayer {
         // Buttons could have names like "Check/Call" depending on how OCR sees them.
         for ((key, rect) in availableActionButtons) {
             val upperKey = key.uppercase()
-            if (upperKey.contains(canonicalAction)) return rect
+            
+            // Check direct matches in both English and Russian
+            val match = when (canonicalAction) {
+                "FOLD" -> upperKey.contains("FOLD") || upperKey.contains("ФОЛД")
+                "CHECK" -> upperKey.contains("CHECK") || upperKey.contains("ЧЕК")
+                "CALL" -> upperKey.contains("CALL") || upperKey.contains("КОЛЛ")
+                "BET" -> upperKey.contains("BET") || upperKey.contains("БЕТ")
+                "RAISE" -> upperKey.contains("RAISE") || upperKey.contains("РЕЙЗ")
+                "ALL-IN" -> upperKey.contains("ALL-IN") || upperKey.contains("ОЛЛ-ИН") || upperKey.contains("ALL") || upperKey.contains("ОЛЛ")
+                else -> false
+            }
+            if (match) return rect
+
             // Synonyms
             if ((canonicalAction == "CALL" || canonicalAction == "CHECK") && 
-                (upperKey.contains("CALL") || upperKey.contains("CHECK"))) return rect
+                (upperKey.contains("CALL") || upperKey.contains("CHECK") || upperKey.contains("КОЛЛ") || upperKey.contains("ЧЕК"))) return rect
             if ((canonicalAction == "BET" || canonicalAction == "RAISE") && 
-                (upperKey.contains("BET") || upperKey.contains("RAISE"))) return rect
-             if (canonicalAction == "ALL-IN" && upperKey.contains("ALL")) return rect
+                (upperKey.contains("BET") || upperKey.contains("RAISE") || upperKey.contains("БЕТ") || upperKey.contains("РЕЙЗ"))) return rect
         }
         return null
     }

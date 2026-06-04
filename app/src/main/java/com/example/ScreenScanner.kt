@@ -325,7 +325,8 @@ class ScreenScanner(
                                 txt.contains("CALL") || txt.contains("КОЛЛ") ||
                                 txt.contains("BET") || txt.contains("БЕТ") ||
                                 txt.contains("RAISE") || txt.contains("РЕЙЗ") ||
-                                txt.contains("ALL-IN") || txt.contains("ОЛЛ-ИН")) {
+                                txt.contains("ALL-IN") || txt.contains("ОЛЛ-ИН") ||
+                                txt.contains("ALL") || txt.contains("ОЛЛ")) {
                                 actionButtonsMap[txt] = box
                             }
                         }
