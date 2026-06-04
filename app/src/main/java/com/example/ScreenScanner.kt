@@ -369,10 +369,8 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
-                    val suit = robustDetectSuit(cleanBitmap, sliceBox)
-                    if (suit != null) {
-                        tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
-                    }
+                    val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
+                    tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
                 }
             }
             
@@ -406,11 +404,8 @@ class ScreenScanner(
                     val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
                     val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     
-                    val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot)
-                    
-                    if (suit != null) {
-                        foundCommCardsRaw[index] = Card(finalRank, suit)
-                    }
+                    val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot) ?: Suit.SPADES
+                    foundCommCardsRaw[index] = Card(finalRank, suit)
                 }
             }
 
@@ -678,7 +673,7 @@ class ScreenScanner(
                     if (r == max && r - g > 30 && r - b > 30) rC++
                     else if (g == max && g - r > 20 && g - b > 20) gC++
                     else if (b == max && b - r > 20 && b - g > 20) bC++
-                } else if (max < 80 && saturation < 25) { 
+                } else if (max < 60 && saturation < 25) { 
                     blkC++
                 }
             }
@@ -702,9 +697,9 @@ class ScreenScanner(
         var rC = 0; var gC = 0; var bC = 0; var blkC = 0
         
         // Scan around and mostly below the rank's bounding box
-        val left = maxOf(0, rankBox.left - rankBox.width())
-        val right = minOf(w - 1, rankBox.right + rankBox.width())
-        val top = maxOf(0, rankBox.top - rankBox.height() / 2)
+        val left = maxOf(0, rankBox.left - rankBox.width() * 2)
+        val right = minOf(w - 1, rankBox.right + rankBox.width() * 2)
+        val top = maxOf(0, rankBox.top - rankBox.height())
         val bottom = minOf(h - 1, rankBox.bottom + rankBox.height() * 2)
         
         for (px in left..right step 2) {
@@ -727,14 +722,14 @@ class ScreenScanner(
                     if (r == max && r - g > 20 && r - b > 20) rC++
                     else if (g == max && g - r > 20 && g - b > 20) gC++
                     else if (b == max && b - r > 20 && b - g > 20) bC++
-                } else if (max < 80 && saturation < 25) {
+                } else if (max < 60 && saturation < 25) {
                     blkC++
                 }
             }
         }
         
         val totalCounts = rC + gC + bC + blkC
-        if (totalCounts < 3) return null // Could not confidently find any real suit pixels
+        if (totalCounts < 1) return null // Could not confidently find any real suit pixels
         
         return when {
             rC > gC && rC > bC && rC > blkC -> Suit.HEARTS

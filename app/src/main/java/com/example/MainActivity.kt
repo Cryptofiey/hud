@@ -1417,32 +1417,6 @@ fun OverlaySimulatorLayout(
                 Spacer(modifier = Modifier.height(2.dp))
                 HorizontalDivider(color = Color(0x16FFFFFF))
 
-                // Toggle visibility controls to easily bring back hidden panels!
-                Text(text = "Overlay panel visibility:", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    PanelVisibilityToggleRow(
-                        label = "Community Box",
-                        visible = showCommBox,
-                        onChanged = { PokerHudSharedState.showCommBox.value = it },
-                        color = Color(0xFF2196F3)
-                    )
-                    PanelVisibilityToggleRow(
-                        label = "Hole Cards Box",
-                        visible = showHoleBox,
-                        onChanged = { PokerHudSharedState.showHoleBox.value = it },
-                        color = Color(0xFFE53935)
-                    )
-                    PanelVisibilityToggleRow(
-                        label = "Live HUD Dashboard",
-                        visible = showProbsBox,
-                        onChanged = { PokerHudSharedState.showProbsBox.value = it },
-                        color = Color(0xFFFFD700)
-                    )
-                }
-
-                HorizontalDivider(color = Color(0x16FFFFFF))
-
                 // Customizer Sliders
                 Text("HUD customizer scaling:", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 
@@ -1452,7 +1426,7 @@ fun OverlaySimulatorLayout(
                         value = hudScale,
                         onValueChange = onHudScaleChanged,
                         valueRange = 0.7f..1.3f,
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
                 }
 
@@ -1462,7 +1436,7 @@ fun OverlaySimulatorLayout(
                         value = hudOpacity,
                         onValueChange = onHudOpacityChanged,
                         valueRange = 0.4f..1.0f,
-                        modifier = Modifier.height(20.dp)
+                        modifier = Modifier.height(14.dp)
                     )
                 }
 

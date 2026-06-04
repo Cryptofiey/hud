@@ -60,7 +60,7 @@ object ProfileScanner {
                         val baseUnit = labelBox.height().toFloat()
                         
                         // Look for a number that is vertically close and horizontally aligned
-                        if (dx < baseUnit * 10f && dy < baseUnit * 4.5f) {
+                        if (dx < baseUnit * 25f && dy < baseUnit * 6.5f) {
                             val dist = (dx * 0.5f) + (dy * 2f) // Penalize vertical distance more to keep aligned
                             if (dist < bestDist) {
                                 bestDist = dist
@@ -74,7 +74,7 @@ object ProfileScanner {
             
             // 2. Index Fallback (If spatial fails, look in adjacent text lines)
             if (res == null) {
-                for (i in (index - 2)..(index + 1)) {
+                for (i in (index - 3)..(index + 3)) {
                     if (i < 0 || i >= lines.size) continue
                     val p = extractPercentInLine(lines[i])
                     if (p != null) {

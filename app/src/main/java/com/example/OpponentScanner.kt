@@ -14,7 +14,8 @@ object OpponentScanner {
     private data class TrackedAnchor(
         var boundingBox: Rect,
         var nickname: String,
-        var consecutiveMisses: Int = 0
+        var consecutiveMisses: Int = 0,
+        var consecutiveHits: Int = 1
     )
 
     private val trackedAnchors = mutableListOf<TrackedAnchor>()
@@ -238,6 +239,7 @@ object OpponentScanner {
                 if (bestCandidate != null) {
                     matchedCandidates.add(bestCandidate)
                     anchor.consecutiveMisses = 0
+                    anchor.consecutiveHits++
                     
                     // Update bounding box strictly to the new candidate to prevent endless growth
                     anchor.boundingBox = android.graphics.Rect(bestCandidate.boundingBox!!)
@@ -245,13 +247,18 @@ object OpponentScanner {
                     // Allow name update if the new name is valid, but anchor provides stability
                     anchor.nickname = bestCandidate.nickname
                     
-                    finalOpponents.add(bestCandidate.copy(nickname = anchor.nickname, boundingBox = anchor.boundingBox))
+                    if (anchor.consecutiveHits >= 3) {
+                        finalOpponents.add(bestCandidate.copy(nickname = anchor.nickname, boundingBox = anchor.boundingBox))
+                    }
                 } else {
                     anchor.consecutiveMisses++
+                    // Also decay the hits if they vanish, so a ghost that blinks doesn't accumulate to 3 easily
+                    anchor.consecutiveHits = maxOf(0, anchor.consecutiveHits - 1)
+                    
                     if (anchor.consecutiveMisses > 15) {
                         iterator.remove() // Player left, or we missed them too many times
-                    } else {
-                        // Remember them for a few frames
+                    } else if (anchor.consecutiveHits >= 3) {
+                        // Remember them for a few frames only if they were confirmed
                         finalOpponents.add(OpponentState(
                             id = 0,
                             nickname = anchor.nickname,
@@ -267,9 +274,10 @@ object OpponentScanner {
 
             for (candidate in uniqueCandidates) {
                 if (candidate !in matchedCandidates) {
-                    val newAnchor = TrackedAnchor(candidate.boundingBox!!, candidate.nickname, 0)
+                    val newAnchor = TrackedAnchor(candidate.boundingBox!!, candidate.nickname, 0, 1)
                     trackedAnchors.add(newAnchor)
-                    finalOpponents.add(candidate)
+                    // We DO NOT add them to finalOpponents immediately on first sighting.
+                    // They'll be added on frame 3 to prevent flickering ghosts.
                 }
             }
         }

@@ -150,8 +150,6 @@ class PokerHudService : Service() {
     private var txtEvoStats: TextView? = null
     private var scannerStatusBox: LinearLayout? = null
     private var txtPreText: TextView? = null
-    private var togglesRow1: LinearLayout? = null
-    private var togglesRow3: LinearLayout? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -347,14 +345,14 @@ class PokerHudService : Service() {
         // 2. EXPANDED HUD LAYOUT
         val expanded = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
             background = createBackgroundDrawable(
                 AndroidColor.parseColor("#F50D151D"), // Dark blue/grey high contrast
                 10f,
                 dpToPx(2f),
-                AndroidColor.parseColor("#FF2196F3") // Neon Blue Outline
+                AndroidColor.parseColor("#FFD500F9") // Neon Purple Outline
             )
-            val shadowParams = FrameLayout.LayoutParams(dpToPx(240f), WindowManager.LayoutParams.WRAP_CONTENT)
+            val shadowParams = FrameLayout.LayoutParams(resources.displayMetrics.widthPixels / 2, WindowManager.LayoutParams.WRAP_CONTENT)
             layoutParams = shadowParams
         }
         expandedLayout = expanded
@@ -366,24 +364,50 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            ).apply {
+                setMargins(0, 0, 0, dpToPx(2f))
+            }
         }
 
         val txtTitle = TextView(this).apply {
-            text = "HUD МОНИТОР"
+            text = "HUD"
             setTextColor(AndroidColor.WHITE)
-            textSize = 11f
+            textSize = 10f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
+        val readProfileBtn = Button(this, null, 0, android.R.style.Widget_Button).apply {
+            text = "ПРОФИЛЬ"
+            textSize = 8f
+            setTextColor(AndroidColor.WHITE)
+            background = createBackgroundDrawable(AndroidColor.parseColor("#FF1976D2"), 4f)
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(dpToPx(56f), dpToPx(24f)).apply {
+                setMargins(0, 0, dpToPx(2f), 0)
+            }
+        }
+        readProfileBtn.setOnClickListener {
+            if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
+                if (screenScanner != null) {
+                    screenScanner?.requestProfileScan = true
+                } else {
+                    startForegroundServiceNotification()
+                    val tempScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode, stopAfterProfileScan = true)
+                    tempScanner.start()
+                }
+            } else {
+                android.widget.Toast.makeText(this@PokerHudService, "Enable Screen Projection first", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+
         val btnMinimize = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "СКРЫТЬ"
-            textSize = 9f
+            textSize = 8f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF37474F"), 4f)
-            setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
-            val btnParams = LinearLayout.LayoutParams(dpToPx(48f), dpToPx(26f)).apply {
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+            val btnParams = LinearLayout.LayoutParams(dpToPx(46f), dpToPx(24f)).apply {
                 setMargins(0, 0, dpToPx(2f), 0)
             }
             layoutParams = btnParams
@@ -391,14 +415,15 @@ class PokerHudService : Service() {
 
         val btnExit = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "ВЫХОД"
-            textSize = 9f
+            textSize = 8f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF1E88E5"), 4f)
-            setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
-            layoutParams = LinearLayout.LayoutParams(dpToPx(44f), dpToPx(26f))
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(dpToPx(42f), dpToPx(24f))
         }
 
         headerRow.addView(txtTitle)
+        headerRow.addView(readProfileBtn)
         headerRow.addView(btnMinimize)
         headerRow.addView(btnExit)
         expanded.addView(headerRow)
@@ -435,120 +460,30 @@ class PokerHudService : Service() {
         
         // Hide scanner logs from HUD: expanded.addView(scannerBoxLocal)
 
-        // OVERLAY TOGGLES
-        val injectorTitleText = TextView(this).apply {
-            text = "НАСТРОЙКИ ВИДА"
-            setTextColor(AndroidColor.LTGRAY)
-            textSize = 8f
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, dpToPx(2f), 0, dpToPx(2f))
-        }
-        expanded.addView(injectorTitleText)
-
-        val toggles1 = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        }
-        this.togglesRow1 = toggles1
-
-        val commCheckBox = android.widget.CheckBox(this).apply {
-            text = "🃏"
-            textSize = 10f
-            setTextColor(AndroidColor.WHITE)
-            isChecked = PokerHudSharedState.showCommBox.value
-            setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showCommBox.value = isChecked }
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setPadding(dpToPx(2f), dpToPx(4f), dpToPx(2f), dpToPx(4f))
-        }
-        val holeCheckBox = android.widget.CheckBox(this).apply {
-            text = "🎴"
-            textSize = 10f
-            setTextColor(AndroidColor.WHITE)
-            isChecked = PokerHudSharedState.showHoleBox.value
-            setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showHoleBox.value = isChecked }
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setPadding(dpToPx(2f), dpToPx(4f), dpToPx(2f), dpToPx(4f))
-        }
-        val probsCheckBox = android.widget.CheckBox(this).apply {
-            text = "📊"
-            textSize = 10f
-            setTextColor(AndroidColor.WHITE)
-            isChecked = PokerHudSharedState.showProbsBox.value
-            setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showProbsBox.value = isChecked }
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setPadding(dpToPx(2f), dpToPx(4f), dpToPx(2f), dpToPx(4f))
-        }
-        val scannerCheckBox = android.widget.CheckBox(this).apply {
-            text = "🔍"
-            textSize = 10f
-            setTextColor(AndroidColor.WHITE)
-            isChecked = PokerHudSharedState.showScannerBoxes.value
-            setOnCheckedChangeListener { _, isChecked -> PokerHudSharedState.showScannerBoxes.value = isChecked }
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setPadding(dpToPx(2f), dpToPx(4f), dpToPx(2f), dpToPx(4f))
-        }
-        
-        toggles1.addView(commCheckBox)
-        toggles1.addView(holeCheckBox)
-        toggles1.addView(probsCheckBox)
-        toggles1.addView(scannerCheckBox)
-        expanded.addView(toggles1)
-
+        // Evolution Monitor
         val evolutionMonitor = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                setMargins(0, dpToPx(4f), 0, dpToPx(4f))
+                setMargins(0, dpToPx(2f), 0, dpToPx(2f))
             }
             background = createBackgroundDrawable(AndroidColor.parseColor("#1AFFFFFF"), 4f)
         }
         val evoLabel = TextView(this).apply {
             text = "🧬 Synthetic Genetics"
             setTextColor(AndroidColor.parseColor("#B39DDB"))
-            textSize = 9f
+            textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
         }
         val evoStats = TextView(this).apply {
             text = "Hunger: -- | Curiosity: --\nActive Mutants: -- / Synapses: --"
             setTextColor(AndroidColor.LTGRAY)
-            textSize = 8f
+            textSize = 7f
         }
         evolutionMonitor.addView(evoLabel)
         evolutionMonitor.addView(evoStats)
         expanded.addView(evolutionMonitor)
         this.txtEvoStats = evoStats
-
-        val toggles3 = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            setPadding(0, dpToPx(2f), 0, dpToPx(2f))
-        }
-        this.togglesRow3 = toggles3
-        val readProfileBtn = Button(this, null, 0, android.R.style.Widget_Button).apply {
-            text = "СЧИТАТЬ ПРОФИЛЬ"
-            textSize = 8f
-            setTextColor(AndroidColor.WHITE)
-            background = createBackgroundDrawable(AndroidColor.parseColor("#FF1976D2"), 4f)
-            setPadding(dpToPx(8f), dpToPx(4f), dpToPx(8f), dpToPx(4f))
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(36f))
-        }
-        readProfileBtn.setOnClickListener {
-            if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
-                if (screenScanner != null) {
-                    screenScanner?.requestProfileScan = true
-                } else {
-                    startForegroundServiceNotification()
-                    val tempScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode, stopAfterProfileScan = true)
-                    tempScanner.start()
-                }
-            } else {
-                android.widget.Toast.makeText(this@PokerHudService, "Enable Screen Projection first", android.widget.Toast.LENGTH_SHORT).show()
-            }
-        }
-        toggles3.addView(readProfileBtn)
-        expanded.addView(toggles3)
 
         parentFrame.addView(expanded)
 
@@ -779,8 +714,6 @@ class PokerHudService : Service() {
                 val visibilityMode = if (gameMode) View.GONE else View.VISIBLE
                 headerRow.visibility = visibilityMode
                 divider1.visibility = visibilityMode
-                togglesRow1?.visibility = visibilityMode
-                togglesRow3?.visibility = visibilityMode
                 txtPreText?.visibility = visibilityMode
 
                 // Scanner status is completely hidden in game play to not draw any blocks on screen
