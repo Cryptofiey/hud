@@ -56,9 +56,12 @@ object ProfileScanner {
                         val dx = Math.abs(labelBox.centerX() - box.centerX()).toFloat()
                         val dy = Math.abs(labelBox.centerY() - box.centerY()).toFloat()
                         
+                        // We use height as a consistent baseline unit because text width varies wildly
+                        val baseUnit = labelBox.height().toFloat()
+                        
                         // Look for a number that is vertically close and horizontally aligned
-                        if (dx < labelBox.width() * 1.5f && dy < labelBox.height() * 3.5f) {
-                            val dist = dx + dy * 2f // Penalize vertical distance more to keep aligned with column
+                        if (dx < baseUnit * 10f && dy < baseUnit * 4.5f) {
+                            val dist = (dx * 0.5f) + (dy * 2f) // Penalize vertical distance more to keep aligned
                             if (dist < bestDist) {
                                 bestDist = dist
                                 bestMatchI = i
@@ -137,25 +140,26 @@ object ProfileScanner {
         
         for (i in lines.indices) {
             val line = lines[i]
+            val normalizedLine = line.replace(" ", "").replace("-", "").replace("/", "").uppercase()
             
             // Extract percentages.
-            if (line.contains("VPIP", ignoreCase = true)) vpip = extractPercentNearWithBox(i, "VPIP") ?: extractPercentInLineWithBox(line, i, 0, "VPIP")
-            if (line.contains("PFR", ignoreCase = true)) pfr = extractPercentNearWithBox(i, "PFR") ?: extractPercentInLineWithBox(line, i, 0, "PFR")
-            if (line.contains("3-Bet", ignoreCase = true) && !line.contains("Fold", ignoreCase = true)) bet3 = extractPercentNearWithBox(i, "3Bet") ?: extractPercentInLineWithBox(line, i, 0, "3Bet")
-            if (line.contains("Fold to 3-Bet", ignoreCase = true)) fold3Bet = extractPercentNearWithBox(i, "F3B") ?: extractPercentInLineWithBox(line, i, 0, "F3B")
-            if (line.contains("C-Bet", ignoreCase = true) && !line.contains("Fold", ignoreCase = true)) cBet = extractPercentNearWithBox(i, "CBet") ?: extractPercentInLineWithBox(line, i, 0, "CBet")
-            if (line.contains("Fold to C-Bet", ignoreCase = true)) foldCBet = extractPercentNearWithBox(i, "FCBet") ?: extractPercentInLineWithBox(line, i, 0, "FCBet")
-            if (line.contains("Steal", ignoreCase = true)) steal = extractPercentNearWithBox(i, "Steal") ?: extractPercentInLineWithBox(line, i, 0, "Steal")
-            if (line.contains("Check/Raise", ignoreCase = true)) checkRaise = extractPercentNearWithBox(i, "C/R") ?: extractPercentInLineWithBox(line, i, 0, "C/R")
+            if (normalizedLine.contains("VPIP")) vpip = extractPercentNearWithBox(i, "VPIP") ?: extractPercentInLineWithBox(line, i, 0, "VPIP")
+            if (normalizedLine.contains("PFR")) pfr = extractPercentNearWithBox(i, "PFR") ?: extractPercentInLineWithBox(line, i, 0, "PFR")
+            if (normalizedLine.contains("3BET") && !normalizedLine.contains("FOLD")) bet3 = extractPercentNearWithBox(i, "3Bet") ?: extractPercentInLineWithBox(line, i, 0, "3Bet")
+            if (normalizedLine.contains("FOLDTO3BET") || normalizedLine.contains("F3B")) fold3Bet = extractPercentNearWithBox(i, "F3B") ?: extractPercentInLineWithBox(line, i, 0, "F3B")
+            if (normalizedLine.contains("CBET") && !normalizedLine.contains("FOLD")) cBet = extractPercentNearWithBox(i, "CBet") ?: extractPercentInLineWithBox(line, i, 0, "CBet")
+            if (normalizedLine.contains("FOLDTOCBET")) foldCBet = extractPercentNearWithBox(i, "FCBet") ?: extractPercentInLineWithBox(line, i, 0, "FCBet")
+            if (normalizedLine.contains("STEAL")) steal = extractPercentNearWithBox(i, "Steal") ?: extractPercentInLineWithBox(line, i, 0, "Steal")
+            if (normalizedLine.contains("CHECKRAISE") || normalizedLine.contains("C/R")) checkRaise = extractPercentNearWithBox(i, "C/R") ?: extractPercentInLineWithBox(line, i, 0, "C/R")
             
             // WTSD and WSD are sometimes on the same line "34% WTSD WSD 41%"
-            if (line.contains("WTSD", ignoreCase = true)) {
+            if (normalizedLine.contains("WTSD")) {
                 wtsd = extractPercentInLineWithBox(line, i, 0, "WTSD") ?: extractPercentNearWithBox(i, "WTSD")
             }
-            if (line.contains("WSD", ignoreCase = true) && !line.contains("WTSD", ignoreCase = true)) {
+            if (normalizedLine.contains("WSD") && !normalizedLine.contains("WTSD")) {
                 wsd = extractPercentInLineWithBox(line, i, 0, "WSD") ?: extractPercentNearWithBox(i, "WSD")
             }
-            if (line.contains("WTSD") && line.contains("WSD")) {
+            if (normalizedLine.contains("WTSD") && normalizedLine.contains("WSD")) {
                 val matches = Regex("(\\d+)[%]?").findAll(line).toList()
                 if (matches.size >= 2) {
                     wtsd = matches[0].groupValues[1].toFloatOrNull()

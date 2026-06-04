@@ -333,11 +333,14 @@ class ScreenScanner(
 
                 // Removed isCardBackground to avoid missing shiny/shadowed cards
                 val parsedRanks = findCardsInText(element.text)
-                for (rank in parsedRanks) {
-                    val suit = robustDetectSuit(cleanBitmap, box)
-                    val xOffset = box.left + (parsedRanks.indexOf(rank) * 10)
-                    val rectWithOffset = android.graphics.Rect(xOffset, box.top, box.right, box.bottom)
-                    tempCommCards.add(Pair(Card(rank, suit), rectWithOffset))
+                for ((idx, rank) in parsedRanks.withIndex()) {
+                    val sliceWidth = box.width() / parsedRanks.size
+                    val sliceLeft = box.left + (idx * sliceWidth)
+                    val sliceRight = sliceLeft + sliceWidth
+                    val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
+                    
+                    val suit = robustDetectSuit(cleanBitmap, sliceBox) // Not used for communtiy cards later, but stored
+                    tempCommCards.add(Pair(Card(rank, suit), sliceBox))
                 }
             }
             
@@ -357,12 +360,15 @@ class ScreenScanner(
                 // We skip isCardBackground for hole cards because they can be covered by player graphics or shadows.
 
                 val parsedRanks = findCardsInText(element.text)
-                for (rank in parsedRanks) {
-                    val suit = robustDetectSuit(cleanBitmap, box)
-                    // If multiple ranks are in same text block, offset the X coordinate slightly to preserve their read order
-                    val xOffset = box.left + (parsedRanks.indexOf(rank) * 10) 
-                    val rectWithOffset = android.graphics.Rect(xOffset, box.top, box.right, box.bottom)
-                    tempHoleCards.add(Pair(Card(rank, suit), rectWithOffset))
+                for ((idx, rank) in parsedRanks.withIndex()) {
+                    // Slicing the bounding box if multiple ranks are merged in a single text block
+                    val sliceWidth = box.width() / parsedRanks.size
+                    val sliceLeft = box.left + (idx * sliceWidth)
+                    val sliceRight = sliceLeft + sliceWidth
+                    val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
+                    
+                    val suit = robustDetectSuit(cleanBitmap, sliceBox)
+                    tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
                 }
             }
             
@@ -407,23 +413,31 @@ class ScreenScanner(
                 val card1Elements = mutableListOf<Pair<Card, android.graphics.Rect>>()
                 val card2Elements = mutableListOf<Pair<Card, android.graphics.Rect>>()
                 
-                for (item in tempHoleCards) {
-                    val relativeX = (item.second.left - holeRect.left).toFloat() / holeRect.width()
-                    // Card 1's rank is typically at 0% - 15%. Card 2 is fully visible, its left rank is around 25% - 40%.
-                    if (relativeX < 0.26f) {
-                        card1Elements.add(item)
-                    } else {
-                        card2Elements.add(item)
+                val sortedHole = tempHoleCards.sortedBy { it.second.centerX() }
+                
+                if (sortedHole.size == 1) {
+                    // Only one card found, guess based on relative X
+                    val relativeX = (sortedHole[0].second.left - holeRect.left).toFloat() / holeRect.width()
+                    if (relativeX < 0.40f) card1Elements.add(sortedHole[0]) else card2Elements.add(sortedHole[0])
+                } else {
+                    // Start by assigning first to card1
+                    card1Elements.add(sortedHole[0])
+                    for (i in 1 until sortedHole.size) {
+                        // If distance to previous is large enough, it's the second card
+                        val gap = sortedHole[i].second.centerX() - sortedHole[i-1].second.centerX()
+                        if (gap > holeRect.width() * 0.15f || card2Elements.isNotEmpty()) {
+                            card2Elements.add(sortedHole[i])
+                        } else {
+                            card1Elements.add(sortedHole[i])
+                        }
                     }
                 }
                 
                 if (card1Elements.isNotEmpty()) {
                     val ranks = card1Elements.map { it.first.rank }
                     val finalRank = ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    val minX = card1Elements.minOf { it.second.left }
-                    val slotW = (holeRect.width() * 0.40f).toInt()
-                    val synSlot = android.graphics.Rect(minX, holeRect.top, minX + slotW, holeRect.bottom)
-                    val finalSuit = detectSuitFromSlotBackground(cleanBitmap!!, synSlot)
+                    val suits = card1Elements.map { it.first.suit }
+                    val finalSuit = suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     foundHoleCardsRaw[0] = Card(finalRank, finalSuit)
                 }
                 
@@ -431,10 +445,9 @@ class ScreenScanner(
                     val ranks = card2Elements.map { it.first.rank }
                     val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
                     val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    val minX = card2Elements.minOf { it.second.left }
-                    val slotW = (holeRect.width() * 0.40f).toInt()
-                    val synSlot = android.graphics.Rect(minX, holeRect.top, minX + slotW, holeRect.bottom)
-                    val finalSuit = detectSuitFromSlotBackground(cleanBitmap!!, synSlot)
+                    val suits = card2Elements.map { it.first.suit }
+                    val duplicateSuit = suits.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
+                    val finalSuit = duplicateSuit ?: suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     foundHoleCardsRaw[1] = Card(finalRank, finalSuit)
                 }
             }
@@ -462,12 +475,25 @@ class ScreenScanner(
             
             val smoothedAll = (smoothedHole + smoothedComm).filterNotNull()
             if (smoothedAll.size != smoothedAll.toSet().size) {
-                // Invalid smoothed detection
-                // Clear history to recover
-                holeHistory.clear()
-                commHistory.clear()
-                scanStatus.value = "Error: Invalid duplicate cards in smoothed state. Clearing history."
-                return
+                // Warning: Invalid smoothed detection (duplicates)
+                // Do not clear history, just ignore duplicates for this frame
+                val seen = mutableSetOf<Card>()
+                for (i in 0 until 5) {
+                    val c = smoothedComm.getOrNull(i)
+                    if (c != null && !seen.add(c)) {
+                        val mList = smoothedComm.toMutableList()
+                        mList[i] = null
+                        smoothedComm = mList
+                    }
+                }
+                for (i in 0 until 2) {
+                    val c = smoothedHole.getOrNull(i)
+                    if (c != null && !seen.add(c)) {
+                        val mList = smoothedHole.toMutableList()
+                        mList[i] = null
+                        smoothedHole = mList
+                    }
+                }
             }
 
             // Board never shrinks during a hand. If we saw N cards, and now see fewer (but >0), keep N cards if possible.
