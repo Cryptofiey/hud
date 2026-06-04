@@ -80,9 +80,10 @@ object RobotPlayer {
                 
                 Log.d("RobotPlayer", "Executing AI Action: $canonicalAction on rectangle $targetRect (sig: $signature)")
                 
-                delay(calculateHumanDelay(canonicalAction))
-                
-                executeClickOnRect(targetRect)
+                scope.launch {
+                    delay(calculateHumanDelay(canonicalAction))
+                    executeClickOnRect(targetRect)
+                }
             }
         }
     }
@@ -132,7 +133,7 @@ object RobotPlayer {
         val x = startX + Random.nextFloat() * (endX - startX)
         val y = startY + Random.nextFloat() * (endY - startY)
 
-        val clickDuration = Random.nextLong(60, 150) // human-like tap
+        val clickDuration = Random.nextLong(100, 250) // longer tap which passes touchslop
         
         autoPlayer.dispatchClick(x, y, clickDuration)
     }

@@ -33,8 +33,12 @@ class AutoPlayerService : AccessibilityService() {
     fun dispatchClick(x: Float, y: Float, duration: Long) {
         val path = Path()
         path.moveTo(x, y)
-        // Some systems ignore 0-length gestures, so we provide an epsilon line
-        path.lineTo(x + 1f, y + 1f)
+        // Some systems ignore 0-length gestures, so we provide a micro movement
+        // A human finger touch is an area, and pressing naturally shifts the center point. 
+        // We move the pointer by ~10-15 pixels over the click duration.
+        val dx = (Math.random() * 8f + 5f).toFloat() * if (Math.random() > 0.5) 1 else -1
+        val dy = (Math.random() * 8f + 5f).toFloat() * if (Math.random() > 0.5) 1 else -1
+        path.lineTo(x + dx, y + dy)
         val gestureBuilder = GestureDescription.Builder()
         gestureBuilder.addStroke(GestureDescription.StrokeDescription(path, 0, duration))
         dispatchGesture(gestureBuilder.build(), object : GestureResultCallback() {
