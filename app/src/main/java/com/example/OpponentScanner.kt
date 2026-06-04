@@ -63,53 +63,69 @@ object OpponentScanner {
         return true
     }
 
-    fun scan(result: Text, cleanBitmap: Bitmap, hudRects: List<Rect> = listOf()): List<OpponentState> {
+    fun scan(result: Text, cleanBitmap: Bitmap, hudRects: List<Rect> = listOf(), commRect: Rect? = null, holeRect: Rect? = null): List<OpponentState> {
         val candidates = mutableListOf<OpponentState>()
         
-        // Filter out text blocks that intersect with HUD rectangles
-        val blocks = result.textBlocks.filter { block ->
-            val boundingBox = block.boundingBox
-            if (boundingBox == null) true
-            else !hudRects.any { android.graphics.Rect.intersects(it, boundingBox) || it.contains(boundingBox) }
+        // Filter out text that intersects with HUD rectangles, break down into lines to prevent grouping issues
+        val linesList = mutableListOf<Text.Line>()
+        for (block in result.textBlocks) {
+            val boundingBox = block.boundingBox ?: continue
+            if (hudRects.any { android.graphics.Rect.intersects(it, boundingBox) || it.contains(boundingBox) }) continue
+            if (commRect != null && (android.graphics.Rect.intersects(commRect, boundingBox) || commRect.contains(boundingBox))) continue
+            if (holeRect != null && (android.graphics.Rect.intersects(holeRect, boundingBox) || holeRect.contains(boundingBox))) continue
+            
+            for (line in block.lines) {
+                val lineBox = line.boundingBox ?: continue
+                if (!hudRects.any { android.graphics.Rect.intersects(it, lineBox) || it.contains(lineBox) } &&
+                    !(commRect != null && android.graphics.Rect.intersects(commRect, lineBox)) &&
+                    !(holeRect != null && android.graphics.Rect.intersects(holeRect, lineBox))) {
+                    linesList.add(line)
+                }
+            }
         }
 
         val height = cleanBitmap.height
         val width = cleanBitmap.width
         
         // 1. Find potential player names in the horseshoe boundary
-        val nameBlocks = blocks.filter { block ->
-            val box = block.boundingBox ?: return@filter false
+        val nameLines = linesList.filter { line ->
+            val box = line.boundingBox ?: return@filter false
             val x = box.centerX().toFloat()
             val y = box.centerY().toFloat()
             
             // Define exclusion zones based on the new layout
             val inTopHeader = y < height * 0.11f
+            // We already exclude commRect/holeRect above, but keep soft bounds just in case
             val inCommunityCards = x > width * 0.18f && x < width * 0.82f && y > height * 0.38f && y < height * 0.68f
-            val inHeroCards = x > width * 0.53f && x < width * 0.95f && y > height * 0.68f && y < height * 0.93f
+            val inHeroCards = x > width * 0.40f && x < width * 0.95f && y > height * 0.68f && y < height * 0.98f
             
-            val inSearchZone = !(inTopHeader || inCommunityCards || inHeroCards)
-            inSearchZone && isValidPlayerName(block.text)
+            // Check if it's explicitly inside the known rects (redundant but safe)
+            val inKnownComm = commRect != null && commRect.contains(x.toInt(), y.toInt())
+            val inKnownHole = holeRect != null && holeRect.contains(x.toInt(), y.toInt())
+            
+            val inSearchZone = !(inTopHeader || inCommunityCards || inHeroCards || inKnownComm || inKnownHole)
+            inSearchZone && isValidPlayerName(line.text)
         }
 
         var oppId = 1
-        for (nameBlock in nameBlocks) {
-            val nameBox = nameBlock.boundingBox ?: continue
-            val nameText = nameBlock.text.trim()
+        for (nameLine in nameLines) {
+            val nameBox = nameLine.boundingBox ?: continue
+            val nameText = nameLine.text.trim()
             
             // 2. Find stack size below the name
             var chipBox: Rect? = null
             var stackValue = 0
             
-            for (block in blocks) {
-                if (block == nameBlock) continue
-                val box = block.boundingBox ?: continue
+            for (line in linesList) {
+                if (line === nameLine) continue
+                val box = line.boundingBox ?: continue
                 
                 // Stack is usually directly below the name
                 val isBelow = box.top >= nameBox.bottom - 20 && box.top < nameBox.bottom + 120
                 val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < 150
                 
                 if (isBelow && isAlignedHorizontally) {
-                    val textTrimmed = block.text.trim()
+                    val textTrimmed = line.text.trim()
                     // Reject if it contains generic letters (to avoid parsing chat messages as stack sizes)
                     val genericLetterCount = textTrimmed.count { it.isLetter() && it.uppercaseChar() !in listOf('K', 'M', 'B') }
                     if (genericLetterCount > 2) continue
@@ -140,10 +156,10 @@ object OpponentScanner {
 
             var detectedAction = PlayerAction.NONE
             
-            for (block in blocks) {
-                val box = block.boundingBox ?: continue
+            for (line in linesList) {
+                val box = line.boundingBox ?: continue
                 if (actionRegion.contains(box.centerX(), box.centerY())) {
-                    val txt = block.text.uppercase(java.util.Locale.US)
+                    val txt = line.text.uppercase(java.util.Locale.US)
                     if (txt.contains("FOLD")) detectedAction = PlayerAction.FOLD
                     else if (txt.contains("CALL")) detectedAction = PlayerAction.CALL
                     else if (txt.contains("RAISE")) detectedAction = PlayerAction.RAISE
@@ -208,18 +224,23 @@ object OpponentScanner {
                 // Allow some movement
                 val anchorRadius = 250.0
                 
-                val bestCandidate = uniqueCandidates.firstOrNull { 
-                    Rect.intersects(it.boundingBox!!, anchor.boundingBox) || 
-                    Math.hypot((it.boundingBox!!.centerX() - anchor.boundingBox.centerX()).toDouble(), 
-                               (it.boundingBox!!.centerY() - anchor.boundingBox.centerY()).toDouble()) < anchorRadius
-                }
+                val bestCandidate = uniqueCandidates
+                    .filter { 
+                        android.graphics.Rect.intersects(it.boundingBox!!, anchor.boundingBox) || 
+                        Math.hypot((it.boundingBox.centerX() - anchor.boundingBox.centerX()).toDouble(), 
+                                   (it.boundingBox.centerY() - anchor.boundingBox.centerY()).toDouble()) < anchorRadius
+                    }
+                    .minByOrNull { 
+                        Math.hypot((it.boundingBox!!.centerX() - anchor.boundingBox.centerX()).toDouble(), 
+                                   (it.boundingBox.centerY() - anchor.boundingBox.centerY()).toDouble())
+                    }
 
                 if (bestCandidate != null) {
                     matchedCandidates.add(bestCandidate)
                     anchor.consecutiveMisses = 0
                     
-                    // Slowly adapt bounding box
-                    anchor.boundingBox.union(bestCandidate.boundingBox!!)
+                    // Update bounding box strictly to the new candidate to prevent endless growth
+                    anchor.boundingBox = android.graphics.Rect(bestCandidate.boundingBox!!)
                     
                     // Allow name update if the new name is valid, but anchor provides stability
                     anchor.nickname = bestCandidate.nickname
@@ -227,7 +248,7 @@ object OpponentScanner {
                     finalOpponents.add(bestCandidate.copy(nickname = anchor.nickname, boundingBox = anchor.boundingBox))
                 } else {
                     anchor.consecutiveMisses++
-                    if (anchor.consecutiveMisses > 4) {
+                    if (anchor.consecutiveMisses > 15) {
                         iterator.remove() // Player left, or we missed them too many times
                     } else {
                         // Remember them for a few frames

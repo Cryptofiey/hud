@@ -514,7 +514,7 @@ class ScreenScanner(
                 smoothedComm.getOrNull(i) ?: smoothedComm.getOrNull(i)
             }
             
-            val scannedOpponents = OpponentScanner.scan(result, cleanBitmap!!, hudRects)
+            val scannedOpponents = OpponentScanner.scan(result, cleanBitmap!!, hudRects, commRect, holeRect)
             val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
 
             var profileBoxesToHighlight: List<ScannedBox>? = null
