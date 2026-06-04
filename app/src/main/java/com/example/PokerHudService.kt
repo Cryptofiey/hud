@@ -690,7 +690,8 @@ class PokerHudService : Service() {
                 
                 // --- SYNTHETIC GENETICS TICK & UPDATE ---
                 try {
-                    EvolutionFunnel.simulateExperience()
+                    val activeOpponentStats = state.opponents.firstOrNull { it.isActive }?.stats
+                    EvolutionFunnel.simulateExperience(realEvDelta = null, activeStats = activeOpponentStats)
                     val hunger = String.format(java.util.Locale.US, "%.0f%%", SyntheticGenome.biochemistry.getHungerLevel())
                     val curiosity = String.format(java.util.Locale.US, "%.0f%%", SyntheticGenome.biochemistry.getCuriosityLevel())
                     val genomeSize = SyntheticGenome.activeGenome.size

@@ -108,6 +108,11 @@ class Synapse(val gene: MutantGene) {
     fun applyReinforcement(dopamine: Float, cortisol: Float) {
         weight = (weight + (dopamine * 0.1f) - (cortisol * 0.05f)).coerceIn(0.01f, 1f)
         testCount++
+
+        // Точечная мутация веса с вероятностью 5% для избежания стагнации (Point Mutation)
+        if (Random.nextFloat() < 0.05f) {
+            weight = (weight + (Random.nextFloat() * 0.2f - 0.1f)).coerceIn(0.01f, 1f)
+        }
     }
 }
 
@@ -190,10 +195,12 @@ object SyntheticGenome {
     val perfectVictim = CrossbredGene("z2_victim", "Perfect Victim (Whale)", callingStationIndex, stickyIndex, RecombinationOp.ADD)
     val trapVulnerability = CrossbredGene("z2_trap_vuln", "Vulnerability to Traps", maniacIndex, honestyIndex, RecombinationOp.SUBTRACT)
 
-    val activeGenome = mutableListOf<MutantGene>(
-        callingStationIndex, honestyIndex, preflopBluffing, dangerIndex,
-        stickyIndex, postflopAgitation, aggroBluffIndex, stubbornBlindDefender,
-        maniacIndex, perfectVictim, trapVulnerability
+    val activeGenome = CopyOnWriteArrayList<MutantGene>(
+        listOf(
+            callingStationIndex, honestyIndex, preflopBluffing, dangerIndex,
+            stickyIndex, postflopAgitation, aggroBluffIndex, stubbornBlindDefender,
+            maniacIndex, perfectVictim, trapVulnerability
+        )
     )
     
     // Инициализация синапсов (по умолчанию вес 0.5 - нейтральный)
@@ -209,26 +216,34 @@ object EvolutionFunnel {
     
     // Эмуляция: "Случайный опыт из внешнего мира".
     // Если результат положительный впрыскиваем Дофамин. Если отрицательный - Кортизол.
-    fun simulateExperience() {
+    fun simulateExperience(realEvDelta: Float? = null, activeStats: PlayerStats? = null) {
         SyntheticGenome.biochemistry.tickBiochemistry()
         
         // 1. Учим текущие синапсы
         SyntheticGenome.synapsis.forEach { synapse ->
-            // Настоящего Монте-Карло здесь пока нет, мы "фантазируем", что ген тестируется.
-            val simulatedEv = (Random.nextFloat() * 20f) - 10f 
-            if (simulatedEv > 0f) {
+            // Используем реальный EV с дашборда (или симулируем если его нет)
+            val ev = realEvDelta ?: ((Random.nextFloat() * 20f) - 10f) 
+            
+            // Возбуждение синапса зависит от того, насколько он был бы активен
+            val activityMult = if (activeStats != null) (synapse.gene.calculate(activeStats) / 100f).coerceIn(0.1f, 1f) else 1f
+            val adjustedEv = ev * activityMult
+
+            if (adjustedEv > 0f) {
                 // Успешное применение гена
-                SyntheticGenome.biochemistry.injectChemical(Chemical.DOPAMINE, simulatedEv)
-                synapse.applyReinforcement(dopamine = simulatedEv, cortisol = 0f)
+                SyntheticGenome.biochemistry.injectChemical(Chemical.DOPAMINE, adjustedEv)
+                synapse.applyReinforcement(dopamine = adjustedEv, cortisol = 0f)
             } else {
                 // Ошибка применения гена
-                SyntheticGenome.biochemistry.injectChemical(Chemical.CORTISOL, Math.abs(simulatedEv))
-                synapse.applyReinforcement(dopamine = 0f, cortisol = Math.abs(simulatedEv))
+                val cost = Math.abs(adjustedEv)
+                SyntheticGenome.biochemistry.injectChemical(Chemical.CORTISOL, cost)
+                synapse.applyReinforcement(dopamine = 0f, cortisol = cost)
             }
         }
         
+        val POPULATION_LIMIT = 30
+
         // 2. Если Дофамина мало, а Драйв CURIOSITY высок - это значит алгоритму скучно и он хочет размножать гены.
-        if (SyntheticGenome.biochemistry.getCuriosityLevel() > 80f) {
+        if (SyntheticGenome.biochemistry.getCuriosityLevel() > 80f && SyntheticGenome.activeGenome.size < POPULATION_LIMIT) {
             breedNewMutation()
             SyntheticGenome.biochemistry.satisfyCuriosity()
         }
@@ -238,6 +253,29 @@ object EvolutionFunnel {
         deadSynapsis.forEach { 
             SyntheticGenome.synapsis.remove(it)
             SyntheticGenome.activeGenome.remove(it.gene)
+        }
+
+        // 4. Строгий отбор (Culling) при превышении лимита перенаселения
+        if (SyntheticGenome.synapsis.size > POPULATION_LIMIT) {
+            // Убиваем самого слабого по весу
+            val weakest = SyntheticGenome.synapsis.minByOrNull { it.weight }
+            weakest?.let {
+                SyntheticGenome.synapsis.remove(it)
+                SyntheticGenome.activeGenome.remove(it.gene)
+            }
+        }
+
+        // 5. Защита от вымирания вида (Extinction Prevention Event)
+        if (SyntheticGenome.synapsis.size < 5) {
+            SyntheticGenome.biochemistry.injectChemical(Chemical.ADRENALINE, 50f) // Паника вида
+            val baseGenes = listOf(SyntheticGenome.vpip, SyntheticGenome.pfr, SyntheticGenome.wsd, SyntheticGenome.wtsd, SyntheticGenome.cbet, SyntheticGenome.foldTo3Bet)
+            val pA = baseGenes.random()
+            val pB = baseGenes.random()
+            if (pA != pB) {
+               val rescueGene = CrossbredGene("z_rescue_${System.currentTimeMillis()}", "Rescue Mutation", pA, pB, RecombinationOp.randomOp())
+               SyntheticGenome.activeGenome.add(rescueGene)
+               SyntheticGenome.synapsis.add(Synapse(rescueGene))
+            }
         }
     }
     
@@ -271,6 +309,60 @@ object EvolutionFunnel {
             
             SyntheticGenome.activeGenome.add(childGene)
             SyntheticGenome.synapsis.add(Synapse(childGene))
+        }
+    }
+}
+
+/**
+ * Нейронный лоб принятия решений (Decision Lobe).
+ * Пока что выполняет функцию заглушки, которая собирает сигналы 
+ * от биохимии и синапсов, но не передает в основной движок.
+ */
+object DecisionLobe {
+    var isActive: Boolean = false // Выключен по умолчанию
+    
+    enum class ProposedAction {
+        FOLD, CALL, RAISE, WAIT
+    }
+
+    /**
+     * Сбор данных из синапсов и биохимии для генерации синтетического решения
+     */
+    fun processSensoryInput(stats: PlayerStats?): ProposedAction {
+        if (!isActive) return ProposedAction.WAIT
+        if (stats == null) return ProposedAction.WAIT
+        
+        val hunger = SyntheticGenome.biochemistry.getHungerLevel()
+        val survival = SyntheticGenome.biochemistry.getSurvivalLevel()
+        
+        // Берем только сильные связи
+        val activeSynapses = SyntheticGenome.synapsis.filter { it.weight > 0.6f && it.testCount > 5 }
+        
+        var foldActivation = 0f
+        var callActivation = 0f
+        var raiseActivation = 0f
+        
+        // Влияние базовых химикатов (Драйвов)
+        foldActivation += (survival * 0.5f)
+        raiseActivation += (hunger * 0.4f)
+        callActivation += (hunger * 0.2f)
+        
+        // Влияние генов (через синапсы)
+        for (syn in activeSynapses) {
+            val geneVal = syn.gene.calculate(stats)
+            when {
+                syn.gene.id.contains("bluff") -> raiseActivation += (geneVal * syn.weight)
+                syn.gene.id.contains("station") || syn.gene.id.contains("sticky") -> callActivation += (geneVal * syn.weight)
+                syn.gene.id.contains("danger") || syn.gene.id.contains("maniac") -> foldActivation += (geneVal * syn.weight)
+            }
+        }
+        
+        // Winner-Takes-All (Победитель забирает всё)
+        return when {
+            foldActivation > callActivation && foldActivation > raiseActivation -> ProposedAction.FOLD
+            raiseActivation > callActivation && raiseActivation > foldActivation -> ProposedAction.RAISE
+            callActivation > foldActivation && callActivation > raiseActivation -> ProposedAction.CALL
+            else -> ProposedAction.WAIT
         }
     }
 }

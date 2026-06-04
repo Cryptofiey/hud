@@ -89,8 +89,8 @@ class ScreenScanner(
         }
     }
 
-    private val holeHistory = mutableListOf<List<Card>>()
-    private val commHistory = mutableListOf<List<Card>>()
+    private val holeHistory = mutableListOf<List<Card?>>()
+    private val commHistory = mutableListOf<List<Card?>>()
 
     private fun findCardSlots(bitmap: Bitmap, rect: android.graphics.Rect, expectedMaxCards: Int): List<android.graphics.Rect> {
         if (rect.width() <= 0 || rect.height() <= 0) return emptyList()
@@ -182,30 +182,35 @@ class ScreenScanner(
         return finalSlots.take(expectedMaxCards)
     }
 
-    private fun getSmoothedCards(history: MutableList<List<Card>>, newCards: List<Card>, windowSize: Int = 4): List<Card> {
+    private fun getSmoothedCards(history: MutableList<List<Card?>>, newCards: List<Card?>, windowSize: Int = 4): List<Card?> {
         history.add(newCards)
         if (history.size > windowSize) {
             history.removeAt(0)
         }
         
         // If last 2 frames were completely empty, reset history
-        if (history.size >= 2 && history.takeLast(2).all { it.isEmpty() }) {
+        if (history.size >= 2 && history.takeLast(2).all { list -> list.all { it == null } }) {
             history.clear()
             return emptyList()
         }
         
         val maxLen = history.maxOfOrNull { it.size } ?: 0
-        val result = mutableListOf<Card>()
+        val result = mutableListOf<Card?>()
         
         for (i in 0 until maxLen) {
             val cardsAtI = history.mapNotNull { it.getOrNull(i) }
-            if (cardsAtI.isEmpty()) continue
+            if (cardsAtI.isEmpty()) {
+                result.add(null)
+                continue
+            }
             val modeCount = cardsAtI.groupingBy { it }.eachCount().maxByOrNull { it.value }
             if (modeCount != null) {
                 result.add(modeCount.key)
+            } else {
+                result.add(null)
             }
         }
-        return result.distinct()
+        return result
     }
 
     private var cachedCleanBitmap: Bitmap? = null
@@ -361,8 +366,8 @@ class ScreenScanner(
                 }
             }
             
-            var foundCommCardsRaw = mutableListOf<Card>()
-            var foundHoleCardsRaw = mutableListOf<Card>()
+            var foundCommCardsRaw = MutableList<Card?>(5) { null }
+            var foundHoleCardsRaw = MutableList<Card?>(2) { null }
 
             // A standard Texas Hold'em board has up to 5 community cards.
             // When drawn fully, the commRect comfortably holds 5 cards side-by-side. 
@@ -384,20 +389,16 @@ class ScreenScanner(
             }
             
             // Evaluate each slot independently
-            for (slot in commSlots) {
+            for ((index, slot) in commSlots.withIndex()) {
                 val elementsInSlot = elementsBySlot[slot] ?: emptyList()
                 if (elementsInSlot.isNotEmpty()) {
                     val ranks = elementsInSlot.map { it.first.rank }
                     val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
                     val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     
-                    // Sample suit from the center area of the slot to avoid picking up table color from margins
-                    val synLeft = slot.left + (slot.width() * 0.15f).toInt()
-                    val synRight = slot.right - (slot.width() * 0.15f).toInt()
-                    val synSlot = android.graphics.Rect(synLeft, slot.top, synRight, slot.bottom)
-                    val suit = detectSuitFromSlotBackground(cleanBitmap!!, synSlot)
+                    val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot)
                     
-                    foundCommCardsRaw.add(Card(finalRank, suit))
+                    foundCommCardsRaw[index] = Card(finalRank, suit)
                 }
             }
 
@@ -420,10 +421,10 @@ class ScreenScanner(
                     val ranks = card1Elements.map { it.first.rank }
                     val finalRank = ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     val minX = card1Elements.minOf { it.second.left }
-                    val slotW = (holeRect.width() * 0.25f).toInt()
+                    val slotW = (holeRect.width() * 0.40f).toInt()
                     val synSlot = android.graphics.Rect(minX, holeRect.top, minX + slotW, holeRect.bottom)
                     val finalSuit = detectSuitFromSlotBackground(cleanBitmap!!, synSlot)
-                    foundHoleCardsRaw.add(Card(finalRank, finalSuit))
+                    foundHoleCardsRaw[0] = Card(finalRank, finalSuit)
                 }
                 
                 if (card2Elements.isNotEmpty()) {
@@ -431,24 +432,35 @@ class ScreenScanner(
                     val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
                     val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     val minX = card2Elements.minOf { it.second.left }
-                    val slotW = (holeRect.width() * 0.35f).toInt()
+                    val slotW = (holeRect.width() * 0.40f).toInt()
                     val synSlot = android.graphics.Rect(minX, holeRect.top, minX + slotW, holeRect.bottom)
                     val finalSuit = detectSuitFromSlotBackground(cleanBitmap!!, synSlot)
-                    foundHoleCardsRaw.add(Card(finalRank, finalSuit))
+                    foundHoleCardsRaw[1] = Card(finalRank, finalSuit)
                 }
             }
 
-            var rawAll = foundHoleCardsRaw + foundCommCardsRaw
+            var rawAll = (foundHoleCardsRaw + foundCommCardsRaw).filterNotNull()
             if (rawAll.size != rawAll.toSet().size) {
                 scanStatus.value = "Warning: Duplicate cards detected. Ignoring duplicates in this frame."
-                foundCommCardsRaw = foundCommCardsRaw.distinct().toMutableList()
-                foundHoleCardsRaw = foundHoleCardsRaw.filter { it !in foundCommCardsRaw }.distinct().toMutableList()
+                val seen = mutableSetOf<Card>()
+                for (i in 0 until 5) {
+                    val c = foundCommCardsRaw[i]
+                    if (c != null) {
+                        if (seen.contains(c)) foundCommCardsRaw[i] = null else seen.add(c)
+                    }
+                }
+                for (i in 0 until 2) {
+                    val c = foundHoleCardsRaw[i]
+                    if (c != null) {
+                        if (seen.contains(c)) foundHoleCardsRaw[i] = null else seen.add(c)
+                    }
+                }
             }
 
             var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, windowSize = 3)
             var smoothedComm = getSmoothedCards(commHistory, foundCommCardsRaw, windowSize = 3)
             
-            val smoothedAll = smoothedHole + smoothedComm
+            val smoothedAll = (smoothedHole + smoothedComm).filterNotNull()
             if (smoothedAll.size != smoothedAll.toSet().size) {
                 // Invalid smoothed detection
                 // Clear history to recover
@@ -460,19 +472,20 @@ class ScreenScanner(
 
             // Board never shrinks during a hand. If we saw N cards, and now see fewer (but >0), keep N cards if possible.
             // If it drops to 0, getSmoothedCards will eventually clear it (after 2 empty frames).
-            val currentComm = currentState.board.filterNotNull()
-            if (smoothedComm.isNotEmpty() && smoothedComm.size < currentComm.size) {
+            val currentCommCount = currentState.board.count { it != null }
+            val smoothedCommCount = smoothedComm.count { it != null }
+            if (smoothedCommCount in 1 until currentCommCount) {
                 // Temporary drop in detected cards. Use previous known board if it's larger length.
-                smoothedComm = currentComm
+                smoothedComm = currentState.board.toList()
                 // Overwrite the last history entry to keep it alive
-                if (commHistory.isNotEmpty()) commHistory[commHistory.lastIndex] = currentComm
+                if (commHistory.isNotEmpty()) commHistory[commHistory.lastIndex] = smoothedComm
             }
             
-            val finalH1 = smoothedHole.getOrNull(0)
-            val finalH2 = smoothedHole.getOrNull(1)
+            val finalH1 = smoothedHole.getOrNull(0) ?: smoothedHole.firstOrNull() ?: null
+            val finalH2 = smoothedHole.getOrNull(1) ?: smoothedHole.drop(1).firstOrNull() ?: null
             
             val finalBoard = List(5) { i ->
-                smoothedComm.getOrNull(i)
+                smoothedComm.getOrNull(i) ?: smoothedComm.getOrNull(i)
             }
             
             val scannedOpponents = OpponentScanner.scan(result, cleanBitmap!!, hudRects)
@@ -604,10 +617,11 @@ class ScreenScanner(
         
         // Sample points across the whole slot horizontally, but restrict vertically to middle
         // to avoid top/bottom shadows or non-card background if the slot is slightly large.
-        val left = maxOf(0, slot.left + (slot.width() * 0.1).toInt())
-        val right = minOf(w - 1, slot.right - (slot.width() * 0.1).toInt())
-        val top = maxOf(0, slot.top + (slot.height() * 0.2).toInt())
-        val bottom = minOf(h - 1, slot.bottom - (slot.height() * 0.2).toInt())
+        // Increased margins to avoid sampling the poker table felt (which is often green or blue).
+        val left = maxOf(0, slot.left + (slot.width() * 0.3).toInt())
+        val right = minOf(w - 1, slot.right - (slot.width() * 0.3).toInt())
+        val top = maxOf(0, slot.top + (slot.height() * 0.35).toInt())
+        val bottom = minOf(h - 1, slot.bottom - (slot.height() * 0.35).toInt())
         
         if (left >= right || top >= bottom) return Suit.SPADES
         

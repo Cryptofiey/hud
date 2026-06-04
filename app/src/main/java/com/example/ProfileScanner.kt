@@ -43,18 +43,50 @@ object ProfileScanner {
         
         val extractPercentNearWithBox: (Int, String) -> Float? = { index, label ->
             var res: Float? = null
-            // Look 2 lines above, the current line, and 1 line below
-            for (i in (index - 2)..(index + 1)) {
-                if (i < 0 || i >= lines.size) continue
-                val p = extractPercentInLine(lines[i])
-                if (p != null) {
-                    res = p
-                    lineBoxes[i]?.let { matchedBoxes.add(ScannedBox(it, lines[i])) }
-                    // Also underline the label itself for visual confirmation
-                    if (i != index) lineBoxes[index]?.let { matchedBoxes.add(ScannedBox(it, lines[index])) }
-                    break
+            var bestMatchI = -1
+            val labelBox = lineBoxes[index]
+            
+            // 1. Spatial Search (Handles cases where MLKit groups columns into separate blocks)
+            if (labelBox != null) {
+                var bestDist = Float.MAX_VALUE
+                for (i in lines.indices) {
+                    val num = extractPercentInLine(lines[i])
+                    val box = lineBoxes[i]
+                    if (num != null && box != null) {
+                        val dx = Math.abs(labelBox.centerX() - box.centerX()).toFloat()
+                        val dy = Math.abs(labelBox.centerY() - box.centerY()).toFloat()
+                        
+                        // Look for a number that is vertically close and horizontally aligned
+                        if (dx < labelBox.width() * 1.5f && dy < labelBox.height() * 3.5f) {
+                            val dist = dx + dy * 2f // Penalize vertical distance more to keep aligned with column
+                            if (dist < bestDist) {
+                                bestDist = dist
+                                bestMatchI = i
+                                res = num
+                            }
+                        }
+                    }
                 }
             }
+            
+            // 2. Index Fallback (If spatial fails, look in adjacent text lines)
+            if (res == null) {
+                for (i in (index - 2)..(index + 1)) {
+                    if (i < 0 || i >= lines.size) continue
+                    val p = extractPercentInLine(lines[i])
+                    if (p != null) {
+                        res = p
+                        bestMatchI = i
+                        break
+                    }
+                }
+            }
+            
+            if (res != null && bestMatchI != -1) {
+                lineBoxes[bestMatchI]?.let { matchedBoxes.add(ScannedBox(it, lines[bestMatchI])) }
+                if (bestMatchI != index) lineBoxes[index]?.let { matchedBoxes.add(ScannedBox(it, lines[index])) }
+            }
+            
             res
         }
 
