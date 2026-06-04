@@ -340,7 +340,9 @@ class ScreenScanner(
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
                     val suit = robustDetectSuit(cleanBitmap, sliceBox) // Not used for communtiy cards later, but stored
-                    tempCommCards.add(Pair(Card(rank, suit), sliceBox))
+                    if (suit != null) {
+                        tempCommCards.add(Pair(Card(rank, suit), sliceBox))
+                    }
                 }
             }
             
@@ -368,7 +370,9 @@ class ScreenScanner(
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
                     val suit = robustDetectSuit(cleanBitmap, sliceBox)
-                    tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
+                    if (suit != null) {
+                        tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
+                    }
                 }
             }
             
@@ -404,7 +408,9 @@ class ScreenScanner(
                     
                     val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot)
                     
-                    foundCommCardsRaw[index] = Card(finalRank, suit)
+                    if (suit != null) {
+                        foundCommCardsRaw[index] = Card(finalRank, suit)
+                    }
                 }
             }
 
@@ -635,7 +641,7 @@ class ScreenScanner(
         return found
     }
 
-    private fun detectSuitFromSlotBackground(crop: Bitmap, slot: android.graphics.Rect): Suit {
+    private fun detectSuitFromSlotBackground(crop: Bitmap, slot: android.graphics.Rect): Suit? {
         val w = crop.width
         val h = crop.height
         
@@ -649,7 +655,7 @@ class ScreenScanner(
         val top = maxOf(0, slot.top + (slot.height() * 0.35).toInt())
         val bottom = minOf(h - 1, slot.bottom - (slot.height() * 0.35).toInt())
         
-        if (left >= right || top >= bottom) return Suit.SPADES
+        if (left >= right || top >= bottom) return null
         
         for (px in left..right step 3) {
             for (py in top..bottom step 3) {
@@ -667,21 +673,19 @@ class ScreenScanner(
                 val min = minOf(r, g, b)
                 val saturation = if (max == 0) 0 else (max - min) * 255 / max
                 
-                // For solid color cards:
-                // Red = Hearts, Blue = Diamonds, Green = Clubs, Dark grey/Black = Spades
-                if (saturation < 30) {
+                // Must be strong enough to be a card suit
+                if (saturation > 40 && max > 50) {
+                    if (r == max && r - g > 30 && r - b > 30) rC++
+                    else if (g == max && g - r > 20 && g - b > 20) gC++
+                    else if (b == max && b - r > 20 && b - g > 20) bC++
+                } else if (max < 80 && saturation < 25) { 
                     blkC++
-                } else if (r == max && r - g > 30 && r - b > 30) {
-                    rC++ // Red -> Hearts
-                } else if (g == max && g - r > 20 && g - b > 20) {
-                    gC++ // Green -> Clubs
-                } else if (b == max && b - r > 20 && b - g > 20) {
-                    bC++ // Blue -> Diamonds
-                } else {
-                    blkC++ // Fallback
                 }
             }
         }
+        
+        val totalCounts = rC + gC + bC + blkC
+        if (totalCounts < 3) return null // Could not confidently find any real suit pixels
         
         return when {
             rC > gC && rC > bC && rC > blkC -> Suit.HEARTS
@@ -691,7 +695,7 @@ class ScreenScanner(
         }
     }
 
-    private fun robustDetectSuit(crop: Bitmap, rankBox: android.graphics.Rect): Suit {
+    private fun robustDetectSuit(crop: Bitmap, rankBox: android.graphics.Rect): Suit? {
         val w = crop.width
         val h = crop.height
         
@@ -717,22 +721,20 @@ class ScreenScanner(
                 
                 val max = maxOf(r, g, b)
                 val min = minOf(r, g, b)
-                val saturation = max - min
+                val saturation = if (max == 0) 0 else (max - min) * 255 / max
                 
-                if (saturation < 30) {
-                    // Very low saturation = gray/black -> Spades (or Clubs in 2-color)
+                if (saturation > 40 && max > 50) {
+                    if (r == max && r - g > 20 && r - b > 20) rC++
+                    else if (g == max && g - r > 20 && g - b > 20) gC++
+                    else if (b == max && b - r > 20 && b - g > 20) bC++
+                } else if (max < 80 && saturation < 25) {
                     blkC++
-                } else {
-                    if (r == max) {
-                        rC++
-                    } else if (g == max) {
-                        gC++
-                    } else {
-                        bC++
-                    }
                 }
             }
         }
+        
+        val totalCounts = rC + gC + bC + blkC
+        if (totalCounts < 3) return null // Could not confidently find any real suit pixels
         
         return when {
             rC > gC && rC > bC && rC > blkC -> Suit.HEARTS
