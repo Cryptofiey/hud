@@ -362,10 +362,8 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
-                    val suit = robustDetectSuit(cleanBitmap, sliceBox)
-                    if (suit != null) {
-                        tempCommCards.add(Pair(Card(rank, suit), sliceBox))
-                    }
+                    val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
+                    tempCommCards.add(Pair(Card(rank, suit), sliceBox))
                 }
             }
             
@@ -392,10 +390,8 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
-                    val suit = robustDetectSuit(cleanBitmap, sliceBox)
-                    if (suit != null) {
-                        tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
-                    }
+                    val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
+                    tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
                 }
             }
             
@@ -429,10 +425,8 @@ class ScreenScanner(
                     val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
                     val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     
-                    val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot)
-                    if (suit != null) {
-                        foundCommCardsRaw[index] = Card(finalRank, suit)
-                    }
+                    val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot) ?: Suit.SPADES
+                    foundCommCardsRaw[index] = Card(finalRank, suit)
                 }
             }
 
@@ -732,10 +726,11 @@ class ScreenScanner(
         
         var rC = 0; var gC = 0; var bC = 0; var blkC = 0
         
-        // Scan around and mostly below the rank's bounding box
-        val left = maxOf(0, rankBox.left - rankBox.width() * 2)
-        val right = minOf(w - 1, rankBox.right + rankBox.width() * 2)
-        val top = maxOf(0, rankBox.top - rankBox.height())
+        // Scan around and mostly below the rank's bounding box. 
+        // Restrict horizontal expansion to avoid sweeping into an adjacent card.
+        val left = maxOf(0, rankBox.left - (rankBox.width() * 0.25).toInt())
+        val right = minOf(w - 1, rankBox.right + (rankBox.width() * 0.25).toInt())
+        val top = maxOf(0, rankBox.top - (rankBox.height() * 0.25).toInt())
         val bottom = minOf(h - 1, rankBox.bottom + rankBox.height() * 2)
         
         for (px in left..right step 2) {
