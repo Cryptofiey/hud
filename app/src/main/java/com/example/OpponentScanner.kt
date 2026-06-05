@@ -34,6 +34,7 @@ object OpponentScanner {
         // Skip action keywords and internal UI text
         val actions = setOf(
             "FOLD", "CALL", "RAISE", "CHECK", "ALL-IN", "ALL IN", "BET", "POT", 
+            "ФОЛД", "КОЛЛ", "РЕЙЗ", "ЧЕК", "ОЛЛ-ИН", "БЕТ", "ПОТ", "ПАС", "ДИЛЕР",
             "DEALER", "PASS", "SIT OUT", "SIT-OUT", "SITOUT", "CHOICE", "CHIPS",
             "FOLDED", "JOIN", "SIMILAR", "NLH", "VPIP", "PFR", "WTSD", "WSD",
             "BALANCE", "PROFILE", "HUD", "MONITOR", "MONIT", "RUNS", "GAME", "INTERPRETATION",
@@ -98,7 +99,7 @@ object OpponentScanner {
             val inTopHeader = y < height * 0.11f
             // We already exclude commRect/holeRect above, but keep soft bounds just in case
             val inCommunityCards = x > width * 0.18f && x < width * 0.82f && y > height * 0.38f && y < height * 0.68f
-            val inHeroCards = x > width * 0.40f && x < width * 0.95f && y > height * 0.68f && y < height * 0.98f
+            val inHeroCards = x > width * 0.53f && x < width * 0.95f && y > height * 0.68f && y < height * 0.98f
             
             // Check if it's explicitly inside the known rects (redundant but safe)
             val inKnownComm = commRect != null && commRect.contains(x.toInt(), y.toInt())
@@ -122,17 +123,17 @@ object OpponentScanner {
                 val box = line.boundingBox ?: continue
                 
                 // Stack is usually directly below the name
-                val isBelow = box.top >= nameBox.bottom - 20 && box.top < nameBox.bottom + 120
-                val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < 150
+                val isBelow = box.top >= nameBox.bottom - 30 && box.top < nameBox.bottom + 150
+                val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < 250
                 
                 if (isBelow && isAlignedHorizontally) {
                     val textTrimmed = line.text.trim()
                     // Reject if it contains generic letters (to avoid parsing chat messages as stack sizes)
                     val genericLetterCount = textTrimmed.count { it.isLetter() && it.uppercaseChar() !in listOf('K', 'M', 'B') }
-                    if (genericLetterCount > 2) continue
+                    if (genericLetterCount > 3) continue
 
-                    val rawText = textTrimmed.replace(Regex("[^0-9]"), "")
-                    if (rawText.isNotEmpty()) {
+                    val rawText = textTrimmed.replace(",", "").replace(Regex("[^0-9.]"), "")
+                    if (rawText.isNotEmpty() && rawText.count { it == '.' } <= 1) {
                         stackValue = rawText.toFloatOrNull() ?: 0f
                         chipBox = box
                         break
@@ -159,13 +160,14 @@ object OpponentScanner {
             
             for (line in linesList) {
                 val box = line.boundingBox ?: continue
+                if (box.top > cleanBitmap.height * 0.8f) continue // skip hero action buttons
                 if (actionRegion.contains(box.centerX(), box.centerY())) {
                     val txt = line.text.uppercase(java.util.Locale.US)
-                    if (txt.contains("FOLD")) detectedAction = PlayerAction.FOLD
-                    else if (txt.contains("CALL")) detectedAction = PlayerAction.CALL
-                    else if (txt.contains("RAISE")) detectedAction = PlayerAction.RAISE
-                    else if (txt.contains("CHECK")) detectedAction = PlayerAction.CHECK
-                    else if (txt.contains("ALL-IN") || txt.contains("ALL IN")) detectedAction = PlayerAction.ALL_IN
+                    if (txt.contains("FOLD") || txt.contains("ФОЛД") || txt.contains("ПАС") || txt.contains("СБРОС")) detectedAction = PlayerAction.FOLD
+                    else if (txt.contains("CALL") || txt.contains("КОЛЛ")) detectedAction = PlayerAction.CALL
+                    else if (txt.contains("RAISE") || txt.contains("РЕЙЗ")) detectedAction = PlayerAction.RAISE
+                    else if (txt.contains("CHECK") || txt.contains("ЧЕК")) detectedAction = PlayerAction.CHECK
+                    else if (txt.contains("ALL-IN") || txt.contains("ALL IN") || txt.contains("ОЛЛ-ИН") || txt.contains("ОЛЛ ИН")) detectedAction = PlayerAction.ALL_IN
                     
                     if (detectedAction != PlayerAction.NONE) break
                 }
@@ -297,9 +299,9 @@ object OpponentScanner {
                 val lineBox = line.boundingBox ?: continue
                 val textUpper = line.text.uppercase()
                 
-                if (textUpper.contains("POT") || !textUpper.any { it.isDigit() }) continue
+                if (textUpper.contains("POT") || textUpper.contains("ПОТ") || !textUpper.any { it.isDigit() }) continue
                 
-                val numStr = textUpper.replace(Regex("[^0-9.]"), "")
+                val numStr = textUpper.replace(",", "").replace(Regex("[^0-9.]"), "")
                 if (numStr.isEmpty() || numStr.count { it == '.' } > 1) continue
                 val betVal = numStr.toFloatOrNull() ?: continue
                 if (betVal <= 0f) continue

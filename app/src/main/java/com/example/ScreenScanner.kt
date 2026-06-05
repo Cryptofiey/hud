@@ -600,6 +600,8 @@ class ScreenScanner(
         // Pre-replace common OCR symbol mistakes before stripping
         var preProcessed = text.uppercase(java.util.Locale.US)
         preProcessed = preProcessed.replace("&", "8").replace("$", "8").replace("@", "Q").replace("%", "8").replace("?", "7").replace("!", "1")
+        // Replace Cyrillic lookalikes
+        preProcessed = preProcessed.replace("А", "A").replace("К", "K").replace("Т", "T").replace("В", "B").replace("О", "O").replace("С", "C").replace("Р", "P")
 
         // Keep only letters, digits, and suit symbols to form a dense string
         val raw = preProcessed.replace(Regex("[^A-Z0-9\u2660\u2663\u2665\u2666]"), "")
