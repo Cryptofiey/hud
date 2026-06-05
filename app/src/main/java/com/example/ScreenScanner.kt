@@ -305,28 +305,71 @@ class ScreenScanner(
             val holeElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
             val actionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
 
-            // We look for action buttons in the bottom 25% of the screen
-            val bottomZoneTop = cleanBitmap!!.height * 0.75
+            // We look for action buttons in the bottom 20% of the screen
+            val bottomZoneTop = cleanBitmap!!.height * 0.80
+
+            var scannedPotSize: Float? = null
 
             for (block in result.textBlocks) {
                 for (line in block.lines) {
+                    val lineTextUpper = line.text.uppercase()
+                    if (lineTextUpper.startsWith("POT") || lineTextUpper.contains("POT ") || lineTextUpper.contains("POT:")) {
+                        val numStr = lineTextUpper.replace(Regex("[^0-9.]"), "")
+                        if (numStr.isNotEmpty() && numStr.count { it == '.' } <= 1) {
+                            scannedPotSize = numStr.toFloatOrNull()
+                        }
+                    }
+
                     for (element in line.elements) {
                         val box = element.boundingBox ?: continue
-                        if (commRect.width() > 20 && android.graphics.Rect.intersects(commRect, box)) {
+                        
+                        var insideHud = false
+                        for (hudRect in hudRects) {
+                            if (android.graphics.Rect.intersects(hudRect, box)) {
+                                insideHud = true
+                                break
+                            }
+                        }
+                        if (insideHud) continue
+
+                        val cx = box.centerX()
+                        val cy = box.centerY()
+                        
+                        val expandedCommRect = android.graphics.Rect(
+                            commRect.left,
+                            commRect.top - commRect.height() / 2,
+                            commRect.right,
+                            commRect.bottom + commRect.height() / 2
+                        )
+                        
+                        val expandedHoleRect = android.graphics.Rect(
+                            holeRect.left,
+                            holeRect.top - holeRect.height() / 4,
+                            holeRect.right,
+                            holeRect.bottom + holeRect.height() / 2
+                        )
+                        
+                        if (commRect.width() > 20 && expandedCommRect.contains(cx, cy)) {
                             commElements.add(element)
-                        } else if (holeRect.width() > 20 && android.graphics.Rect.intersects(holeRect, box)) {
+                        } else if (holeRect.width() > 20 && expandedHoleRect.contains(cx, cy)) {
                             holeElements.add(element)
                         }
                         
                         if (box.top > bottomZoneTop) {
                             val txt = element.text.uppercase()
+                            
+                            // Prevent tiny non-button text from being recognized:
+                            // Even short action buttons like "BET" or "Fold" are larger than 5% of screen width.
+                            if (box.width() < cleanBitmap!!.width * 0.05f) continue
+                            
                             if (txt.contains("FOLD") || txt.contains("ФОЛД") ||
                                 txt.contains("CHECK") || txt.contains("ЧЕК") ||
                                 txt.contains("CALL") || txt.contains("КОЛЛ") ||
                                 txt.contains("BET") || txt.contains("БЕТ") ||
                                 txt.contains("RAISE") || txt.contains("РЕЙЗ") ||
                                 txt.contains("ALL-IN") || txt.contains("ОЛЛ-ИН") ||
-                                txt.contains("ALL") || txt.contains("ОЛЛ")) {
+                                txt.contains("ALL") || txt.contains("ОЛЛ") || 
+                                txt.contains("STRADDLE") || txt.contains("СТРАДДЛ")) {
                                 actionButtonsMap[txt] = box
                             }
                         }
@@ -353,10 +396,14 @@ class ScreenScanner(
                 if (lowerCount >= 2) continue
                 
                 val rawText = element.text.trim().uppercase(java.util.Locale.US)
-                if (rawText.contains("OK") || rawText.contains("WAIT") || rawText.contains("COIN")) continue
+                val safeText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
+                if (safeText.contains("OK") || safeText.contains("WAIT") || 
+                    safeText.contains("OUTS") || safeText.contains("%") || safeText.contains("STRAIGHT") ||
+                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
+                    safeText.contains("BB")) continue
 
                 // Removed isCardBackground to avoid missing shiny/shadowed cards
-                val parsedRanks = findCardsInText(element.text)
+                val parsedRanks = findCardsInText(safeText)
                 for ((idx, rank) in parsedRanks.withIndex()) {
                     val sliceWidth = box.width() / parsedRanks.size
                     val sliceLeft = box.left + (idx * sliceWidth)
@@ -379,11 +426,15 @@ class ScreenScanner(
                 if (lowerCount >= 2) continue
                 
                 val rawText = element.text.trim().uppercase(java.util.Locale.US)
-                if (rawText.contains("OK") || rawText.contains("WAIT") || rawText.contains("COIN")) continue
+                val safeText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
+                if (safeText.contains("OK") || safeText.contains("WAIT") || 
+                    safeText.contains("OUTS") || safeText.contains("%") || safeText.contains("STRAIGHT") ||
+                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
+                    safeText.contains("BB")) continue
 
                 // We skip isCardBackground for hole cards because they can be covered by player graphics or shadows.
 
-                val parsedRanks = findCardsInText(element.text)
+                val parsedRanks = findCardsInText(safeText)
                 for ((idx, rank) in parsedRanks.withIndex()) {
                     // Slicing the bounding box if multiple ranks are merged in a single text block
                     val sliceWidth = box.width() / parsedRanks.size
@@ -426,8 +477,11 @@ class ScreenScanner(
                     val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
                     val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     
-                    val suit = detectSuitFromSlotBackground(cleanBitmap!!, slot) ?: Suit.SPADES
-                    foundCommCardsRaw[index] = Card(finalRank, suit)
+                    val suits = elementsInSlot.map { it.first.suit }
+                    val duplicateSuit = suits.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
+                    val finalSuit = duplicateSuit ?: suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                    
+                    foundCommCardsRaw[index] = Card(finalRank, finalSuit)
                 }
             }
 
@@ -436,23 +490,25 @@ class ScreenScanner(
                 val card1Elements = mutableListOf<Pair<Card, android.graphics.Rect>>()
                 val card2Elements = mutableListOf<Pair<Card, android.graphics.Rect>>()
                 
-                val sortedHole = tempHoleCards.sortedBy { it.second.centerX() }
-                
-                if (sortedHole.size == 1) {
-                    // Only one card found, guess based on relative X
-                    val relativeX = (sortedHole[0].second.left - holeRect.left).toFloat() / holeRect.width()
-                    if (relativeX < 0.40f) card1Elements.add(sortedHole[0]) else card2Elements.add(sortedHole[0])
-                } else {
-                    // Start by assigning first to card1
-                    card1Elements.add(sortedHole[0])
-                    for (i in 1 until sortedHole.size) {
-                        // If distance to previous is large enough, it's the second card
-                        val gap = sortedHole[i].second.centerX() - sortedHole[i-1].second.centerX()
-                        if (gap > holeRect.width() * 0.15f || card2Elements.isNotEmpty()) {
-                            card2Elements.add(sortedHole[i])
-                        } else {
-                            card1Elements.add(sortedHole[i])
-                        }
+                val expectedHoleCardW = holeRect.width() / 2.0f
+                val holeSlots = List(2) { i ->
+                    android.graphics.Rect(
+                        (holeRect.left + (i * expectedHoleCardW)).toInt(),
+                        holeRect.top,
+                        (holeRect.left + ((i + 1) * expectedHoleCardW)).toInt(),
+                        holeRect.bottom
+                    )
+                }
+
+                for (item in tempHoleCards) {
+                    val centerX = item.second.centerX()
+                    val dist0 = Math.abs(centerX - holeSlots[0].centerX())
+                    val dist1 = Math.abs(centerX - holeSlots[1].centerX())
+                    
+                    if (dist0 < dist1) {
+                        card1Elements.add(item)
+                    } else {
+                        card2Elements.add(item)
                     }
                 }
                 
@@ -523,12 +579,6 @@ class ScreenScanner(
             // If it drops to 0, getSmoothedCards will eventually clear it (after 2 empty frames).
             val currentCommCount = currentState.board.count { it != null }
             val smoothedCommCount = smoothedComm.count { it != null }
-            if (smoothedCommCount in 1 until currentCommCount) {
-                // Temporary drop in detected cards. Use previous known board if it's larger length.
-                smoothedComm = currentState.board.toList()
-                // Overwrite the last history entry to keep it alive
-                if (commHistory.isNotEmpty()) commHistory[commHistory.lastIndex] = smoothedComm
-            }
             
             val finalH1 = smoothedHole.getOrNull(0) ?: smoothedHole.firstOrNull() ?: null
             val finalH2 = smoothedHole.getOrNull(1) ?: smoothedHole.drop(1).firstOrNull() ?: null
@@ -569,7 +619,7 @@ class ScreenScanner(
             }
 
             PokerHudSharedState.externalActions.tryEmit(
-                ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight, updateProfileBoxes = (profileBoxesToHighlight != null))
+                ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight, updateProfileBoxes = (profileBoxesToHighlight != null), potSize = scannedPotSize)
             )
             
             scanStatus.value = "H:${smoothedHole.size}(${foundHoleCardsRaw.size}) C:${smoothedComm.size}(${foundCommCardsRaw.size}) Ops:${finalOpponents.size}<br>" +
@@ -594,12 +644,15 @@ class ScreenScanner(
         if (raw.length > 6) return emptyList() // Too long to be just 1-2 cards
         if (raw.isEmpty()) return emptyList()
         
-        // Ignore obvious standalone numbers/stacks unless they are a single 10, or two 10s
+        // Block obvious chip stacks or bets
+        val noSymbols = text.uppercase(java.util.Locale.US).replace(Regex("[^A-Z0-9 ]"), "")
+        if (noSymbols.matches(Regex(".*\\d{3,}.*"))) return emptyList() // 100, 500 etc.
+        // Ignore obvious standalone numbers/stacks
         val digits = raw.count { it.isDigit() }
-        if (digits >= 2) {
-            val hasTen = Regex("10|I0|1O|IO").containsMatchIn(raw)
-            if (!hasTen) return emptyList() // E.g., "50", "25", "42"
-        }
+        val hasTen = Regex("10|I0|1O|IO|L0|LO|IQ|1Q").containsMatchIn(raw)
+        
+        if (digits > 4) return emptyList()
+        if (digits > 2 && !hasTen) return emptyList() // E.g., "125", "500", "250" 
 
         var i = 0
         while (i < raw.length) {
@@ -635,8 +688,11 @@ class ScreenScanner(
                 
                 // Do not allow '1' acting as JACK or 'O' acting as QUEEN to prevent false numbers
                 // If it is 'O' or '1' standalone, they carry high risk of being non-cards compared to actual elements
+                var isValid = true
+                if (r == Rank.JACK && (c == '1' || c == 'I') && raw.length == 1) isValid = false
+                if (r == Rank.QUEEN && (c == '0' || c == 'O') && raw.length == 1) isValid = false
                 
-                if (r != null) {
+                if (r != null && isValid) {
                     found.add(r)
                     i++
                     matched = true
@@ -661,65 +717,7 @@ class ScreenScanner(
         return found
     }
 
-    private fun detectSuitFromSlotBackground(crop: Bitmap, slot: android.graphics.Rect): Suit? {
-        val w = crop.width
-        val h = crop.height
-        
-        var rC = 0; var gC = 0; var bC = 0; var blkC = 0
-        
-        // Sample points across the whole slot horizontally, but restrict vertically to middle
-        // to avoid top/bottom shadows or non-card background if the slot is slightly large.
-        // Increased margins to avoid sampling the poker table felt (which is often green or blue).
-        val left = maxOf(0, slot.left + (slot.width() * 0.3).toInt())
-        val right = minOf(w - 1, slot.right - (slot.width() * 0.3).toInt())
-        val top = maxOf(0, slot.top + (slot.height() * 0.35).toInt())
-        val bottom = minOf(h - 1, slot.bottom - (slot.height() * 0.35).toInt())
-        
-        if (left >= right || top >= bottom) return null
-        
-        for (px in left..right step 3) {
-            for (py in top..bottom step 3) {
-                val p = crop.getPixel(px, py)
-                val r = android.graphics.Color.red(p)
-                val g = android.graphics.Color.green(p)
-                val b = android.graphics.Color.blue(p)
-                
-                // Ignore text/icon bright pixels (white text on face)
-                if (r > 160 && g > 160 && b > 160) continue
-                // Ignore pitch black background shadows
-                if (r < 25 && g < 25 && b < 25) continue
-                
-                val max = maxOf(r, g, b)
-                val min = minOf(r, g, b)
-                val saturation = if (max == 0) 0 else (max - min) * 255 / max
-                
-                val isPurple = (r > g + 30 && b > g + 30 && r > 40 && b > 40)
-                val isOrange = (r > g + 20 && g > b + 20 && r > 80 && r - b > 50)
-                
-                // Must be strong enough to be a card suit
-                if (saturation > 40 && max > 50 && !isPurple && !isOrange) {
-                    if (r == max && r - g > 30 && r - b > 30) {
-                        // Additional check to ensure Orange isn't counted as Red Hearts
-                        if (g < max * 0.7f) rC++
-                    }
-                    else if (g == max && g - r > 20 && g - b > 20) gC++
-                    else if (b == max && b - r > 20 && b - g > 20) bC++
-                } else if (max < 60 && saturation < 25 && !isPurple && !isOrange) { 
-                    blkC++
-                }
-            }
-        }
-        
-        val totalCounts = rC + gC + bC + blkC
-        if (totalCounts < 3) return null // Could not confidently find any real suit pixels
-        
-        return when {
-            rC > gC && rC > bC && rC > blkC -> Suit.HEARTS
-            bC > rC && bC > gC && bC > blkC -> Suit.DIAMONDS
-            gC > rC && gC > bC && gC > blkC -> Suit.CLUBS
-            else -> Suit.SPADES
-        }
-    }
+
 
     private fun robustDetectSuit(crop: Bitmap, rankBox: android.graphics.Rect): Suit? {
         val w = crop.width
@@ -728,11 +726,13 @@ class ScreenScanner(
         var rC = 0; var gC = 0; var bC = 0; var blkC = 0
         
         // Scan around and mostly below the rank's bounding box. 
-        // Restrict horizontal expansion to avoid sweeping into an adjacent card.
-        val left = maxOf(0, rankBox.left - (rankBox.width() * 0.25).toInt())
-        val right = minOf(w - 1, rankBox.right + (rankBox.width() * 0.25).toInt())
-        val top = maxOf(0, rankBox.top - (rankBox.height() * 0.25).toInt())
-        val bottom = minOf(h - 1, rankBox.bottom + rankBox.height() * 2)
+        // Expand horizontally enough to catch the center suit symbol on community cards, 
+        // but restrict if we don't want to sweep adjacent cards.
+        val expandX = maxOf((rankBox.width() * 0.15).toInt(), (rankBox.height() * 0.6).toInt())
+        val left = maxOf(0, rankBox.left - (rankBox.width() * 0.15).toInt())
+        val right = minOf(w - 1, rankBox.right + expandX)
+        val top = maxOf(0, rankBox.top - (rankBox.height() * 0.15).toInt())
+        val bottom = minOf(h - 1, rankBox.bottom + (rankBox.height() * 1.5).toInt())
         
         for (px in left..right step 2) {
             for (py in top..bottom step 2) {
@@ -753,28 +753,29 @@ class ScreenScanner(
                 val isPurple = (r > g + 30 && b > g + 30 && r > 40 && b > 40)
                 val isOrange = (r > g + 20 && g > b + 20 && r > 80 && r - b > 50)
                 
-                if (saturation > 40 && max > 50 && !isPurple && !isOrange) {
-                    if (r == max && r - g > 20 && r - b > 20) {
+                if (saturation > 20 && max > 35 && !isPurple && !isOrange) {
+                    if (r == max && r - g > 15 && r - b > 15) {
                         // Additional check to ensure Orange isn't counted as Red Hearts
-                        if (g < max * 0.7f) rC++
+                        if (g < max * 0.75f) rC++
                     }
-                    else if (g == max && g - r > 20 && g - b > 20) gC++
-                    else if (b == max && b - r > 20 && b - g > 20) bC++
-                } else if (max < 60 && saturation < 25 && !isPurple && !isOrange) {
+                    else if (g == max && g - r > 15 && g - b > 15) gC++
+                    else if (b == max && b - r > 15 && b - g > 15) bC++
+                } else if (max < 65 && saturation < 30 && !isPurple && !isOrange) {
                     blkC++
                 }
             }
         }
         
-        val totalCounts = rC + gC + bC + blkC
-        if (totalCounts < 1) return null // Could not confidently find any real suit pixels
-        
-        return when {
-            rC > gC && rC > bC && rC > blkC -> Suit.HEARTS
-            bC > rC && bC > gC && bC > blkC -> Suit.DIAMONDS
-            gC > rC && gC > bC && gC > blkC -> Suit.CLUBS
-            else -> Suit.SPADES
+        val totalChroma = rC + gC + bC
+        if (totalChroma >= 5) {
+            if (rC > gC && rC > bC) return Suit.HEARTS
+            if (gC > rC && gC > bC) return Suit.CLUBS
+            if (bC > rC && bC > gC) return Suit.DIAMONDS
         }
+        
+        if (totalChroma + blkC < 2) return null
+        
+        return Suit.SPADES
     }
 
 

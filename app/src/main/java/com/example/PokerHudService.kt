@@ -43,7 +43,8 @@ sealed class ExternalAction {
         val board: List<Card?>,
         val opponents: List<OpponentState> = emptyList(),
         val profileBoxes: List<ScannedBox>? = null,
-        val updateProfileBoxes: Boolean = false
+        val updateProfileBoxes: Boolean = false,
+        val potSize: Float? = null
     ) : ExternalAction()
     data class ControlHud(val command: String) : ExternalAction()
 }
@@ -815,7 +816,8 @@ class PokerHudService : Service() {
                         currentState.heroCard1 == action.hero1 && 
                         currentState.heroCard2 == action.hero2 && 
                         currentState.board == newBoard &&
-                        !action.updateProfileBoxes) {
+                        !action.updateProfileBoxes &&
+                        (action.potSize == null || action.potSize == currentState.potSize)) {
                         return@collect
                     }
 
@@ -876,7 +878,8 @@ class PokerHudService : Service() {
                         heroCard2 = action.hero2,
                         board = newBoard,
                         opponents = finalOpponentsList,
-                        profileBoxes = if (action.updateProfileBoxes) action.profileBoxes else currentState.profileBoxes
+                        profileBoxes = if (action.updateProfileBoxes) action.profileBoxes else currentState.profileBoxes,
+                        potSize = action.potSize ?: currentState.potSize
                     )
                     PokerHudSharedState.uiState.update { updatedState }
                     

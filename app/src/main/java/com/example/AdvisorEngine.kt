@@ -186,17 +186,17 @@ object AdvisorEngine {
         heroCard1: Card?,
         heroCard2: Card?,
         board: List<Card?>,
-        potSize: Int,
-        heroBet: Int,
+        potSize: Float,
+        heroBet: Float,
         opponents: List<OpponentState>,
         activeOpponentsCount: Int,
         simResult: SimulationResult?,
         settings: AdvisorSettings,
         position: TablePosition,
         stage: TournamentStage,
-        smallBlind: Int,
-        bigBlind: Int,
-        heroStack: Int,
+        smallBlind: Float,
+        bigBlind: Float,
+        heroStack: Float,
         lastActions: String = ""
     ): Recommendation {
         // Zero cards check
@@ -220,15 +220,15 @@ object AdvisorEngine {
         }
 
         // Calculate bets
-        var maxOpponentBet = 0
+        var maxOpponentBet = 0f
         opponents.filter { it.isActive }.forEach { opp ->
-            val pBet = if (settings.usePip) opp.betSize else 0
+            val pBet = if (settings.usePip) opp.betSize else 0f
             if (pBet > maxOpponentBet) {
                 maxOpponentBet = pBet
             }
         }
-        val betToCall = maxOf(0, maxOpponentBet - heroBet).toFloat()
-        val activePot = potSize.toFloat() + betToCall
+        val betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        val activePot = potSize + betToCall
 
         // 3. Pot odds
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
@@ -419,17 +419,17 @@ object AdvisorEngine {
         heroCard1: Card?,
         heroCard2: Card?,
         board: List<Card?>,
-        potSize: Int,
-        heroBet: Int,
+        potSize: Float,
+        heroBet: Float,
         opponents: List<OpponentState>,
         activeOpponentsCount: Int,
         simResult: SimulationResult?,
         settings: AdvisorSettings,
         position: TablePosition,
         stage: TournamentStage,
-        smallBlind: Int,
-        bigBlind: Int,
-        heroStack: Int,
+        smallBlind: Float,
+        bigBlind: Float,
+        heroStack: Float,
         lastActions: String = ""
     ): Recommendation {
         // Advanced logic uses the 10 parameters more deeply
@@ -446,12 +446,12 @@ object AdvisorEngine {
         var adjustedScore = equity
 
         // Pot odds and profit check
-        var maxOpponentBet = 0
+        var maxOpponentBet = 0f
         opponents.filter { it.isActive }.forEach { opp ->
-            val pBet = if (settings.usePip) opp.betSize else 0
+            val pBet = if (settings.usePip) opp.betSize else 0f
             if (pBet > maxOpponentBet) maxOpponentBet = pBet
         }
-        val betToCall = maxOf(0, maxOpponentBet - heroBet).toFloat()
+        val betToCall = maxOf(0f, maxOpponentBet - heroBet)
 
         if (profile != null) {
             // Integrate ALL 10 parameters into the calculation
@@ -548,7 +548,7 @@ object AdvisorEngine {
             // But we don't have a way to pass it down easily outside the if(profile != null) block.
         }
 
-        val activePot = potSize.toFloat() + betToCall
+        val activePot = potSize + betToCall
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
         
         val isProfitable = adjustedScore > potOdds

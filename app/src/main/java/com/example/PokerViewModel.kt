@@ -25,11 +25,11 @@ data class PokerUiState(
     val heroCard2: Card? = null,
     val board: List<Card?> = listOf(null, null, null, null, null), // Flop1..3, Turn, River
     val opponents: List<OpponentState> = listOf(
-        OpponentState(id = 1, isActive = false, isRandom = true, nickname = "Opponent 1", betSize = 0, stackSize = 0),
-        OpponentState(id = 2, isActive = false, isRandom = true, nickname = "Opponent 2", betSize = 0, stackSize = 0),
-        OpponentState(id = 3, isActive = false, isRandom = true, nickname = "Opponent 3", betSize = 0, stackSize = 0),
-        OpponentState(id = 4, isActive = false, isRandom = true, nickname = "Opponent 4", betSize = 0, stackSize = 0),
-        OpponentState(id = 5, isActive = false, isRandom = true, nickname = "Opponent 5", betSize = 0, stackSize = 0)
+        OpponentState(id = 1, isActive = false, isRandom = true, nickname = "Opponent 1", betSize = 0f, stackSize = 0f),
+        OpponentState(id = 2, isActive = false, isRandom = true, nickname = "Opponent 2", betSize = 0f, stackSize = 0f),
+        OpponentState(id = 3, isActive = false, isRandom = true, nickname = "Opponent 3", betSize = 0f, stackSize = 0f),
+        OpponentState(id = 4, isActive = false, isRandom = true, nickname = "Opponent 4", betSize = 0f, stackSize = 0f),
+        OpponentState(id = 5, isActive = false, isRandom = true, nickname = "Opponent 5", betSize = 0f, stackSize = 0f)
     ),
     val activeTarget: SelectionTarget? = SelectionTarget.Hero1,
     val isCalculating: Boolean = false,
@@ -37,11 +37,11 @@ data class PokerUiState(
     val simulationResult: SimulationResult? = null,
     val errorMessage: String? = null,
     val simulationSize: Int = 3000, // default MC size
-    val potSize: Int = 100,
-    val heroBet: Int = 0,
-    val smallBlind: Int = 10,
-    val bigBlind: Int = 20,
-    val heroStack: Int = 1000,
+    val potSize: Float = 100f,
+    val heroBet: Float = 0f,
+    val smallBlind: Float = 10f,
+    val bigBlind: Float = 20f,
+    val heroStack: Float = 1000f,
     val position: TablePosition = TablePosition.BTN,
     val stage: TournamentStage = TournamentStage.EARLY,
     val settings: AdvisorSettings = AdvisorSettings(),
@@ -221,23 +221,23 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- NEW INTERACTIVE HUD ADVISOR STATE MANIPULATIONS ---
 
-    fun updatePotSize(pot: Int) {
-        _uiState.update { it.copy(potSize = pot.coerceAtLeast(1)) }
+    fun updatePotSize(pot: Float) {
+        _uiState.update { it.copy(potSize = pot.coerceAtLeast(1f)) }
         triggerAutoCalculation()
     }
 
-    fun updateHeroBet(bet: Int) {
-        _uiState.update { it.copy(heroBet = bet.coerceAtLeast(0)) }
+    fun updateHeroBet(bet: Float) {
+        _uiState.update { it.copy(heroBet = bet.coerceAtLeast(0f)) }
         triggerAutoCalculation()
     }
 
-    fun updateBlinds(small: Int, big: Int) {
-        _uiState.update { it.copy(smallBlind = small.coerceAtLeast(1), bigBlind = big.coerceAtLeast(2)) }
+    fun updateBlinds(small: Float, big: Float) {
+        _uiState.update { it.copy(smallBlind = small.coerceAtLeast(1f), bigBlind = big.coerceAtLeast(2f)) }
         triggerAutoCalculation()
     }
 
-    fun updateHeroStack(stack: Int) {
-        _uiState.update { it.copy(heroStack = stack.coerceAtLeast(1)) }
+    fun updateHeroStack(stack: Float) {
+        _uiState.update { it.copy(heroStack = stack.coerceAtLeast(1f)) }
         triggerAutoCalculation()
     }
 
@@ -265,20 +265,20 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
         triggerAutoCalculation()
     }
 
-    fun updateOpponentBetSize(opponentId: Int, size: Int) {
+    fun updateOpponentBetSize(opponentId: Int, size: Float) {
         _uiState.update { state ->
             val newOpponents = state.opponents.map { opp ->
-                if (opp.id == opponentId) opp.copy(betSize = size.coerceAtLeast(0)) else opp
+                if (opp.id == opponentId) opp.copy(betSize = size.coerceAtLeast(0f)) else opp
             }
             state.copy(opponents = newOpponents)
         }
         triggerAutoCalculation()
     }
 
-    fun updateOpponentStackSize(opponentId: Int, size: Int) {
+    fun updateOpponentStackSize(opponentId: Int, size: Float) {
         _uiState.update { state ->
             val newOpponents = state.opponents.map { opp ->
-                if (opp.id == opponentId) opp.copy(stackSize = size.coerceAtLeast(1)) else opp
+                if (opp.id == opponentId) opp.copy(stackSize = size.coerceAtLeast(1f)) else opp
             }
             state.copy(opponents = newOpponents)
         }

@@ -70,8 +70,8 @@ data class OpponentState(
     val isRandom: Boolean = true,
     val isActive: Boolean = false,
     val nickname: String = "Player $id",
-    val betSize: Int = 0,
-    val stackSize: Int = 1000,
+    val betSize: Float = 0f,
+    val stackSize: Float = 1000f,
     val stats: PlayerStats? = null,
     val currentAction: String = "NONE",
     @Transient

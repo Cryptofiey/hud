@@ -115,7 +115,7 @@ object OpponentScanner {
             
             // 2. Find stack size below the name
             var chipBox: Rect? = null
-            var stackValue = 0
+            var stackValue = 0f
             
             for (line in linesList) {
                 if (line === nameLine) continue
@@ -133,7 +133,7 @@ object OpponentScanner {
 
                     val rawText = textTrimmed.replace(Regex("[^0-9]"), "")
                     if (rawText.isNotEmpty()) {
-                        stackValue = rawText.toIntOrNull() ?: 0
+                        stackValue = rawText.toFloatOrNull() ?: 0f
                         chipBox = box
                         break
                     }
@@ -262,7 +262,7 @@ object OpponentScanner {
                         finalOpponents.add(OpponentState(
                             id = 0,
                             nickname = anchor.nickname,
-                            stackSize = 0,
+                            stackSize = 0f,
                             isActive = true,
                             isRandom = true,
                             currentAction = "NONE",
@@ -285,6 +285,43 @@ object OpponentScanner {
         // Deduplicate opponents by nickname to prevent OCR feedback loops from UI renders
         val dedupedOpponents = finalOpponents.distinctBy { it.nickname }
 
-        return dedupedOpponents.mapIndexed { i, opp -> opp.copy(id = i + 1) }
+        // Find bet sizes mapped to closest players
+        val screenCenterX = cleanBitmap.width / 2f
+        val screenCenterY = cleanBitmap.height / 2f
+        
+        val opponentsWithBets = dedupedOpponents.map { opp ->
+            var closestBet = 0f
+            var minDistSq = Float.MAX_VALUE
+            
+            for (line in linesList) {
+                val lineBox = line.boundingBox ?: continue
+                val textUpper = line.text.uppercase()
+                
+                if (textUpper.contains("POT") || !textUpper.any { it.isDigit() }) continue
+                
+                val numStr = textUpper.replace(Regex("[^0-9.]"), "")
+                if (numStr.isEmpty() || numStr.count { it == '.' } > 1) continue
+                val betVal = numStr.toFloatOrNull() ?: continue
+                if (betVal <= 0f) continue
+                
+                val intersectsPlayer = uniqueCandidates.any { android.graphics.Rect.intersects(it.boundingBox!!, lineBox) }
+                if (intersectsPlayer) continue // This is probably their stack
+                
+                // Exclude central pot amounts
+                val distToCenterSq = Math.pow((lineBox.centerX() - screenCenterX).toDouble(), 2.0) + Math.pow((lineBox.centerY() - screenCenterY).toDouble(), 2.0)
+                if (distToCenterSq < Math.pow(cleanBitmap.width * 0.15, 2.0)) continue
+                
+                val oppBox = opp.boundingBox ?: continue
+                val distSq = Math.pow((lineBox.centerX() - oppBox.centerX()).toDouble(), 2.0) + Math.pow((lineBox.centerY() - oppBox.centerY()).toDouble(), 2.0)
+                
+                if (distSq < minDistSq && distSq < Math.pow(cleanBitmap.width * 0.3, 2.0)) {
+                    minDistSq = distSq.toFloat()
+                    closestBet = betVal
+                }
+            }
+            opp.copy(betSize = closestBet)
+        }
+
+        return opponentsWithBets.mapIndexed { i, opp -> opp.copy(id = i + 1) }
     }
 }
