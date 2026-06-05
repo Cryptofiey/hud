@@ -1605,14 +1605,29 @@ class PokerHudService : Service() {
             setOnClickListener { PokerHudSharedState.showProbsBox.value = false }
         }
         
+        val infoRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        
+        val leftInfoCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        
+        val rightInfoCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                rightMargin = dpToPx(20f) // Keep clear of close button
+                leftMargin = dpToPx(4f)
+            }
+        }
+
         val title = TextView(this).apply {
             text = "LHD | Поб: 0.0% | L3: 0.0%"
             setTextColor(AndroidColor.parseColor("#FFFFD54F"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                rightMargin = dpToPx(20f) // Keep clear of close button
-            }
         }
         
         // Info Slot Content
@@ -1624,44 +1639,59 @@ class PokerHudService : Service() {
                 topMargin = dpToPx(2f)
             }
         }
+        
+        leftInfoCol.addView(title)
+        leftInfoCol.addView(txtCardsBoard)
+
         val txtHandRankStrength = TextView(this).apply {
             text = "Комбо: -- | Сила: --"
             setTextColor(AndroidColor.parseColor("#90CAF9"))
-            textSize = 9f
+            textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dpToPx(1f)
+                topMargin = dpToPx(1f) // Align with Карты text if needed
             }
         }
         val txtSklan = TextView(this).apply {
-            text = "Склански: --"
+            text = "Группа: [Нет карт]"
             setTextColor(AndroidColor.parseColor("#FFFF7043"))
             textSize = 8f
-        }
-        
-        mainVert.addView(title)
-        mainVert.addView(txtCardsBoard)
-        mainVert.addView(txtHandRankStrength)
-        mainVert.addView(txtSklan)
-        
-        // Advisor Slot (grouped and styled, avoiding left cutout)
-        val advisorBox = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = createBackgroundDrawable(AndroidColor.parseColor("#22000000"), 6f)
-            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dpToPx(4f)
-                bottomMargin = dpToPx(4f)
-                leftMargin = dpToPx(42f) // Avoid cutout area
-                rightMargin = dpToPx(2f)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dpToPx(2f)
             }
         }
         
+        rightInfoCol.addView(txtHandRankStrength)
+        rightInfoCol.addView(txtSklan)
+        
+        infoRow.addView(leftInfoCol)
+        infoRow.addView(rightInfoCol)
+        
+        mainVert.addView(infoRow)
+        
+        // Divider before Advisor Slot
+        val advDivider = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
+                topMargin = dpToPx(4f)
+                bottomMargin = dpToPx(2f)
+                leftMargin = dpToPx(2f)
+                rightMargin = dpToPx(20f) // Keep clear of close button area
+            }
+            setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
+        }
+        mainVert.addView(advDivider)
+        
+        // Advisor Slot
         val txtAdvisor = TextView(this).apply {
             text = "Совет: ЖДЕМ..."
             setTextColor(AndroidColor.parseColor("#FF90CAF9"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                leftMargin = dpToPx(2f)
+                rightMargin = dpToPx(2f)
+                bottomMargin = dpToPx(2f)
+            }
         }
         
         val txtAdvAdvisor = TextView(this).apply {
@@ -1671,12 +1701,13 @@ class PokerHudService : Service() {
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dpToPx(1f)
+                leftMargin = dpToPx(42f) // Avoid cutout area
+                bottomMargin = dpToPx(4f)
             }
         }
         
-        advisorBox.addView(txtAdvisor)
-        advisorBox.addView(txtAdvAdvisor)
-        mainVert.addView(advisorBox)
+        mainVert.addView(txtAdvisor)
+        mainVert.addView(txtAdvAdvisor)
         
         // 3. EQUALIZER SECTION
         val oppDivider = View(this).apply {
@@ -1925,7 +1956,9 @@ class PokerHudService : Service() {
         }
         serviceScope.launch(probsJob!!) {
             PokerHudSharedState.showActionAdvisor.collect { isVisible ->
-                advisorBox.visibility = if (isVisible) View.VISIBLE else View.GONE
+                advDivider.visibility = if (isVisible) View.VISIBLE else View.GONE
+                txtAdvisor.visibility = if (isVisible) View.VISIBLE else View.GONE
+                txtAdvAdvisor.visibility = if (isVisible) View.VISIBLE else View.GONE
             }
         }
         serviceScope.launch(probsJob!!) {
