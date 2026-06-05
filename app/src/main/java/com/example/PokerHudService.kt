@@ -1581,49 +1581,42 @@ class PokerHudService : Service() {
             )
             setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
         }
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val content = FrameLayout(this)
         
-        val mainRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        }
-        
-        val leftMain = LinearLayout(this).apply {
+        val mainVert = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        
-        val rightTop = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.END
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(4f)
-            }
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
         }
         
         val closeBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f)).apply {
-                bottomMargin = dpToPx(2f)
+            layoutParams = FrameLayout.LayoutParams(dpToPx(16f), dpToPx(16f)).apply {
+                gravity = Gravity.TOP or Gravity.END
+                topMargin = dpToPx(2f)
+                rightMargin = dpToPx(2f)
             }
             setColorFilter(AndroidColor.parseColor("#888888"))
             setOnClickListener { PokerHudSharedState.showProbsBox.value = false }
         }
+        
         val title = TextView(this).apply {
-            text = "LHD\nПоб: 0.0%\nL3: 0.0%"
+            text = "LHD | Поб: 0.0% | L3: 0.0%"
             setTextColor(AndroidColor.parseColor("#FFFFD54F"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.END
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                rightMargin = dpToPx(20f) // Keep clear of close button
+            }
         }
-        rightTop.addView(closeBtn)
-        rightTop.addView(title)
         
-        // Left Column Content
+        // Info Slot Content
         val txtCardsBoard = TextView(this).apply {
             text = "Карты: -- | Борд: --"
             setTextColor(AndroidColor.parseColor("#FFD54F"))
             textSize = 8f
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dpToPx(2f)
+            }
         }
         val txtHandRankStrength = TextView(this).apply {
             text = "Комбо: -- | Сила: --"
@@ -1639,13 +1632,25 @@ class PokerHudService : Service() {
             setTextColor(AndroidColor.parseColor("#FFFF7043"))
             textSize = 8f
         }
-        val advDivider = View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
-                topMargin = dpToPx(1f)
-                bottomMargin = dpToPx(1f)
+        
+        mainVert.addView(title)
+        mainVert.addView(txtCardsBoard)
+        mainVert.addView(txtHandRankStrength)
+        mainVert.addView(txtSklan)
+        
+        // Advisor Slot (grouped and styled, avoiding left cutout)
+        val advisorBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = createBackgroundDrawable(AndroidColor.parseColor("#22000000"), 6f)
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dpToPx(4f)
+                bottomMargin = dpToPx(4f)
+                leftMargin = dpToPx(42f) // Avoid cutout area
+                rightMargin = dpToPx(2f)
             }
-            setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
         }
+        
         val txtAdvisor = TextView(this).apply {
             text = "Совет: ЖДЕМ..."
             setTextColor(AndroidColor.parseColor("#FF90CAF9"))
@@ -1653,26 +1658,21 @@ class PokerHudService : Service() {
             typeface = Typeface.DEFAULT_BOLD
         }
         
-        leftMain.addView(txtCardsBoard)
-        leftMain.addView(txtHandRankStrength)
-        leftMain.addView(txtSklan)
-        leftMain.addView(advDivider)
-        leftMain.addView(txtAdvisor)
-        
-        mainRow.addView(leftMain)
-        mainRow.addView(rightTop)
-        content.addView(mainRow)
-        
-        // Bottom Content (Respecting bottom-left cutout)
         val txtAdvAdvisor = TextView(this).apply {
             text = "Совет (L3): ЖДЕМ..."
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(42f)
+                topMargin = dpToPx(1f)
             }
         }
+        
+        advisorBox.addView(txtAdvisor)
+        advisorBox.addView(txtAdvAdvisor)
+        mainVert.addView(advisorBox)
+        
+        // 3. EQUALIZER SECTION
         val oppDivider = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
                 topMargin = dpToPx(1f)
@@ -1689,10 +1689,11 @@ class PokerHudService : Service() {
             }
         }
         
-        content.addView(txtAdvAdvisor)
-        content.addView(oppDivider)
-        content.addView(equalizerView)
+        mainVert.addView(oppDivider)
+        mainVert.addView(equalizerView)
         
+        content.addView(mainVert)
+        content.addView(closeBtn)
         frame.addView(content)
         setupDragListener(frame, params)
         try {
@@ -1797,7 +1798,7 @@ class PokerHudService : Service() {
                     }
 
                     if (heroCardsChanged || boardChanged || simResultChanged || opponentsChanged) {
-                        title.text = "LHD\nПоб: $currentWin\nL3: $currentAdvWin"
+                        title.text = "LHD | Поб: $currentWin | L3: $currentAdvWin"
                         txtCardsBoard.text = android.text.Html.fromHtml("<b>Карты:</b> $currentCardsStr | <b>Борд:</b> $currentBoardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
                         txtHandRankStrength.text = "Комбо: $currentHandRank | Сила: $currentStrength"
                     }
@@ -1918,9 +1919,7 @@ class PokerHudService : Service() {
         }
         serviceScope.launch(probsJob!!) {
             PokerHudSharedState.showActionAdvisor.collect { isVisible ->
-                advDivider.visibility = if (isVisible) View.VISIBLE else View.GONE
-                txtAdvisor.visibility = if (isVisible) View.VISIBLE else View.GONE
-                txtAdvAdvisor.visibility = if (isVisible) View.VISIBLE else View.GONE
+                advisorBox.visibility = if (isVisible) View.VISIBLE else View.GONE
             }
         }
         serviceScope.launch(probsJob!!) {
