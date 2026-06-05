@@ -596,8 +596,25 @@ class ScreenScanner(
                 requestProfileScan = false
             }
 
+            val rawBoxes = if (PokerHudSharedState.showScannerBoxes.value) {
+                result.textBlocks.mapNotNull { block ->
+                    block.boundingBox?.let { rect -> ScannedBox(rect, block.text) }
+                }
+            } else {
+                null
+            }
+
             PokerHudSharedState.externalActions.tryEmit(
-                ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight, updateProfileBoxes = (profileBoxesToHighlight != null), potSize = scannedPotSize)
+                ExternalAction.UpdateCards(
+                    hero1 = finalH1, 
+                    hero2 = finalH2, 
+                    board = finalBoard, 
+                    opponents = finalOpponents, 
+                    profileBoxes = profileBoxesToHighlight, 
+                    updateProfileBoxes = (profileBoxesToHighlight != null), 
+                    rawScannerBoxes = rawBoxes,
+                    potSize = scannedPotSize
+                )
             )
             
             scanStatus.value = "H:${smoothedHole.filterNotNull().size}(${foundHoleCardsRaw.filterNotNull().size}) C:${smoothedComm.filterNotNull().size}(${foundCommCardsRaw.filterNotNull().size}) Ops:${finalOpponents.size}<br>" +

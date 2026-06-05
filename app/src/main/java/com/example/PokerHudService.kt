@@ -44,6 +44,7 @@ sealed class ExternalAction {
         val opponents: List<OpponentState> = emptyList(),
         val profileBoxes: List<ScannedBox>? = null,
         val updateProfileBoxes: Boolean = false,
+        val rawScannerBoxes: List<ScannedBox>? = null,
         val potSize: Float? = null
     ) : ExternalAction()
     data class ControlHud(val command: String) : ExternalAction()
@@ -960,6 +961,7 @@ class PokerHudService : Service() {
                         board = newBoard,
                         opponents = finalOpponentsList,
                         profileBoxes = if (action.updateProfileBoxes) action.profileBoxes else currentState.profileBoxes,
+                        rawScannerBoxes = action.rawScannerBoxes,
                         potSize = action.potSize ?: currentState.potSize
                     )
                     PokerHudSharedState.uiState.update { updatedState }
@@ -1164,6 +1166,36 @@ class PokerHudService : Service() {
         }
     }
 
+    private fun setupResizeListener(resizer: View, parentFrame: View, params: WindowManager.LayoutParams, minWidth: Int, minHeight: Int) {
+        var initialWidth = 0
+        var initialHeight = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+
+        resizer.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialWidth = params.width
+                    initialHeight = params.height
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val deltaX = (event.rawX - initialTouchX).toInt()
+                    val deltaY = (event.rawY - initialTouchY).toInt()
+                    params.width = Math.max(minWidth, initialWidth + deltaX)
+                    params.height = Math.max(minHeight, initialHeight + deltaY)
+                    try {
+                        windowManager?.updateViewLayout(parentFrame, params)
+                    } catch (ignored: Exception) {}
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
     private fun animScanLaser(laserLine: View, heightPx: Int): ValueAnimator {
         return ValueAnimator.ofFloat(0f, (heightPx - dpToPx(3f)).toFloat()).apply {
             duration = 1500
@@ -1205,6 +1237,11 @@ class PokerHudService : Service() {
             launch {
                 PokerHudSharedState.uiState.collect { state ->
                     floatingScannerOverlay?.state = state
+                }
+            }
+            launch {
+                PokerHudSharedState.showScannerBoxes.collect { showBoxes ->
+                    floatingScannerOverlay?.showGrid = showBoxes
                 }
             }
             launch {
@@ -1312,8 +1349,18 @@ class PokerHudService : Service() {
             visibility = View.GONE
         }
 
+        val resizeBtn = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_crop)
+            setColorFilter(AndroidColor.parseColor("#90CAF9"))
+            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
+                gravity = Gravity.BOTTOM or Gravity.END
+            }
+        }
+        setupResizeListener(resizeBtn, frame, params, dpToPx(80f), dpToPx(50f))
+
         frame.addView(content)
         frame.addView(txtCardsInfo)
+        frame.addView(resizeBtn)
         frame.addView(laserLine)
 
         setupDragListener(frame, params)
@@ -1445,8 +1492,18 @@ class PokerHudService : Service() {
             visibility = View.GONE
         }
 
+        val resizeBtn = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_crop)
+            setColorFilter(AndroidColor.parseColor("#90CAF9"))
+            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
+                gravity = Gravity.BOTTOM or Gravity.END
+            }
+        }
+        setupResizeListener(resizeBtn, frame, params, dpToPx(60f), dpToPx(50f))
+
         frame.addView(content)
         frame.addView(txtCardsInfo)
+        frame.addView(resizeBtn)
         frame.addView(laserLine)
 
         setupDragListener(frame, params)

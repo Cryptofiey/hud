@@ -65,17 +65,28 @@ class ScannerBoxesView(context: Context) : View(context) {
 
     private val profileBoxPaint = Paint().apply {
         style = Paint.Style.STROKE
-        color = Color.parseColor("#FFEB3B") // Bright Yellow
-        strokeWidth = 3f
-        setShadowLayer(8f, 0f, 0f, Color.parseColor("#88FFEB3B")) // Glow
+        color = Color.parseColor("#80FFFFFF") // Semi-transparent white
+        strokeWidth = 2f // Thin walls
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(15f, 10f), 0f)
         isAntiAlias = true
     }
 
     private val profileFillPaint = Paint().apply {
         style = Paint.Style.FILL
-        color = Color.parseColor("#15FFEB3B") // Very transparent yellow
+        color = Color.parseColor("#10FFFFFF") // Very transparent filler
         isAntiAlias = true
     }
+
+    private val gridPaint = Paint().apply {
+        style = Paint.Style.STROKE
+        color = Color.parseColor("#AAFF0000") // Semi-transparent Red for grid
+        strokeWidth = 4f
+        isAntiAlias = true
+    }
+
+    var verticalGridRatios = listOf(0.25f, 0.78f)
+    var horizontalGridRatios = listOf(0.15f, 0.35f, 0.60f, 0.85f)
+    var showGrid: Boolean = true // Will sync with state
 
     var state: PokerUiState = PokerUiState()
         set(value) {
@@ -109,49 +120,84 @@ class ScannerBoxesView(context: Context) : View(context) {
             val w = width.toFloat()
             val h = height.toFloat()
 
-            // Draw the search zone (Horseshoe) - only if not specifically drawing profile boxes
-            if (state.profileBoxes == null && PokerHudSharedState.showScannerBoxes.value) {
-            val path = Path()
-            path.fillType = Path.FillType.EVEN_ODD
-            // Whole screen
-            path.addRect(0f, 0f, w, h, Path.Direction.CW)
-            // Exclude Top Header
-            path.addRect(0f, 0f, w, h * 0.11f, Path.Direction.CW)
-            // Exclude Community Cards
-            path.addRect(w * 0.18f, h * 0.38f, w * 0.82f, h * 0.68f, Path.Direction.CW)
-            // Exclude Hero Hole Cards
-            path.addRect(w * 0.53f, h * 0.68f, w * 0.95f, h * 0.93f, Path.Direction.CW)
+            // Draw grid if enabled
+            if (showGrid) {
+                for (xRatio in verticalGridRatios) {
+                    canvas.drawLine(w * xRatio, 0f, w * xRatio, h, gridPaint)
+                }
+                for (yRatio in horizontalGridRatios) {
+                    canvas.drawLine(0f, h * yRatio, w, h * yRatio, gridPaint)
+                }
+            }
 
-            canvas.drawPath(path, zoneFillPaint)
-            canvas.drawPath(path, zoneOutlinePaint)
+            // Draw the search zone (Horseshoe)
+            if (PokerHudSharedState.showScannerBoxes.value) {
+                val path = Path()
+                path.fillType = Path.FillType.EVEN_ODD
+                // Whole screen
+                path.addRect(0f, 0f, w, h, Path.Direction.CW)
+                // Exclude Top Header
+                path.addRect(0f, 0f, w, h * 0.11f, Path.Direction.CW)
+                // Exclude Community Cards
+                path.addRect(w * 0.18f, h * 0.38f, w * 0.82f, h * 0.68f, Path.Direction.CW)
+                // Exclude Hero Hole Cards
+                path.addRect(w * 0.53f, h * 0.68f, w * 0.95f, h * 0.93f, Path.Direction.CW)
 
-            textPaint.textSize = 34f
-            textOutlinePaint.textSize = 34f
+                canvas.drawPath(path, zoneFillPaint)
+                canvas.drawPath(path, zoneOutlinePaint)
 
-            for (opp in state.opponents) {
-                val box = opp.boundingBox
-                if (box != null) {
-                    val actualBox = Rect(
-                        box.left + offsetX.toInt(),
-                        box.top + offsetY.toInt(),
-                        box.right + offsetX.toInt(),
-                        box.bottom + offsetY.toInt()
-                    )
-                    
-                    if (opp.isActive) {
-                        canvas.drawRect(actualBox, fillPaint)
-                        canvas.drawRect(actualBox, boxPaint)
+                textPaint.textSize = 34f
+                textOutlinePaint.textSize = 34f
+
+                for (opp in state.opponents) {
+                    val box = opp.boundingBox
+                    if (box != null) {
+                        val actualBox = Rect(
+                            box.left + offsetX.toInt(),
+                            box.top + offsetY.toInt(),
+                            box.right + offsetX.toInt(),
+                            box.bottom + offsetY.toInt()
+                        )
                         
-                        val label = opp.nickname
-                        canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textOutlinePaint)
-                        canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
-                    } else {
-                        canvas.drawRect(actualBox, inactiveBoxPaint)
-                        canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textOutlinePaint)
-                        canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
+                        if (opp.isActive) {
+                            canvas.drawRect(actualBox, fillPaint)
+                            canvas.drawRect(actualBox, boxPaint)
+                            
+                            val label = opp.nickname + " " + opp.currentAction
+                            canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textOutlinePaint)
+                            canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
+                        } else {
+                            canvas.drawRect(actualBox, inactiveBoxPaint)
+                            canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textOutlinePaint)
+                            canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
+                        }
                     }
                 }
             }
+
+        // Draw generic scanned text boxes continuously
+        state.rawScannerBoxes?.forEach { box ->
+            val actualBox = Rect(
+                box.rect.left + offsetX.toInt(),
+                box.rect.top + offsetY.toInt(),
+                box.rect.right + offsetX.toInt(),
+                box.rect.bottom + offsetY.toInt()
+            )
+
+            // Make text match height of the bounding box
+            val boxHeight = actualBox.height().toFloat()
+            val textSz = java.lang.Math.max(1f, boxHeight * 0.95f)
+            textPaint.textSize = textSz
+            textOutlinePaint.textSize = textSz
+
+            val xPos = actualBox.left.toFloat()
+            val yPos = actualBox.bottom.toFloat() - textPaint.descent()
+
+            canvas.drawRect(actualBox, profileFillPaint)
+            canvas.drawRect(actualBox, profileBoxPaint)
+            // Just draw the box and the text recognized inside it
+            canvas.drawText(box.label, xPos, yPos, textOutlinePaint)
+            canvas.drawText(box.label, xPos, yPos, textPaint)
         }
 
         // Draw profile stat highlights if any
@@ -163,30 +209,25 @@ class ScannerBoxesView(context: Context) : View(context) {
                 box.rect.bottom + offsetY.toInt()
             )
             
-            // Skip false-positive boxes detected in the top-left area (e.g., background table HUD)
+            // Skip false-positive boxes detected in the top-left area
             val w = width.toFloat()
             val h = height.toFloat()
             if (actualBox.top < h * 0.15f && actualBox.left < w * 0.4f) {
                 return@forEach
             }
-            if (actualBox.top < h * 0.12f) { // Generally avoid top header
+            if (actualBox.top < h * 0.12f) { 
                 return@forEach
             }
 
             canvas.drawRect(actualBox, profileFillPaint)
             canvas.drawRect(actualBox, profileBoxPaint)
             
-            // Set text size to match the height of the bounding box
             val boxHeight = actualBox.height().toFloat()
             val textSz = java.lang.Math.max(1f, boxHeight * 0.95f)
-            textPaint.textSize = textSz // Almost full height for precise fit
+            textPaint.textSize = textSz
             textOutlinePaint.textSize = textSz
             
-            // Draw text exactly starting from the left edge of the bounding box
             val xPos = actualBox.left.toFloat()
-            
-            // Baseline calculation: align the bottom of the text with the bottom of the box
-            // The descent is the portion below the baseline.
             val yPos = actualBox.bottom.toFloat() - textPaint.descent()
             
             canvas.drawText(box.label, xPos, yPos, textOutlinePaint)

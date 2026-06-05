@@ -48,7 +48,8 @@ data class PokerUiState(
     val recommendation: Recommendation? = null,
     val advancedSimulationResult: SimulationResult? = null,
     val advancedRecommendation: Recommendation? = null,
-    val profileBoxes: List<ScannedBox>? = null
+    val profileBoxes: List<ScannedBox>? = null,
+    val rawScannerBoxes: List<ScannedBox>? = null
 ) {
     // Collect all selected cards on the table to dim them in the card picker grid
     fun getAllSelectedCards(): Set<Card> {
