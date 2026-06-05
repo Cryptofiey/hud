@@ -396,7 +396,12 @@ class ScreenScanner(
                 val safeText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
                     safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
-                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH")) continue
+                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
+                    safeText.contains("KIND") || safeText.contains("HOUSE") || safeText.contains("ALL") ||
+                    safeText.contains("FOLD") || safeText.contains("CALL") || safeText.contains("CHECK") ||
+                    safeText.contains("BET") || safeText.contains("POT") || safeText.contains("BB") ||
+                    safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
+                    safeText.contains("OF")) continue
 
                 // Removed isCardBackground to avoid missing shiny/shadowed cards
                 val parsedRanks = findCardsInText(safeText)
@@ -422,10 +427,14 @@ class ScreenScanner(
                 val safeText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
                     safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
-                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH")) continue
+                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
+                    safeText.contains("KIND") || safeText.contains("HOUSE") || safeText.contains("ALL") ||
+                    safeText.contains("FOLD") || safeText.contains("CALL") || safeText.contains("CHECK") ||
+                    safeText.contains("BET") || safeText.contains("POT") || safeText.contains("BB") ||
+                    safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
+                    safeText.contains("OF")) continue
 
                 // We skip isCardBackground for hole cards because they can be covered by player graphics or shadows.
-
                 val parsedRanks = findCardsInText(safeText)
                 for ((idx, rank) in parsedRanks.withIndex()) {
                     // Slicing the bounding box if multiple ranks are merged in a single text block
@@ -443,29 +452,39 @@ class ScreenScanner(
                 val resultList = MutableList<Card?>(maxCards) { null }
                 if (cards.isEmpty()) return resultList
                 
-                val slotW = regionRect.width() / maxCards.toFloat()
+                // Group detections by their X center
+                val clusterThreshold = regionRect.width() / 12f
+                val sorted = cards.sortedBy { it.second.centerX() }
+                val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
                 
-                // Group each card detection by the slot it belongs to
-                val elementsBySlot = cards.groupBy { elem ->
-                    val cx = elem.second.centerX()
-                    val bestSlot = ((cx - regionRect.left) / slotW).toInt()
-                    maxOf(0, minOf(maxCards - 1, bestSlot))
-                }
-                
-                for (slot in 0 until maxCards) {
-                    val elementsInSlot = elementsBySlot[slot] ?: emptyList()
-                    if (elementsInSlot.isNotEmpty()) {
-                        val ranks = elementsInSlot.map { it.first.rank }
-                        val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
-                        val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                        
-                        val suits = elementsInSlot.map { it.first.suit }
-                        val duplicateSuit = suits.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
-                        val finalSuit = duplicateSuit ?: suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                        
-                        resultList[slot] = Card(finalRank, finalSuit)
+                for (elem in sorted) {
+                    if (clusters.isEmpty()) {
+                        clusters.add(mutableListOf(elem))
+                    } else {
+                        val lastCluster = clusters.last()
+                        val lastCx = lastCluster.map { it.second.centerX() }.average()
+                        if (elem.second.centerX() - lastCx < clusterThreshold) {
+                            lastCluster.add(elem)
+                        } else {
+                            clusters.add(mutableListOf(elem))
+                        }
                     }
                 }
+                
+                val finalCards = clusters.map { cluster ->
+                    val ranks = cluster.map { it.first.rank }
+                    val finalRank = ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                    
+                    val suits = cluster.map { it.first.suit }
+                    val finalSuit = suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                    
+                    Card(finalRank, finalSuit)
+                }
+                
+                for (i in 0 until minOf(maxCards, finalCards.size)) {
+                    resultList[i] = finalCards[i]
+                }
+                
                 return resultList
             }
 
@@ -664,13 +683,11 @@ class ScreenScanner(
         
         var rC = 0; var gC = 0; var bC = 0; var blkC = 0
         
-        // Scan around and mostly below the rank's bounding box. 
-        // Expand horizontally enough to catch the center suit symbol on community cards, 
-        // but restrict if we don't want to sweep adjacent cards.
-        val expandX = maxOf((rankBox.width() * 0.15).toInt(), (rankBox.height() * 0.6).toInt())
-        val left = maxOf(0, rankBox.left - (rankBox.width() * 0.15).toInt())
-        val right = minOf(w - 1, rankBox.right + expandX)
-        val top = maxOf(0, rankBox.top - (rankBox.height() * 0.15).toInt())
+        // Scan just around the rank and look down below it where the suit symbol is located
+        val adjustX = (rankBox.width() * 0.1).toInt()
+        val left = maxOf(0, rankBox.left - adjustX)
+        val right = minOf(w - 1, rankBox.right + adjustX)
+        val top = maxOf(0, rankBox.top + (rankBox.height() * 0.35).toInt())
         val bottom = minOf(h - 1, rankBox.bottom + (rankBox.height() * 1.5).toInt())
         
         for (px in left..right step 2) {
