@@ -1611,7 +1611,7 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
                 topMargin = dpToPx(4f)
                 bottomMargin = dpToPx(2f)
-                leftMargin = dpToPx(2f)
+                leftMargin = dpToPx(42f) // Keep clear of cutout
                 rightMargin = dpToPx(20f) // Keep clear of close button area
             }
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
@@ -1625,7 +1625,7 @@ class PokerHudService : Service() {
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(2f)
+                leftMargin = dpToPx(42f) // Avoid cutout area
                 rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(2f)
             }
