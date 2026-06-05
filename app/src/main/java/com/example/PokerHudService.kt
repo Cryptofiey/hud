@@ -1164,46 +1164,6 @@ class PokerHudService : Service() {
         }
     }
 
-    private fun setupResizeListener(
-        resizeHandle: View,
-        containerFrame: View,
-        params: WindowManager.LayoutParams
-    ) {
-        var initialWidth = 0
-        var initialHeight = 0
-        var initialTouchX = 0f
-        var initialTouchY = 0f
-
-        resizeHandle.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    notifyInteraction()
-                    initialWidth = containerFrame.width
-                    initialHeight = containerFrame.height
-                    initialTouchX = event.rawX
-                    initialTouchY = event.rawY
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = (event.rawX - initialTouchX).toInt()
-                    val dy = (event.rawY - initialTouchY).toInt()
-
-                    val newWidth = maxOf(dpToPx(100f), initialWidth + dx)
-                    val newHeight = maxOf(dpToPx(48f), initialHeight + dy)
-
-                    params.width = newWidth
-                    params.height = newHeight
-
-                    try {
-                        windowManager?.updateViewLayout(containerFrame, params)
-                    } catch (ignored: Exception) {}
-                    true
-                }
-                else -> false
-            }
-        }
-    }
-
     private fun animScanLaser(laserLine: View, heightPx: Int): ValueAnimator {
         return ValueAnimator.ofFloat(0f, (heightPx - dpToPx(3f)).toFloat()).apply {
             duration = 1500
@@ -1352,22 +1312,11 @@ class PokerHudService : Service() {
             visibility = View.GONE
         }
 
-        val resizeHandle = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_menu_crop)
-            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
-                gravity = Gravity.BOTTOM or Gravity.END
-            }
-            setColorFilter(AndroidColor.parseColor("#FFD500F9"))
-            setPadding(0, 0, dpToPx(2f), dpToPx(2f)) 
-        }
-
         frame.addView(content)
         frame.addView(txtCardsInfo)
         frame.addView(laserLine)
-        frame.addView(resizeHandle)
 
         setupDragListener(frame, params)
-        setupResizeListener(resizeHandle, frame, params)
 
         try {
             windowManager?.addView(frame, params)
@@ -1496,22 +1445,11 @@ class PokerHudService : Service() {
             visibility = View.GONE
         }
 
-        val resizeHandle = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_menu_crop)
-            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
-                gravity = Gravity.BOTTOM or Gravity.END
-            }
-            setColorFilter(AndroidColor.parseColor("#FFE53935"))
-            setPadding(0, 0, dpToPx(2f), dpToPx(2f)) 
-        }
-
         frame.addView(content)
         frame.addView(txtCardsInfo)
         frame.addView(laserLine)
-        frame.addView(resizeHandle)
 
         setupDragListener(frame, params)
-        setupResizeListener(resizeHandle, frame, params)
 
         try {
             windowManager?.addView(frame, params)
@@ -1560,7 +1498,7 @@ class PokerHudService : Service() {
     private fun showProbsOverlay() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            dpToPx(180f),
             WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -1708,26 +1646,6 @@ class PokerHudService : Service() {
         mainVert.addView(txtAdvisor)
         mainVert.addView(txtAdvAdvisor)
         
-        // 3. EQUALIZER SECTION
-        val oppDivider = View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
-                topMargin = dpToPx(1f)
-                bottomMargin = dpToPx(1f)
-                leftMargin = dpToPx(42f)
-            }
-            setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
-        }
-        val equalizerView = EqualizerView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(12f)).apply {
-                topMargin = dpToPx(1f)
-                bottomMargin = dpToPx(1f)
-                leftMargin = dpToPx(42f)
-            }
-        }
-        
-        mainVert.addView(oppDivider)
-        mainVert.addView(equalizerView)
-        
         content.addView(mainVert)
         content.addView(closeBtn)
         frame.addView(content)
@@ -1843,87 +1761,24 @@ class PokerHudService : Service() {
                         // Update original recommendation
                         if (rec != null) {
                             val actName = translateAction(rec.action)
-                            txtAdvisor.text = "Совет: $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)}) - ${rec.explanation}"
+                            txtAdvisor.text = "🧮 $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)})"
                             setRecommendationColor(txtAdvisor, rec.action)
                         } else {
-                            txtAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "Совет: Ждем..." else "Совет: Введите карты"
+                            txtAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🧮 Ждем..." else "🧮 Ждем карты"
                             txtAdvisor.setTextColor(AndroidColor.parseColor("#FFFFD54F"))
                         }
 
                         // Update advanced recommendation
                         if (advRec != null) {
                             val actName = translateAction(advRec.action)
-                            txtAdvAdvisor.text = "Совет (L3): $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)}) - ${advRec.explanation}"
+                            txtAdvAdvisor.text = "✍️ $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)})"
                             setRecommendationColor(txtAdvAdvisor, advRec.action)
                         } else {
-                            txtAdvAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "Совет (L3): Ждем..." else ""
+                            txtAdvAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "✍️ Ждем..." else ""
                             txtAdvAdvisor.setTextColor(AndroidColor.parseColor("#FF00FFCC"))
                         }
                     }
 
-                    if (opponentsChanged || heroCardsChanged || boardChanged) {
-                        try {
-                            val heroOk = state.heroCard1 != null && state.heroCard2 != null
-                            val commCount = state.board.filterNotNull().size
-                            var l1Fill = if (heroOk) (0.6f + commCount * 0.08f) else 0.1f
-                            if (l1Fill > 1f) l1Fill = 1f
-                            val l1Color = if (l1Fill >= 1f) AndroidColor.GREEN else if (l1Fill > 0.2f) AndroidColor.YELLOW else AndroidColor.RED
-
-                            val activeOppsCount = state.opponents.count { it.isActive }
-                            val potOk = state.potSize > 0
-                            val oppFill = minOf(activeOppsCount / 5f, 1f) * 0.75f
-                            val l2Fill = oppFill + if (potOk) 0.25f else 0f
-                            val l2Color = if (l2Fill >= 0.8f) AndroidColor.GREEN else if (l2Fill > 0.1f) AndroidColor.YELLOW else AndroidColor.RED
-
-                            val l3Segments = mutableListOf<Int>()
-                            val activeOpps = state.opponents.filter { it.isActive }
-                            for (opp in activeOpps) {
-                                val stats = opp.stats
-                                if (stats == null) {
-                                    l3Segments.add(AndroidColor.WHITE)
-                                } else {
-                                    val now = System.currentTimeMillis()
-                                    val sevenDaysMs = 7L * 24 * 60 * 60 * 1000
-                                    val isRecent = stats.lastUpdated > 0 && (now - stats.lastUpdated) < sevenDaysMs
-
-                                    val nonNullCount = listOf(stats.histVpip, stats.histPfr, stats.hist3Bet, stats.histFoldTo3Bet, stats.histCBet, stats.histFoldToCBet, stats.histSteal, stats.histCheckRaise, stats.histWtsd, stats.histWsd).count { it != null }
-                                    
-                                    if (isRecent || nonNullCount >= 10 || stats.handsPlayed >= 20) {
-                                        l3Segments.add(AndroidColor.GREEN) // Полная готовность
-                                    } else if (stats.handsPlayed >= 5 || nonNullCount >= 5) {
-                                        l3Segments.add(AndroidColor.parseColor("#81C784")) // Светло-зеленый
-                                    } else if (stats.handsPlayed > 0 || nonNullCount > 0) {
-                                        l3Segments.add(AndroidColor.parseColor("#FFF176")) // Желтый
-                                    } else {
-                                        l3Segments.add(AndroidColor.WHITE) // Нет ничего
-                                    }
-                                }
-                            }
-
-                            val robotConnected = AutoPlayerService.instance != null
-                            val robotEnabled = RobotPlayer.isRobotModeEnabled.value
-                            val robotActions = RobotPlayer.availableActionButtons.isNotEmpty()
-
-                            val l4Fill = if (robotConnected && robotEnabled) {
-                                if (robotActions) 1f else 0.5f
-                            } else if (robotConnected) {
-                                0.2f
-                            } else {
-                                0f
-                            }
-
-                            val l4Color = if (l4Fill >= 1f) AndroidColor.GREEN 
-                                else if (l4Fill >= 0.2f) AndroidColor.YELLOW 
-                                else AndroidColor.RED
-
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                equalizerView.updateState(EqualizerState(l1Fill, l1Color, l2Fill, l2Color, l3Segments, l4Fill, l4Color))
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("Equalizer", "Error updating equalizer", e)
-                        }
-                    }
-                    
                     lastHero1 = state.heroCard1
                     lastHero2 = state.heroCard2
                     lastBoard = state.board
@@ -1958,12 +1813,6 @@ class PokerHudService : Service() {
                 advDivider.visibility = if (isVisible) View.VISIBLE else View.GONE
                 txtAdvisor.visibility = if (isVisible) View.VISIBLE else View.GONE
                 txtAdvAdvisor.visibility = if (isVisible) View.VISIBLE else View.GONE
-            }
-        }
-        serviceScope.launch(probsJob!!) {
-            PokerHudSharedState.advStatsToggle.collect { isVisible ->
-                oppDivider.visibility = if (isVisible) View.VISIBLE else View.GONE
-                equalizerView.visibility = if (isVisible) View.VISIBLE else View.GONE
             }
         }
         
