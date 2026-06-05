@@ -241,12 +241,15 @@ class PokerHudService : Service() {
         return (dp * resources.displayMetrics.density).toInt()
     }
 
+    enum class CutoutCorner { BOTTOM_RIGHT, BOTTOM_LEFT }
+
     private class CutoutBackgroundDrawable(
         private val bgColor: Int,
         private val cornerRadiusPx: Float,
         private val strokeWidthPx: Float,
         private val strokeColor: Int,
-        private val cutoutRadiusPx: Float
+        private val cutoutRadiusPx: Float,
+        private val cutoutCorner: CutoutCorner = CutoutCorner.BOTTOM_RIGHT
     ) : android.graphics.drawable.Drawable() {
 
         private val fillPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
@@ -261,26 +264,40 @@ class PokerHudService : Service() {
         }
 
         override fun draw(canvas: android.graphics.Canvas) {
-            val w = bounds.width().toFloat()
-            val h = bounds.height().toFloat()
+            val sw = strokeWidthPx / 2f
+            val w = bounds.width().toFloat() - sw
+            val h = bounds.height().toFloat() - sw
+            val x0 = sw
+            val y0 = sw
             val R = cutoutRadiusPx
 
             val path = android.graphics.Path()
-            path.moveTo(0f, cornerRadiusPx)
-            path.quadTo(0f, 0f, cornerRadiusPx, 0f)
-            path.lineTo(w - cornerRadiusPx, 0f)
-            path.quadTo(w, 0f, w, cornerRadiusPx)
-            
-            // Right edge down to the start of the cutout
-            path.lineTo(w, h - R)
-            
-            // Inset circular cutout at the bottom-right
-            val rectInfo = android.graphics.RectF(w - R, h - R, w + R, h + R)
-            path.arcTo(rectInfo, 270f, -90f, false)
-            
-            // Bottom edge from left side of cutout to bottom-left corner
-            path.lineTo(cornerRadiusPx, h)
-            path.quadTo(0f, h, 0f, h - cornerRadiusPx)
+
+            if (cutoutCorner == CutoutCorner.BOTTOM_RIGHT) {
+                path.moveTo(x0, y0 + cornerRadiusPx)
+                path.quadTo(x0, y0, x0 + cornerRadiusPx, y0)
+                path.lineTo(w - cornerRadiusPx, y0)
+                path.quadTo(w, y0, w, y0 + cornerRadiusPx)
+                
+                path.lineTo(w, h - R)
+                val rectInfo = android.graphics.RectF(w - R, h - R, w + R, h + R)
+                path.arcTo(rectInfo, 270f, -90f, false)
+                
+                path.lineTo(x0 + cornerRadiusPx, h)
+                path.quadTo(x0, h, x0, h - cornerRadiusPx)
+            } else {
+                path.moveTo(w, h - cornerRadiusPx)
+                path.quadTo(w, h, w - cornerRadiusPx, h)
+                path.lineTo(x0 + R, h)
+                
+                val rectInfo = android.graphics.RectF(x0 - R, h - R, x0 + R, h + R)
+                path.arcTo(rectInfo, 0f, -90f, false)
+                
+                path.lineTo(x0, y0 + cornerRadiusPx)
+                path.quadTo(x0, y0, x0 + cornerRadiusPx, y0)
+                path.lineTo(w - cornerRadiusPx, y0)
+                path.quadTo(w, y0, w, y0 + cornerRadiusPx)
+            }
             path.close()
 
             canvas.drawPath(path, fillPaint)
@@ -1559,9 +1576,10 @@ class PokerHudService : Service() {
                 dpToPx(10f).toFloat(), 
                 dpToPx(1.5f).toFloat(), 
                 AndroidColor.parseColor("#FF4CAF50"),
-                dpToPx(40f).toFloat()
+                dpToPx(42f).toFloat(),
+                CutoutCorner.BOTTOM_LEFT
             )
-            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
         }
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         
@@ -1645,7 +1663,7 @@ class PokerHudService : Service() {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                rightMargin = dpToPx(36f)
+                leftMargin = dpToPx(42f)
             }
         }
         content.addView(advDivider)
@@ -1657,15 +1675,15 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
                 topMargin = dpToPx(1f)
                 bottomMargin = dpToPx(1f)
-                rightMargin = dpToPx(36f)
+                leftMargin = dpToPx(42f)
             }
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
         }
         val equalizerView = EqualizerView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(16f)).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(12f)).apply {
                 topMargin = dpToPx(1f)
                 bottomMargin = dpToPx(1f)
-                rightMargin = dpToPx(36f)
+                leftMargin = dpToPx(42f)
             }
         }
         content.addView(oppDivider)
