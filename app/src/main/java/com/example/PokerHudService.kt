@@ -1535,8 +1535,9 @@ class PokerHudService : Service() {
 
     private fun showProbsOverlay() {
         if (floatingProbsOverlay != null) return
+        val width = resources.displayMetrics.widthPixels / 2
         val params = WindowManager.LayoutParams(
-            dpToPx(240f),
+            width,
             WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -1553,7 +1554,7 @@ class PokerHudService : Service() {
         }
         val frame = FrameLayout(this).apply {
             background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 10f, dpToPx(1.5f), AndroidColor.parseColor("#FF4CAF50"))
-            setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
         }
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         
@@ -1571,7 +1572,7 @@ class PokerHudService : Service() {
         }
         val closeBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-            layoutParams = LinearLayout.LayoutParams(dpToPx(24f), dpToPx(24f))
+            layoutParams = LinearLayout.LayoutParams(dpToPx(20f), dpToPx(20f))
             setOnClickListener { PokerHudSharedState.showProbsBox.value = false }
         }
         header.addView(title)
@@ -1647,9 +1648,9 @@ class PokerHudService : Service() {
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
         }
         val equalizerView = EqualizerView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
-                topMargin = dpToPx(4f)
-                bottomMargin = dpToPx(4f)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(20f)).apply {
+                topMargin = dpToPx(2f)
+                bottomMargin = dpToPx(2f)
             }
         }
         content.addView(oppDivider)
