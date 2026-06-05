@@ -392,10 +392,6 @@ class ScreenScanner(
                 // Minimum size threshold to filter out small text like pot size
                 if (box.height() < commRect.height() * 0.08f) continue
                 
-                // If it contains mostly lowercase, it's a word.
-                val lowerCount = element.text.count { it.isLowerCase() }
-                if (lowerCount >= 2) continue
-                
                 val rawText = element.text.trim().uppercase(java.util.Locale.US)
                 val safeText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
@@ -422,9 +418,6 @@ class ScreenScanner(
                 // Minimum size threshold to filter out tiny text. Hole cards usually large.
                 if (box.height() < holeRect.height() * 0.05f) continue
                 
-                val lowerCount = element.text.count { it.isLowerCase() }
-                if (lowerCount >= 2) continue
-                
                 val rawText = element.text.trim().uppercase(java.util.Locale.US)
                 val safeText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
@@ -446,66 +439,38 @@ class ScreenScanner(
                 }
             }
             
-            fun clusterCards(cards: List<Pair<Card, android.graphics.Rect>>, maxCards: Int, maxDist: Float, regionRect: android.graphics.Rect): MutableList<Card?> {
+            fun clusterCards(cards: List<Pair<Card, android.graphics.Rect>>, maxCards: Int, regionRect: android.graphics.Rect): MutableList<Card?> {
                 val resultList = MutableList<Card?>(maxCards) { null }
                 if (cards.isEmpty()) return resultList
                 
-                val sorted = cards.sortedBy { it.second.centerX() }
-                val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
-                
-                var currentCluster = mutableListOf(sorted[0])
-                for (i in 1 until sorted.size) {
-                    val prevCenter = currentCluster.map { it.second.centerX() }.average()
-                    val currCenter = sorted[i].second.centerX().toDouble()
-                    
-                    if (currCenter - prevCenter < maxDist) {
-                        currentCluster.add(sorted[i])
-                    } else {
-                        clusters.add(currentCluster)
-                        currentCluster = mutableListOf(sorted[i])
-                    }
-                }
-                clusters.add(currentCluster)
-                
                 val slotW = regionRect.width() / maxCards.toFloat()
                 
-                for (cluster in clusters.take(maxCards)) {
-                    val cx = cluster.map { it.second.centerX() }.average()
-                    var bestSlot = ((cx - regionRect.left) / slotW).toInt()
-                    bestSlot = maxOf(0, minOf(maxCards - 1, bestSlot))
-                    
-                    // If slot is taken, find nearest empty slot
-                    if (resultList[bestSlot] != null) {
-                        var altSlot = -1
-                        var minD = Double.MAX_VALUE
-                        for (i in 0 until maxCards) {
-                            if (resultList[i] == null) {
-                                val expectedCx = regionRect.left + (i + 0.5) * slotW
-                                val dist = Math.abs(cx - expectedCx)
-                                if (dist < minD) {
-                                    minD = dist
-                                    altSlot = i
-                                }
-                            }
-                        }
-                        if (altSlot != -1) bestSlot = altSlot
+                // Group each card detection by the slot it belongs to
+                val elementsBySlot = cards.groupBy { elem ->
+                    val cx = elem.second.centerX()
+                    val bestSlot = ((cx - regionRect.left) / slotW).toInt()
+                    maxOf(0, minOf(maxCards - 1, bestSlot))
+                }
+                
+                for (slot in 0 until maxCards) {
+                    val elementsInSlot = elementsBySlot[slot] ?: emptyList()
+                    if (elementsInSlot.isNotEmpty()) {
+                        val ranks = elementsInSlot.map { it.first.rank }
+                        val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
+                        val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                        
+                        val suits = elementsInSlot.map { it.first.suit }
+                        val duplicateSuit = suits.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
+                        val finalSuit = duplicateSuit ?: suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                        
+                        resultList[slot] = Card(finalRank, finalSuit)
                     }
-                    
-                    val ranks = cluster.map { it.first.rank }
-                    val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
-                    val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    
-                    val suits = cluster.map { it.first.suit }
-                    val duplicateSuit = suits.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
-                    val finalSuit = duplicateSuit ?: suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    
-                    resultList[bestSlot] = Card(finalRank, finalSuit)
                 }
                 return resultList
             }
 
-            var foundCommCardsRaw = clusterCards(tempCommCards, 5, commRect.width() / 10.0f, commRect)
-            var foundHoleCardsRaw = clusterCards(tempHoleCards, 2, holeRect.width() / 4.0f, holeRect)
+            var foundCommCardsRaw = clusterCards(tempCommCards, 5, commRect)
+            var foundHoleCardsRaw = clusterCards(tempHoleCards, 2, holeRect)
 
             var rawAll = (foundHoleCardsRaw + foundCommCardsRaw).filterNotNull()
             if (rawAll.size != rawAll.toSet().size) {
@@ -727,14 +692,14 @@ class ScreenScanner(
                 val isPurple = (r > g + 30 && b > g + 30 && r > 40 && b > 40)
                 val isOrange = (r > g + 20 && g > b + 20 && r > 80 && r - b > 50)
                 
-                if (saturation > 20 && max > 35 && !isPurple && !isOrange) {
-                    if (r == max && r - g > 15 && r - b > 15) {
+                if (saturation > 45 && max > 35 && !isPurple && !isOrange) {
+                    if (r == max && r - g > 20 && r - b > 20) {
                         // Additional check to ensure Orange isn't counted as Red Hearts
                         if (g < max * 0.75f) rC++
                     }
-                    else if (g == max && g - r > 15 && g - b > 15) gC++
-                    else if (b == max && b - r > 15 && b - g > 15) bC++
-                } else if (max < 65 && saturation < 30 && !isPurple && !isOrange) {
+                    else if (g == max && g - r > 20 && g - b > 20) gC++
+                    else if (b == max && b - r > 20 && b - g > 20) bC++
+                } else if (max < 100 && saturation < 45 && !isPurple && !isOrange) {
                     blkC++
                 }
             }
