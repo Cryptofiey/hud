@@ -336,16 +336,16 @@ class ScreenScanner(
                         val cy = box.centerY()
                         
                         val expandedCommRect = android.graphics.Rect(
-                            commRect.left,
+                            commRect.left - commRect.width() / 10,
                             commRect.top - commRect.height() / 2,
-                            commRect.right,
+                            commRect.right + commRect.width() / 10,
                             commRect.bottom + commRect.height() / 2
                         )
                         
                         val expandedHoleRect = android.graphics.Rect(
-                            holeRect.left,
+                            holeRect.left - holeRect.width() / 4,
                             holeRect.top - holeRect.height() / 4,
-                            holeRect.right,
+                            holeRect.right + holeRect.width() / 4,
                             holeRect.bottom + holeRect.height() / 2
                         )
                         
@@ -398,9 +398,8 @@ class ScreenScanner(
                 val rawText = element.text.trim().uppercase(java.util.Locale.US)
                 val safeText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
-                    safeText.contains("OUTS") || safeText.contains("%") || safeText.contains("STRAIGHT") ||
-                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
-                    safeText.contains("BB")) continue
+                    safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
+                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH")) continue
 
                 // Removed isCardBackground to avoid missing shiny/shadowed cards
                 val parsedRanks = findCardsInText(safeText)
@@ -428,9 +427,8 @@ class ScreenScanner(
                 val rawText = element.text.trim().uppercase(java.util.Locale.US)
                 val safeText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
-                    safeText.contains("OUTS") || safeText.contains("%") || safeText.contains("STRAIGHT") ||
-                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
-                    safeText.contains("BB")) continue
+                    safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
+                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH")) continue
 
                 // We skip isCardBackground for hole cards because they can be covered by player graphics or shadows.
 
@@ -622,7 +620,7 @@ class ScreenScanner(
                 ExternalAction.UpdateCards(finalH1, finalH2, finalBoard, finalOpponents, profileBoxesToHighlight, updateProfileBoxes = (profileBoxesToHighlight != null), potSize = scannedPotSize)
             )
             
-            scanStatus.value = "H:${smoothedHole.size}(${foundHoleCardsRaw.size}) C:${smoothedComm.size}(${foundCommCardsRaw.size}) Ops:${finalOpponents.size}<br>" +
+            scanStatus.value = "H:${smoothedHole.filterNotNull().size}(${foundHoleCardsRaw.filterNotNull().size}) C:${smoothedComm.filterNotNull().size}(${foundCommCardsRaw.filterNotNull().size}) Ops:${finalOpponents.size}<br>" +
                                "Board: ${finalBoard.take(5).joinToString("") { it?.toHtmlString() ?: "[?]" }}"
             
         } catch (e: Throwable) {
@@ -637,9 +635,12 @@ class ScreenScanner(
 
     private fun findCardsInText(text: String): List<Rank> {
         val found = mutableListOf<Rank>()
+        // Pre-replace common OCR symbol mistakes before stripping
+        var preProcessed = text.uppercase(java.util.Locale.US)
+        preProcessed = preProcessed.replace("&", "8").replace("$", "8").replace("@", "Q").replace("%", "8").replace("?", "7").replace("!", "1")
+
         // Keep only letters, digits, and suit symbols to form a dense string
-        val raw = text.uppercase(java.util.Locale.US)
-            .replace(Regex("[^A-Z0-9\u2660\u2663\u2665\u2666]"), "")
+        val raw = preProcessed.replace(Regex("[^A-Z0-9\u2660\u2663\u2665\u2666]"), "")
             
         if (raw.length > 6) return emptyList() // Too long to be just 1-2 cards
         if (raw.isEmpty()) return emptyList()
@@ -686,13 +687,7 @@ class ScreenScanner(
                     else -> null
                 }
                 
-                // Do not allow '1' acting as JACK or 'O' acting as QUEEN to prevent false numbers
-                // If it is 'O' or '1' standalone, they carry high risk of being non-cards compared to actual elements
-                var isValid = true
-                if (r == Rank.JACK && (c == '1' || c == 'I') && raw.length == 1) isValid = false
-                if (r == Rank.QUEEN && (c == '0' || c == 'O') && raw.length == 1) isValid = false
-                
-                if (r != null && isValid) {
+                if (r != null) {
                     found.add(r)
                     i++
                     matched = true
