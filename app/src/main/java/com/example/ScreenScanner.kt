@@ -311,9 +311,9 @@ class ScreenScanner(
             var scannedPotSize: Float? = null
             
             val fullScanText = result.text.uppercase()
-            val potMatch = Regex("POT[^0-9]*([0-9.,]+)").find(fullScanText)
+            val potMatch = Regex("(POT|ПОТ)[^0-9]*([0-9.,]+)").find(fullScanText)
             if (potMatch != null) {
-                val numStr = potMatch.groupValues[1].replace(",", "")
+                val numStr = potMatch.groupValues[2].replace(",", "")
                 if (numStr.count { it == '.' } <= 1) {
                     scannedPotSize = numStr.toFloatOrNull()
                 }
@@ -392,16 +392,25 @@ class ScreenScanner(
                 // Minimum size threshold to filter out small text like pot size
                 if (box.height() < commRect.height() * 0.08f) continue
                 
-                val rawText = element.text.trim().uppercase(java.util.Locale.US)
-                val safeText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
+                var rawText = element.text.trim().uppercase(java.util.Locale.US)
+                rawText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
+                rawText = rawText.replace("ALL-IN", "").replace("ALL IN", "").replace("ALLIN", "")
+                    .replace("ОЛЛ-ИН", "").replace("ОЛЛИН", "").replace("ОЛЛ ИН", "").replace("ALL", "").replace("ОЛЛ", "")
+                    .replace("CHECK", "").replace("ЧЕК", "")
+                    .replace("FOLD", "").replace("ФОЛД", "").replace("ПАС", "")
+                    .replace("CALL", "").replace("КОЛЛ", "")
+                    .replace("BET", "").replace("БЕТ", "")
+                    .replace("RAISE", "").replace("РЕЙЗ", "")
+                    .replace("STRADDLE", "").replace("СТРАДДЛ", "")
+                    
+                val safeText = rawText.trim()
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
                     safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
                     safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
-                    safeText.contains("KIND") || safeText.contains("HOUSE") || safeText.contains("ALL") ||
-                    safeText.contains("FOLD") || safeText.contains("CALL") || safeText.contains("CHECK") ||
-                    safeText.contains("BET") || safeText.contains("POT") || safeText.contains("BB") ||
+                    safeText.contains("KIND") || safeText.contains("HOUSE") ||
+                    safeText.contains("POT") || safeText.contains("BB") ||
                     safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
-                    safeText.contains("OF")) continue
+                    safeText.contains("OF") || safeText.isEmpty()) continue
 
                 // Removed isCardBackground to avoid missing shiny/shadowed cards
                 val parsedRanks = findCardsInText(safeText)
@@ -423,16 +432,25 @@ class ScreenScanner(
                 // Minimum size threshold to filter out tiny text. Hole cards usually large.
                 if (box.height() < holeRect.height() * 0.05f) continue
                 
-                val rawText = element.text.trim().uppercase(java.util.Locale.US)
-                val safeText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
+                var rawText = element.text.trim().uppercase(java.util.Locale.US)
+                rawText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
+                rawText = rawText.replace("ALL-IN", "").replace("ALL IN", "").replace("ALLIN", "")
+                    .replace("ОЛЛ-ИН", "").replace("ОЛЛИН", "").replace("ОЛЛ ИН", "").replace("ALL", "").replace("ОЛЛ", "")
+                    .replace("CHECK", "").replace("ЧЕК", "")
+                    .replace("FOLD", "").replace("ФОЛД", "").replace("ПАС", "")
+                    .replace("CALL", "").replace("КОЛЛ", "")
+                    .replace("BET", "").replace("БЕТ", "")
+                    .replace("RAISE", "").replace("РЕЙЗ", "")
+                    .replace("STRADDLE", "").replace("СТРАДДЛ", "")
+                    
+                val safeText = rawText.trim()
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
                     safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
                     safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
-                    safeText.contains("KIND") || safeText.contains("HOUSE") || safeText.contains("ALL") ||
-                    safeText.contains("FOLD") || safeText.contains("CALL") || safeText.contains("CHECK") ||
-                    safeText.contains("BET") || safeText.contains("POT") || safeText.contains("BB") ||
+                    safeText.contains("KIND") || safeText.contains("HOUSE") ||
+                    safeText.contains("POT") || safeText.contains("BB") ||
                     safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
-                    safeText.contains("OF")) continue
+                    safeText.contains("OF") || safeText.isEmpty()) continue
 
                 // We skip isCardBackground for hole cards because they can be covered by player graphics or shadows.
                 val parsedRanks = findCardsInText(safeText)
@@ -638,7 +656,7 @@ class ScreenScanner(
                 val r = when (c) {
                     'A' -> Rank.ACE
                     'K' -> Rank.KING
-                    'Q' -> Rank.QUEEN
+                    'Q', 'O', '0' -> Rank.QUEEN
                     'J' -> Rank.JACK
                     '9' -> Rank.NINE
                     '8' -> Rank.EIGHT
