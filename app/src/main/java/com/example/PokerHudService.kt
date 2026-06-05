@@ -1146,8 +1146,14 @@ class PokerHudService : Service() {
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    params.x = initialX + (event.rawX - initialTouchX).toInt()
-                    params.y = initialY + (event.rawY - initialTouchY).toInt()
+                    val deltaX = (event.rawX - initialTouchX).toInt()
+                    val deltaY = (event.rawY - initialTouchY).toInt()
+                    
+                    val isEnd = (params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.END || (params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.RIGHT
+                    val isBottom = (params.gravity and Gravity.VERTICAL_GRAVITY_MASK) == Gravity.BOTTOM
+                    
+                    params.x = if (isEnd) initialX - deltaX else initialX + deltaX
+                    params.y = if (isBottom) initialY - deltaY else initialY + deltaY
                     try {
                         windowManager?.updateViewLayout(view, params)
                     } catch (ignored: Exception) {}
@@ -1566,7 +1572,7 @@ class PokerHudService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            gravity = Gravity.BOTTOM or Gravity.START
             x = dpToPx(300f)
             y = dpToPx(150f)
         }
