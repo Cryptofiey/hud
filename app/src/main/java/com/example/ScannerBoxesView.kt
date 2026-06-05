@@ -143,7 +143,7 @@ class ScannerBoxesView(context: Context) : View(context) {
                 // Exclude Top Header
                 path.addRect(0f, 0f, w, h * 0.11f, Path.Direction.CW)
                 // Exclude Community Cards
-                path.addRect(w * 0.18f, h * 0.38f, w * 0.82f, h * 0.68f, Path.Direction.CW)
+                path.addRect(w * 0.25f, h * 0.38f, w * 0.75f, h * 0.68f, Path.Direction.CW)
                 // Exclude Hero Hole Cards
                 path.addRect(w * 0.53f, h * 0.68f, w * 0.95f, h * 0.93f, Path.Direction.CW)
 
@@ -166,14 +166,8 @@ class ScannerBoxesView(context: Context) : View(context) {
                         if (opp.isActive) {
                             canvas.drawRect(actualBox, fillPaint)
                             canvas.drawRect(actualBox, boxPaint)
-                            
-                            val label = opp.nickname + " " + opp.currentAction
-                            canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textOutlinePaint)
-                            canvas.drawText(label, actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
                         } else {
                             canvas.drawRect(actualBox, inactiveBoxPaint)
-                            canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textOutlinePaint)
-                            canvas.drawText("FOLDED", actualBox.left.toFloat(), actualBox.top.toFloat() - 10f, textPaint)
                         }
                     }
                 }
@@ -198,30 +192,8 @@ class ScannerBoxesView(context: Context) : View(context) {
             canvas.drawRect(actualBox, zoneFillPaint)
             canvas.drawRect(actualBox, profileBoxPaint)
             
-            val boxWidth = actualBox.width().toFloat()
-            val boxHeight = actualBox.height().toFloat()
-            if (boxWidth > 0 && boxHeight > 0 && box.label.isNotEmpty()) {
-                val baseTextSize = 100f
-                textPaint.textSize = baseTextSize
-                textOutlinePaint.textSize = baseTextSize
-
-
-                val textW = textPaint.measureText(box.label)
-                val fm = textPaint.fontMetrics
-                val textH = fm.descent - fm.ascent
-
-                val scaleX = boxWidth / textW
-                val scaleY = boxHeight / textH
-
-                canvas.save()
-                canvas.translate(actualBox.left.toFloat(), actualBox.top.toFloat())
-                canvas.scale(scaleX, scaleY)
-                
-                val yBaseline = -fm.ascent
-                canvas.drawText(box.label, 0f, yBaseline, textOutlinePaint)
-                canvas.drawText(box.label, 0f, yBaseline, textPaint)
-                canvas.restore()
-            }
+            // We intentionally DO NOT draw the text here anymore to prevent 
+            // OCR feedback loops where the next frame scans our drawn overlay text.
         }
 
         // Draw profile stat highlights if any
@@ -245,22 +217,6 @@ class ScannerBoxesView(context: Context) : View(context) {
 
             canvas.drawRect(actualBox, profileFillPaint)
             canvas.drawRect(actualBox, profileBoxPaint)
-            
-            val boxWidth = actualBox.width().toFloat()
-            val boxHeight = actualBox.height().toFloat()
-            if (boxWidth > 0 && boxHeight > 0 && box.label.isNotEmpty()) {
-                val predictedTextSize = boxHeight * 0.85f
-                textPaint.textSize = predictedTextSize
-                textOutlinePaint.textSize = predictedTextSize
-                textOutlinePaint.strokeWidth = 2f
-
-                val fm = textPaint.fontMetrics
-                val textHeightWithoutDescent = -fm.ascent
-                val textY = actualBox.top.toFloat() + textHeightWithoutDescent + (boxHeight * 0.05f)
-
-                canvas.drawText(box.label, actualBox.left.toFloat(), textY, textOutlinePaint)
-                canvas.drawText(box.label, actualBox.left.toFloat(), textY, textPaint)
-            }
         }
         } catch (e: Throwable) {
             android.util.Log.e("ScannerBoxesView", "Error drawing scanner boxes", e)

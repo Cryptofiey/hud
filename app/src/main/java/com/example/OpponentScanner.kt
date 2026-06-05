@@ -97,8 +97,8 @@ object OpponentScanner {
             
             // Define exclusion zones based on the new layout
             val inTopHeader = y < height * 0.15f || (y < height * 0.20f && x < width * 0.5f)
-            // We already exclude commRect/holeRect above, but keep soft bounds just in case
-            val inCommunityCards = x > width * 0.18f && x < width * 0.82f && y > height * 0.38f && y < height * 0.68f
+            // Community cards are roughly in the center third, not fully edge to edge horizontally
+            val inCommunityCards = x > width * 0.25f && x < width * 0.75f && y > height * 0.38f && y < height * 0.68f
             val inHeroCards = x > width * 0.53f && x < width * 0.95f && y > height * 0.68f && y < height * 0.98f
             
             // Check if it's explicitly inside the known rects (redundant but safe)
@@ -316,7 +316,7 @@ object OpponentScanner {
                 val oppBox = opp.boundingBox ?: continue
                 val distSq = Math.pow((lineBox.centerX() - oppBox.centerX()).toDouble(), 2.0) + Math.pow((lineBox.centerY() - oppBox.centerY()).toDouble(), 2.0)
                 
-                if (distSq < minDistSq && distSq < Math.pow(cleanBitmap.width * 0.3, 2.0)) {
+                if (distSq < minDistSq && distSq < Math.pow(cleanBitmap.width * 0.15, 2.0)) {
                     minDistSq = distSq.toFloat()
                     closestBet = betVal
                 }

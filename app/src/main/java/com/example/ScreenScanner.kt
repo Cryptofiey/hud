@@ -37,7 +37,11 @@ class ScreenScanner(
     private var mediaProjection: MediaProjection? = null
     private var imageReader: ImageReader? = null
     private var virtualDisplay: android.hardware.display.VirtualDisplay? = null
-    private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    companion object {
+        val recognizer by lazy {
+            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        }
+    }
     
     private val scope = CoroutineScope(Dispatchers.Default + Job())
     private var scanJob: Job? = null
@@ -323,6 +327,8 @@ class ScreenScanner(
                     scannedPotSize = numStr.toFloatOrNull()
                 }
             }
+            
+            val heroActionOptions = mutableSetOf<String>()
 
             for (block in result.textBlocks) {
                 for (line in block.lines) {
@@ -337,6 +343,26 @@ class ScreenScanner(
                             }
                         }
                         if (insideHud) continue
+                        
+                        if (box.top > cleanBitmap!!.height * 0.82f) {
+                            val textUpper = element.text.uppercase()
+                            if (textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || 
+                                textUpper.contains("X/F") || textUpper.contains("ПАС")) {
+                                heroActionOptions.add("Fold")
+                            } 
+                            if (textUpper.contains("CHECK") || textUpper.contains("ЧЕК") || textUpper.contains("X/C")) {
+                                heroActionOptions.add("Check")
+                            } 
+                            if (textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) {
+                                heroActionOptions.add("Call")
+                            } 
+                            if (textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || textUpper.contains("BET") || textUpper.contains("БЕТ")) {
+                                heroActionOptions.add("Raise")
+                            } 
+                            if (textUpper.contains("ALL-IN") || textUpper.contains("ALL IN") || textUpper.contains("ОЛЛ-ИН")) {
+                                heroActionOptions.add("All-in")
+                            }
+                        }
 
                         val cx = box.centerX()
                         val cy = box.centerY()
@@ -571,13 +597,28 @@ class ScreenScanner(
             }
             
             val scannedOpponents = OpponentScanner.scan(result, cleanBitmap!!, hudRects, commRect, holeRect)
-            val finalOpponents: List<OpponentState>
+            val finalOpponentsRaw: List<OpponentState>
             if (scannedOpponents.isNotEmpty()) {
                 emptyOpponentsFrames = 0
-                finalOpponents = scannedOpponents
+                finalOpponentsRaw = scannedOpponents
             } else {
                 emptyOpponentsFrames++
-                finalOpponents = if (emptyOpponentsFrames < 3) currentState.opponents else emptyList()
+                finalOpponentsRaw = if (emptyOpponentsFrames < 3) currentState.opponents else emptyList()
+            }
+            
+            // Hero is usually at the bottom-center of the screen.
+            // Exclude hero from opponents and extract hero stack.
+            var scannedHeroStack: Float? = null
+            var scannedHeroBet: Float? = null
+            val finalOpponents = finalOpponentsRaw.filter { opp ->
+                val box = opp.boundingBox
+                if (box != null && box.top > cleanBitmap!!.height * 0.70f && box.left > cleanBitmap.width * 0.2f && box.right < cleanBitmap.width * 0.8f) {
+                    scannedHeroStack = opp.stackSize
+                    scannedHeroBet = opp.betSize
+                    false // EXCLUDE from opponents
+                } else {
+                    true // Keep as opponent
+                }
             }
 
             var profileBoxesToHighlight: List<ScannedBox>? = null
@@ -611,7 +652,23 @@ class ScreenScanner(
             val rawBoxes = if (PokerHudSharedState.showScannerBoxes.value) {
                 result.textBlocks.flatMap { block ->
                     block.lines.mapNotNull { line ->
-                        line.boundingBox?.let { rect -> ScannedBox(rect, line.text) }
+                        val rect = line.boundingBox
+                        if (rect == null) null
+                        else {
+                            var insideHud = false
+                            for (hudRect in hudRects) {
+                                if (android.graphics.Rect.intersects(hudRect, rect)) {
+                                    insideHud = true
+                                    break
+                                }
+                            }
+                            val textUpper = line.text.uppercase()
+                            if (insideHud || textUpper.contains("COIN POKER") || textUpper.contains("COINPOKER") || textUpper == "COIN" || textUpper == "POKER") {
+                                null
+                            } else {
+                                ScannedBox(rect, line.text)
+                            }
+                        }
                     }
                 }
             } else {
@@ -627,7 +684,11 @@ class ScreenScanner(
                     profileBoxes = profileBoxesToHighlight, 
                     updateProfileBoxes = (profileBoxesToHighlight != null), 
                     rawScannerBoxes = rawBoxes,
-                    potSize = scannedPotSize
+                    potSize = scannedPotSize,
+                    heroActionOptions = heroActionOptions.toList(),
+                    heroTurn = heroActionOptions.isNotEmpty(),
+                    heroStack = scannedHeroStack,
+                    heroBet = scannedHeroBet
                 )
             )
             

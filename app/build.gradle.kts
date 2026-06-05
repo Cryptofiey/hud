@@ -18,7 +18,7 @@ android {
     // Auto-versioning for GitHub Actions / Obtainium
     val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
     versionCode = runNumber
-    versionName = "1.0.$runNumber"
+    versionName = "0.0.$runNumber"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -58,7 +58,14 @@ android {
     compose = true
     buildConfig = true
   }
-  
+}
+
+base {
+  archivesName.set("hud-0.0.${System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1}")
+}
+
+// Re-open android block for ksp since we closed it
+android {
   ksp {
     arg("room.incremental", "true")
   }

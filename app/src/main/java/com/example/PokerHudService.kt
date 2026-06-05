@@ -45,7 +45,11 @@ sealed class ExternalAction {
         val profileBoxes: List<ScannedBox>? = null,
         val updateProfileBoxes: Boolean = false,
         val rawScannerBoxes: List<ScannedBox>? = null,
-        val potSize: Float? = null
+        val potSize: Float? = null,
+        val heroActionOptions: List<String> = emptyList(),
+        val heroTurn: Boolean = false,
+        val heroStack: Float? = null,
+        val heroBet: Float? = null
     ) : ExternalAction()
     data class ControlHud(val command: String) : ExternalAction()
 }
@@ -54,7 +58,10 @@ object PokerHudSharedState {
     val isHudOverlayRunning = MutableStateFlow(false)
     val uiState = MutableStateFlow<PokerUiState>(PokerUiState())
     val triggerPreset = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val externalActions = MutableSharedFlow<ExternalAction>(extraBufferCapacity = 1)
+    val externalActions = MutableSharedFlow<ExternalAction>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+    )
 
     // Scanner tuning
     val showScannerBoxes = MutableStateFlow(false)
@@ -149,7 +156,6 @@ class PokerHudService : Service() {
 
     // Multi-Data Scanner fields
     private var txtScannerStatus: TextView? = null
-    private var txtEvoStats: TextView? = null
     private var scannerStatusBox: LinearLayout? = null
     private var txtPreText: TextView? = null
     private var togglesRow1: LinearLayout? = null
@@ -597,32 +603,6 @@ class PokerHudService : Service() {
         toggles1.addView(scannerCheckBox)
         expanded.addView(toggles1)
 
-        // Evolution Monitor
-        val evolutionMonitor = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(2f), dpToPx(2f), dpToPx(2f), dpToPx(2f))
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                // Avoid the bottom-right cutout area
-                setMargins(0, dpToPx(2f), dpToPx(36f), dpToPx(2f))
-            }
-            background = createBackgroundDrawable(AndroidColor.parseColor("#1AFFFFFF"), 4f)
-        }
-        val evoLabel = TextView(this).apply {
-            text = "🧬 Synthetic Genetics"
-            setTextColor(AndroidColor.parseColor("#B39DDB"))
-            textSize = 8f
-            typeface = Typeface.DEFAULT_BOLD
-        }
-        val evoStats = TextView(this).apply {
-            text = "Hunger: -- | Curiosity: --\nActive Mutants: -- / Synapses: --"
-            setTextColor(AndroidColor.LTGRAY)
-            textSize = 7f
-        }
-        evolutionMonitor.addView(evoLabel)
-        evolutionMonitor.addView(evoStats)
-        expanded.addView(evolutionMonitor)
-        this.txtEvoStats = evoStats
-
         parentFrame.addView(expanded)
 
         // 3. SET WINDOW SEAMLESS TOUCH DRAGGING LISTENERS
@@ -760,19 +740,6 @@ class PokerHudService : Service() {
                 txtScannerStatus?.text = "🔍 $activeScannerStr Stage/Board: $boardStr\n" +
                         "Opponents: $oppsCount tracked\n" +
                         "Hero: $h1Raw $h2Raw"
-                
-                // --- SYNTHETIC GENETICS TICK & UPDATE ---
-                try {
-                    val activeOpponentStats = state.opponents.firstOrNull { it.isActive }?.stats
-                    EvolutionFunnel.simulateExperience(realEvDelta = null, activeStats = activeOpponentStats)
-                    val hunger = String.format(java.util.Locale.US, "%.0f%%", SyntheticGenome.biochemistry.getHungerLevel())
-                    val curiosity = String.format(java.util.Locale.US, "%.0f%%", SyntheticGenome.biochemistry.getCuriosityLevel())
-                    val genomeSize = SyntheticGenome.activeGenome.size
-                    val synapses = SyntheticGenome.synapsis.size
-                    txtEvoStats?.text = "Hunger: $hunger | Curiosity: $curiosity\nMutants: $genomeSize | Synapses: $synapses"
-                } catch (e: Exception) {
-                    txtEvoStats?.text = "Evolution suspended: ${e.message}"
-                }
                 
                 lastProfileBoxes = state.profileBoxes
             }
@@ -965,7 +932,11 @@ class PokerHudService : Service() {
                         opponents = finalOpponentsList,
                         profileBoxes = if (action.updateProfileBoxes) action.profileBoxes else currentState.profileBoxes,
                         rawScannerBoxes = action.rawScannerBoxes,
-                        potSize = action.potSize ?: currentState.potSize
+                        potSize = action.potSize ?: currentState.potSize,
+                        heroActionOptions = action.heroActionOptions,
+                        heroTurn = action.heroTurn,
+                        heroStack = action.heroStack ?: currentState.heroStack,
+                        heroBet = action.heroBet ?: currentState.heroBet
                     )
                     PokerHudSharedState.uiState.update { updatedState }
                     
@@ -1073,36 +1044,42 @@ class PokerHudService : Service() {
 }
 
     private fun bringHudsToFront() {
-        // Reduced frequency or use updateViewLayout instead of remove/add to prevent flickering
-        // We only really need to bring to front if specifically requested, not on every OCR update.
+        try {
+            // Re-adding the views puts them at the top of the Z-order.
+            floatingOverlayView?.let { v ->
+                val p = v.layoutParams
+                windowManager?.removeView(v)
+                windowManager?.addView(v, p)
+            }
+            floatingProbsOverlay?.let { v ->
+                val p = v.layoutParams
+                windowManager?.removeView(v)
+                windowManager?.addView(v, p)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PokerHudService", "bringHudsToFront error", e)
+        }
     }
 
     fun getHudRects(): List<android.graphics.Rect> {
         val rects = mutableListOf<android.graphics.Rect>()
-        floatingOverlayView?.let { v ->
-            if (v.visibility == View.VISIBLE) {
-                val params = v.layoutParams as? WindowManager.LayoutParams
-                if (params != null) {
-                    rects.add(android.graphics.Rect(params.x, params.y, params.x + v.width, params.y + v.height))
+        
+        fun addRect(view: View?) {
+            view?.let { v ->
+                if (v.visibility == View.VISIBLE) {
+                    val pos = IntArray(2)
+                    v.getLocationOnScreen(pos)
+                    rects.add(android.graphics.Rect(pos[0], pos[1], pos[0] + v.width, pos[1] + v.height))
                 }
             }
         }
-        floatingProbsOverlay?.let { v ->
-            if (v.visibility == View.VISIBLE) {
-                val params = v.layoutParams as? WindowManager.LayoutParams
-                if (params != null) {
-                    rects.add(android.graphics.Rect(params.x, params.y, params.x + v.width, params.y + v.height))
-                }
-            }
-        }
-        floatingAdvisorOverlay?.let { v ->
-            if (v.visibility == View.VISIBLE) {
-                val params = v.layoutParams as? WindowManager.LayoutParams
-                if (params != null) {
-                    rects.add(android.graphics.Rect(params.x, params.y, params.x + v.width, params.y + v.height))
-                }
-            }
-        }
+
+        addRect(floatingOverlayView)
+        addRect(floatingProbsOverlay)
+        addRect(floatingAdvisorOverlay)
+        addRect(floatingCommOverlay)
+        addRect(floatingHoleOverlay)
+        
         return rects
     }
 
@@ -1114,6 +1091,9 @@ class PokerHudService : Service() {
         if (PokerHudSharedState.showProbsBox.value && !gameMode) showProbsOverlay() else hideProbsOverlay()
         
         if (!gameMode) showScannerOutlinesOverlay() else hideScannerOutlinesOverlay()
+        
+        // Ensure our interactive HUDs stay on top of the scanner overlay Canvas
+        bringHudsToFront()
     }
 
     fun getCommRect(): android.graphics.Rect {
@@ -1560,8 +1540,8 @@ class PokerHudService : Service() {
     private fun showProbsOverlay() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
-            dpToPx(180f),
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            dpToPx(200f),
+            dpToPx(130f),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -1590,7 +1570,7 @@ class PokerHudService : Service() {
         
         val mainVert = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         }
         
         val closeBtn = ImageView(this).apply {
@@ -1705,8 +1685,20 @@ class PokerHudService : Service() {
             }
         }
         
-        mainVert.addView(txtAdvisor)
-        mainVert.addView(txtAdvAdvisor)
+        val advVert = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
+        }
+        
+        advVert.addView(txtAdvisor)
+        advVert.addView(txtAdvAdvisor)
+        
+        val scrollAdvisor = android.widget.ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+        }
+        scrollAdvisor.addView(advVert)
+        
+        mainVert.addView(scrollAdvisor)
         
         content.addView(mainVert)
         content.addView(closeBtn)

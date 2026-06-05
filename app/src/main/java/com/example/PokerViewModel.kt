@@ -31,6 +31,8 @@ data class PokerUiState(
         OpponentState(id = 4, isActive = false, isRandom = true, nickname = "Opponent 4", betSize = 0f, stackSize = 0f),
         OpponentState(id = 5, isActive = false, isRandom = true, nickname = "Opponent 5", betSize = 0f, stackSize = 0f)
     ),
+    val heroActionOptions: List<String> = emptyList(),
+    val heroTurn: Boolean = false,
     val activeTarget: SelectionTarget? = SelectionTarget.Hero1,
     val isCalculating: Boolean = false,
     val calculationProgress: Float = 0f,
