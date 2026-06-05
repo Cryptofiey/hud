@@ -241,6 +241,68 @@ class PokerHudService : Service() {
         return (dp * resources.displayMetrics.density).toInt()
     }
 
+    class CutoutBackgroundDrawable(
+        private val bgColor: Int,
+        private val strokeColor: Int,
+        private val strokeWidthPx: Float,
+        private val cornerRadiusPx: Float,
+        private val cutoutRadiusPx: Float,
+        private val isCutoutLeft: Boolean
+    ) : android.graphics.drawable.Drawable() {
+        private val paintFill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.FILL
+            color = bgColor
+        }
+        private val paintStroke = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            style = android.graphics.Paint.Style.STROKE
+            color = strokeColor
+            strokeWidth = strokeWidthPx
+        }
+        private val path = android.graphics.Path()
+
+        override fun draw(canvas: android.graphics.Canvas) {
+            val w = bounds.width().toFloat()
+            val h = bounds.height().toFloat()
+            val cr = cutoutRadiusPx
+            val r = kotlin.math.min(cornerRadiusPx, kotlin.math.min(w / 2f, h / 2f))
+
+            path.reset()
+            if (isCutoutLeft) {
+                path.moveTo(r, 0f)
+                path.lineTo(w - r, 0f)
+                path.arcTo(w - 2f * r, 0f, w, 2f * r, -90f, 90f, false)
+                path.lineTo(w, h - r)
+                path.arcTo(w - 2f * r, h - 2f * r, w, h, 0f, 90f, false)
+                path.lineTo(cr, h)
+                path.arcTo(-cr, h - cr * 2f, cr * 2f, h + cr * 0f, 0f, -90f, false) // wait, the radius is cr. So bounds for center (0, h) are (-cr, h-cr, cr, h+cr). Wait, rect height is 2*cr. So RectF(-cr, h-cr, cr, h+cr). Yes.
+                path.lineTo(0f, r)
+                path.arcTo(0f, 0f, 2f * r, 2f * r, 180f, 90f, false)
+                path.close()
+            } else {
+                path.moveTo(r, 0f)
+                path.lineTo(w - r, 0f)
+                path.arcTo(w - 2f * r, 0f, w, 2f * r, -90f, 90f, false)
+                path.lineTo(w, h - cr)
+                path.arcTo(w - cr, h - cr, w + cr, h + cr, 270f, -90f, false)
+                path.lineTo(r, h)
+                path.arcTo(0f, h - 2f * r, 2f * r, h, 90f, 90f, false)
+                path.lineTo(0f, r)
+                path.arcTo(0f, 0f, 2f * r, 2f * r, 180f, 90f, false)
+                path.close()
+            }
+
+            canvas.drawPath(path, paintFill)
+            if (strokeWidthPx > 0) {
+                canvas.drawPath(path, paintStroke)
+            }
+        }
+
+        override fun setAlpha(alpha: Int) {}
+        override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {}
+        @Deprecated("Deprecated in Java")
+        override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+    }
+
     private fun createBackgroundDrawable(bgColor: Int, cornerRadiusDp: Float, strokeWidthPx: Int = 0, strokeColor: Int = 0): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
@@ -307,7 +369,7 @@ class PokerHudService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = dpToPx(2f)
-            y = dpToPx(120f)
+            y = dpToPx(130f)
         }
 
         // Parent FrameLayout containing both expanded panel & minimized handle
@@ -348,11 +410,13 @@ class PokerHudService : Service() {
         val expanded = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
-            background = createBackgroundDrawable(
+            background = CutoutBackgroundDrawable(
                 AndroidColor.parseColor("#F50D151D"), // Dark blue/grey high contrast
-                10f,
-                dpToPx(2f),
-                AndroidColor.parseColor("#FFD500F9") // Neon Purple Outline
+                AndroidColor.parseColor("#FFD500F9"), // Neon Purple Outline
+                dpToPx(2f).toFloat(),
+                dpToPx(10f).toFloat(),
+                dpToPx(40f).toFloat(), // avatar cutout radius
+                isCutoutLeft = false   // cutout on bottom-right
             )
             val shadowParams = FrameLayout.LayoutParams(resources.displayMetrics.widthPixels / 2, WindowManager.LayoutParams.WRAP_CONTENT)
             layoutParams = shadowParams
@@ -1473,7 +1537,7 @@ class PokerHudService : Service() {
     private fun showProbsOverlay() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
-            dpToPx(240f),
+            resources.displayMetrics.widthPixels / 2,
             WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -1484,12 +1548,19 @@ class PokerHudService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = dpToPx(300f)
-            y = dpToPx(150f)
+            gravity = Gravity.TOP or Gravity.END
+            x = dpToPx(2f)
+            y = dpToPx(130f)
         }
         val frame = FrameLayout(this).apply {
-            background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 10f, dpToPx(1.5f), AndroidColor.parseColor("#FF4CAF50"))
+            background = CutoutBackgroundDrawable(
+                AndroidColor.parseColor("#E6111C24"),
+                AndroidColor.parseColor("#FF4CAF50"),
+                dpToPx(1.5f).toFloat(),
+                dpToPx(10f).toFloat(),
+                dpToPx(40f).toFloat(),
+                isCutoutLeft = true
+            )
             setPadding(dpToPx(6f), dpToPx(6f), dpToPx(6f), dpToPx(6f))
         }
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
