@@ -1559,9 +1559,8 @@ class PokerHudService : Service() {
 
     private fun showProbsOverlay() {
         if (floatingProbsOverlay != null) return
-        val width = resources.displayMetrics.widthPixels / 2
         val params = WindowManager.LayoutParams(
-            width,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -1572,9 +1571,9 @@ class PokerHudService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.BOTTOM or Gravity.START
+            gravity = Gravity.TOP or Gravity.START
             x = dpToPx(300f)
-            y = dpToPx(150f)
+            y = dpToPx(50f)
         }
         val frame = FrameLayout(this).apply {
             background = CutoutBackgroundDrawable(
@@ -1683,7 +1682,7 @@ class PokerHudService : Service() {
         
         // Advisor Slot
         val txtAdvisor = TextView(this).apply {
-            text = "Совет: ЖДЕМ..."
+            text = "🧮 ЖДЕМ..."
             setTextColor(AndroidColor.parseColor("#FF90CAF9"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -1695,7 +1694,7 @@ class PokerHudService : Service() {
         }
         
         val txtAdvAdvisor = TextView(this).apply {
-            text = "Совет (L3): ЖДЕМ..."
+            text = "✍️ ЖДЕМ..."
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
