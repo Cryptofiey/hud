@@ -843,11 +843,12 @@ class PokerHudService : Service() {
                 if (gameMode) {
                     expanded.background = createBackgroundDrawable(AndroidColor.TRANSPARENT, 0f)
                 } else {
-                    expanded.background = createBackgroundDrawable(
+                    expanded.background = CutoutBackgroundDrawable(
                         AndroidColor.parseColor("#F50D151D"),
-                        10f,
-                        dpToPx(2f),
-                        AndroidColor.parseColor("#FFD500F9")
+                        dpToPx(10f).toFloat(),
+                        dpToPx(2f).toFloat(),
+                        AndroidColor.parseColor("#FFD500F9"),
+                        dpToPx(40f).toFloat()
                     )
                 }
                 updateBoxOverlays()
@@ -1553,7 +1554,13 @@ class PokerHudService : Service() {
             y = dpToPx(150f)
         }
         val frame = FrameLayout(this).apply {
-            background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 10f, dpToPx(1.5f), AndroidColor.parseColor("#FF4CAF50"))
+            background = CutoutBackgroundDrawable(
+                AndroidColor.parseColor("#E6111C24"), 
+                dpToPx(10f).toFloat(), 
+                dpToPx(1.5f).toFloat(), 
+                AndroidColor.parseColor("#FF4CAF50"),
+                dpToPx(40f).toFloat()
+            )
             setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
         }
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1582,8 +1589,8 @@ class PokerHudService : Service() {
         // Underline block
         content.addView(View(this).apply { 
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
-                topMargin = dpToPx(2f)
-                bottomMargin = dpToPx(2f)
+                topMargin = dpToPx(1f)
+                bottomMargin = dpToPx(1f)
             }
             setBackgroundColor(AndroidColor.parseColor("#33FFFFFF"))
         })
@@ -1603,7 +1610,7 @@ class PokerHudService : Service() {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                topMargin = dpToPx(2f)
+                topMargin = dpToPx(1f)
             }
         }
         val txtSklan = TextView(this).apply {
@@ -1618,8 +1625,8 @@ class PokerHudService : Service() {
         // 2. ACTION ADVISOR SECTION
         val advDivider = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
-                topMargin = dpToPx(2f)
-                bottomMargin = dpToPx(2f)
+                topMargin = dpToPx(1f)
+                bottomMargin = dpToPx(1f)
             }
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
         }
@@ -1634,6 +1641,12 @@ class PokerHudService : Service() {
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                rightMargin = dpToPx(36f)
+            }
         }
         content.addView(advDivider)
         content.addView(txtAdvisor)
@@ -1642,15 +1655,17 @@ class PokerHudService : Service() {
         // 3. EQUALIZER SECTION
         val oppDivider = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
-                topMargin = dpToPx(2f)
-                bottomMargin = dpToPx(2f)
+                topMargin = dpToPx(1f)
+                bottomMargin = dpToPx(1f)
+                rightMargin = dpToPx(36f)
             }
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
         }
         val equalizerView = EqualizerView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(20f)).apply {
-                topMargin = dpToPx(2f)
-                bottomMargin = dpToPx(2f)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(16f)).apply {
+                topMargin = dpToPx(1f)
+                bottomMargin = dpToPx(1f)
+                rightMargin = dpToPx(36f)
             }
         }
         content.addView(oppDivider)
