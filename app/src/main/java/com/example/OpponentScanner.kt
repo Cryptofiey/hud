@@ -96,7 +96,7 @@ object OpponentScanner {
             val y = box.centerY().toFloat()
             
             // Define exclusion zones based on the new layout
-            val inTopHeader = y < height * 0.11f
+            val inTopHeader = y < height * 0.15f || (y < height * 0.20f && x < width * 0.5f)
             // We already exclude commRect/holeRect above, but keep soft bounds just in case
             val inCommunityCards = x > width * 0.18f && x < width * 0.82f && y > height * 0.38f && y < height * 0.68f
             val inHeroCards = x > width * 0.53f && x < width * 0.95f && y > height * 0.68f && y < height * 0.98f

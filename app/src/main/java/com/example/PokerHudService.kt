@@ -894,7 +894,10 @@ class PokerHudService : Service() {
                         }
                     }
 
+                    val rawBoxesChanged = PokerHudSharedState.showScannerBoxes.value && currentState.rawScannerBoxes != action.rawScannerBoxes
+
                     if (!opponentsChanged && 
+                        !rawBoxesChanged &&
                         currentState.heroCard1 == action.hero1 && 
                         currentState.heroCard2 == action.hero2 && 
                         currentState.board == newBoard &&

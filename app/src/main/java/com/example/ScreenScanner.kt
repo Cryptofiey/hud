@@ -78,8 +78,12 @@ class ScreenScanner(
             scanJob = scope.launch {
                 delay(200) // Small delay to allow UI to update and hide overlays
                 while (isActive) {
-                    processLatestImage()
-                    delay(500) // Lower delay for faster reaction (was 1100)
+                    val gotImage = processLatestImage()
+                    if (gotImage) {
+                        delay(500) // Normal polling rate
+                    } else {
+                        delay(50) // Poll faster while waiting for first frame
+                    }
                 }
             }
         } catch (e: Throwable) {
@@ -91,6 +95,7 @@ class ScreenScanner(
 
     private val holeHistory = mutableListOf<List<Card?>>()
     private val commHistory = mutableListOf<List<Card?>>()
+    private var emptyOpponentsFrames = 0
     
     private val confirmedHole = mutableListOf<Card?>()
     private val confirmedComm = mutableListOf<Card?>()
@@ -238,12 +243,12 @@ class ScreenScanner(
 
     private var cachedCleanBitmap: Bitmap? = null
 
-    private suspend fun processLatestImage() {
+    private suspend fun processLatestImage(): Boolean {
         var image: Image? = null
         try {
             image = imageReader?.acquireLatestImage()
 
-            if (image == null) return
+            if (image == null) return false
             
             val width = image.width
             val height = image.height
@@ -566,7 +571,14 @@ class ScreenScanner(
             }
             
             val scannedOpponents = OpponentScanner.scan(result, cleanBitmap!!, hudRects, commRect, holeRect)
-            val finalOpponents = if (scannedOpponents.isNotEmpty()) scannedOpponents else currentState.opponents
+            val finalOpponents: List<OpponentState>
+            if (scannedOpponents.isNotEmpty()) {
+                emptyOpponentsFrames = 0
+                finalOpponents = scannedOpponents
+            } else {
+                emptyOpponentsFrames++
+                finalOpponents = if (emptyOpponentsFrames < 3) currentState.opponents else emptyList()
+            }
 
             var profileBoxesToHighlight: List<ScannedBox>? = null
             if (requestProfileScan) {
@@ -628,6 +640,7 @@ class ScreenScanner(
         } finally {
             try { image?.close() } catch(ignored: Exception) {}
         }
+        return true
     }
 
     // isCardBackground removed because it was aggressively dropping cards with shiny or dark backgrounds

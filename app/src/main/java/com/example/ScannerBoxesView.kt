@@ -188,7 +188,14 @@ class ScannerBoxesView(context: Context) : View(context) {
                 box.rect.bottom + offsetY.toInt() - viewOffsetY
             )
 
-            canvas.drawRect(actualBox, profileFillPaint)
+            // Skip false-positive boxes detected in the top-left area HUD
+            val w = width.toFloat()
+            val h = height.toFloat()
+            if (actualBox.top < h * 0.15f && actualBox.left < w * 0.4f) {
+                return@forEach
+            }
+
+            canvas.drawRect(actualBox, zoneFillPaint)
             canvas.drawRect(actualBox, profileBoxPaint)
             
             val boxWidth = actualBox.width().toFloat()
