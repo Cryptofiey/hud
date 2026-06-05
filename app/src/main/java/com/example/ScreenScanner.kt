@@ -309,17 +309,18 @@ class ScreenScanner(
             val bottomZoneTop = cleanBitmap!!.height * 0.80
 
             var scannedPotSize: Float? = null
+            
+            val fullScanText = result.text.uppercase()
+            val potMatch = Regex("POT[^0-9]*([0-9.,]+)").find(fullScanText)
+            if (potMatch != null) {
+                val numStr = potMatch.groupValues[1].replace(",", "")
+                if (numStr.count { it == '.' } <= 1) {
+                    scannedPotSize = numStr.toFloatOrNull()
+                }
+            }
 
             for (block in result.textBlocks) {
                 for (line in block.lines) {
-                    val lineTextUpper = line.text.uppercase()
-                    if (lineTextUpper.startsWith("POT") || lineTextUpper.contains("POT ") || lineTextUpper.contains("POT:")) {
-                        val numStr = lineTextUpper.replace(Regex("[^0-9.]"), "")
-                        if (numStr.isNotEmpty() && numStr.count { it == '.' } <= 1) {
-                            scannedPotSize = numStr.toFloatOrNull()
-                        }
-                    }
-
                     for (element in line.elements) {
                         val box = element.boundingBox ?: continue
                         
@@ -336,17 +337,17 @@ class ScreenScanner(
                         val cy = box.centerY()
                         
                         val expandedCommRect = android.graphics.Rect(
-                            commRect.left - commRect.width() / 10,
-                            commRect.top - commRect.height() / 2,
-                            commRect.right + commRect.width() / 10,
-                            commRect.bottom + commRect.height() / 2
+                            commRect.left - commRect.width() / 20,
+                            commRect.top - commRect.height() / 10,
+                            commRect.right + commRect.width() / 20,
+                            commRect.bottom + commRect.height() / 10
                         )
                         
                         val expandedHoleRect = android.graphics.Rect(
-                            holeRect.left - holeRect.width() / 4,
-                            holeRect.top - holeRect.height() / 4,
-                            holeRect.right + holeRect.width() / 4,
-                            holeRect.bottom + holeRect.height() / 2
+                            holeRect.left - holeRect.width() / 20,
+                            holeRect.top - holeRect.height() / 10,
+                            holeRect.right + holeRect.width() / 20,
+                            holeRect.bottom + holeRect.height() / 10
                         )
                         
                         if (commRect.width() > 20 && expandedCommRect.contains(cx, cy)) {
@@ -445,89 +446,66 @@ class ScreenScanner(
                 }
             }
             
-            var foundCommCardsRaw = MutableList<Card?>(5) { null }
-            var foundHoleCardsRaw = MutableList<Card?>(2) { null }
-
-            // A standard Texas Hold'em board has up to 5 community cards.
-            // When drawn fully, the commRect comfortably holds 5 cards side-by-side. 
-            // We divide the zone into 5 equal slots and assign OCR hits to the nearest slot.
-            val expectedCardW = commRect.width() / 5.0f
-            val commSlots = List(5) { i ->
-                android.graphics.Rect(
-                    (commRect.left + i * expectedCardW).toInt(),
-                    commRect.top,
-                    (commRect.left + (i + 1) * expectedCardW).toInt(),
-                    commRect.bottom
-                )
-            }
-            
-            // Assign each OCR hit to the theoretical slot its center is closest to
-            val elementsBySlot = tempCommCards.groupBy { elem ->
-                val cx = elem.second.centerX()
-                commSlots.minByOrNull { Math.abs(cx - it.centerX()) }
-            }
-            
-            // Evaluate each slot independently
-            for ((index, slot) in commSlots.withIndex()) {
-                val elementsInSlot = elementsBySlot[slot] ?: emptyList()
-                if (elementsInSlot.isNotEmpty()) {
-                    val ranks = elementsInSlot.map { it.first.rank }
-                    val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
-                    val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    
-                    val suits = elementsInSlot.map { it.first.suit }
-                    val duplicateSuit = suits.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
-                    val finalSuit = duplicateSuit ?: suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    
-                    foundCommCardsRaw[index] = Card(finalRank, finalSuit)
-                }
-            }
-
-            // Hole cards are fixed to exactly 2 cards max.
-            if (tempHoleCards.isNotEmpty()) {
-                val card1Elements = mutableListOf<Pair<Card, android.graphics.Rect>>()
-                val card2Elements = mutableListOf<Pair<Card, android.graphics.Rect>>()
+            fun clusterCards(cards: List<Pair<Card, android.graphics.Rect>>, maxCards: Int, maxDist: Float, regionRect: android.graphics.Rect): MutableList<Card?> {
+                val resultList = MutableList<Card?>(maxCards) { null }
+                if (cards.isEmpty()) return resultList
                 
-                val expectedHoleCardW = holeRect.width() / 2.0f
-                val holeSlots = List(2) { i ->
-                    android.graphics.Rect(
-                        (holeRect.left + (i * expectedHoleCardW)).toInt(),
-                        holeRect.top,
-                        (holeRect.left + ((i + 1) * expectedHoleCardW)).toInt(),
-                        holeRect.bottom
-                    )
-                }
-
-                for (item in tempHoleCards) {
-                    val centerX = item.second.centerX()
-                    val dist0 = Math.abs(centerX - holeSlots[0].centerX())
-                    val dist1 = Math.abs(centerX - holeSlots[1].centerX())
+                val sorted = cards.sortedBy { it.second.centerX() }
+                val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
+                
+                var currentCluster = mutableListOf(sorted[0])
+                for (i in 1 until sorted.size) {
+                    val prevCenter = currentCluster.map { it.second.centerX() }.average()
+                    val currCenter = sorted[i].second.centerX().toDouble()
                     
-                    if (dist0 < dist1) {
-                        card1Elements.add(item)
+                    if (currCenter - prevCenter < maxDist) {
+                        currentCluster.add(sorted[i])
                     } else {
-                        card2Elements.add(item)
+                        clusters.add(currentCluster)
+                        currentCluster = mutableListOf(sorted[i])
                     }
                 }
+                clusters.add(currentCluster)
                 
-                if (card1Elements.isNotEmpty()) {
-                    val ranks = card1Elements.map { it.first.rank }
-                    val finalRank = ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    val suits = card1Elements.map { it.first.suit }
-                    val finalSuit = suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    foundHoleCardsRaw[0] = Card(finalRank, finalSuit)
-                }
+                val slotW = regionRect.width() / maxCards.toFloat()
                 
-                if (card2Elements.isNotEmpty()) {
-                    val ranks = card2Elements.map { it.first.rank }
+                for (cluster in clusters.take(maxCards)) {
+                    val cx = cluster.map { it.second.centerX() }.average()
+                    var bestSlot = ((cx - regionRect.left) / slotW).toInt()
+                    bestSlot = maxOf(0, minOf(maxCards - 1, bestSlot))
+                    
+                    // If slot is taken, find nearest empty slot
+                    if (resultList[bestSlot] != null) {
+                        var altSlot = -1
+                        var minD = Double.MAX_VALUE
+                        for (i in 0 until maxCards) {
+                            if (resultList[i] == null) {
+                                val expectedCx = regionRect.left + (i + 0.5) * slotW
+                                val dist = Math.abs(cx - expectedCx)
+                                if (dist < minD) {
+                                    minD = dist
+                                    altSlot = i
+                                }
+                            }
+                        }
+                        if (altSlot != -1) bestSlot = altSlot
+                    }
+                    
+                    val ranks = cluster.map { it.first.rank }
                     val duplicateRank = ranks.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
                     val finalRank = duplicateRank ?: ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    val suits = card2Elements.map { it.first.suit }
+                    
+                    val suits = cluster.map { it.first.suit }
                     val duplicateSuit = suits.groupBy { it }.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.key else null }
                     val finalSuit = duplicateSuit ?: suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    foundHoleCardsRaw[1] = Card(finalRank, finalSuit)
+                    
+                    resultList[bestSlot] = Card(finalRank, finalSuit)
                 }
+                return resultList
             }
+
+            var foundCommCardsRaw = clusterCards(tempCommCards, 5, commRect.width() / 10.0f, commRect)
+            var foundHoleCardsRaw = clusterCards(tempHoleCards, 2, holeRect.width() / 4.0f, holeRect)
 
             var rawAll = (foundHoleCardsRaw + foundCommCardsRaw).filterNotNull()
             if (rawAll.size != rawAll.toSet().size) {
@@ -673,17 +651,17 @@ class ScreenScanner(
                 val c = raw[i]
                 val r = when (c) {
                     'A' -> Rank.ACE
-                    'K', 'X' -> Rank.KING
-                    'Q', 'D', '0', 'O' -> Rank.QUEEN
-                    'J', 'L', '1', 'I' -> Rank.JACK
-                    '9', 'G' -> Rank.NINE
-                    '8', 'B' -> Rank.EIGHT
+                    'K' -> Rank.KING
+                    'Q' -> Rank.QUEEN
+                    'J' -> Rank.JACK
+                    '9' -> Rank.NINE
+                    '8' -> Rank.EIGHT
                     '7' -> Rank.SEVEN
                     '6' -> Rank.SIX
-                    '5', 'S' -> Rank.FIVE
+                    '5' -> Rank.FIVE
                     '4' -> Rank.FOUR
                     '3' -> Rank.THREE
-                    '2', 'Z' -> Rank.TWO
+                    '2' -> Rank.TWO
                     'T' -> Rank.TEN
                     else -> null
                 }
