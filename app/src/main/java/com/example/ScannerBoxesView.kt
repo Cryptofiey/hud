@@ -47,17 +47,13 @@ class ScannerBoxesView(context: Context) : View(context) {
 
     private val textPaint = Paint().apply {
         color = Color.parseColor("#00FFC8") // Bright Neon Teal/Cyan
-        textSize = 34f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         style = Paint.Style.FILL
-        setShadowLayer(10f, 0f, 0f, Color.parseColor("#FF00FFC8")) // Neon glow
+        // setShadowLayer(10f, 0f, 0f, Color.parseColor("#FF00FFC8")) // Remove shadow for crispness
         isAntiAlias = true
     }
 
     private val textOutlinePaint = Paint().apply {
         color = Color.BLACK
-        textSize = 34f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         style = Paint.Style.STROKE
         strokeWidth = 2f
         isAntiAlias = true
@@ -184,20 +180,33 @@ class ScannerBoxesView(context: Context) : View(context) {
                 box.rect.bottom + offsetY.toInt()
             )
 
-            // Make text match height of the bounding box
-            val boxHeight = actualBox.height().toFloat()
-            val textSz = java.lang.Math.max(1f, boxHeight * 0.95f)
-            textPaint.textSize = textSz
-            textOutlinePaint.textSize = textSz
-
-            val xPos = actualBox.left.toFloat()
-            val yPos = actualBox.bottom.toFloat() - textPaint.descent()
-
             canvas.drawRect(actualBox, profileFillPaint)
             canvas.drawRect(actualBox, profileBoxPaint)
-            // Just draw the box and the text recognized inside it
-            canvas.drawText(box.label, xPos, yPos, textOutlinePaint)
-            canvas.drawText(box.label, xPos, yPos, textPaint)
+            
+            val boxWidth = actualBox.width().toFloat()
+            val boxHeight = actualBox.height().toFloat()
+            if (boxWidth > 0 && boxHeight > 0 && box.label.isNotEmpty()) {
+                val baseTextSize = 100f
+                textPaint.textSize = baseTextSize
+                textOutlinePaint.textSize = baseTextSize
+                textOutlinePaint.strokeWidth = 3f
+
+                val textW = textPaint.measureText(box.label)
+                val fm = textPaint.fontMetrics
+                val textH = fm.descent - fm.ascent
+
+                val scaleX = boxWidth / textW
+                val scaleY = boxHeight / textH
+
+                canvas.save()
+                canvas.translate(actualBox.left.toFloat(), actualBox.top.toFloat())
+                canvas.scale(scaleX, scaleY)
+                
+                val yBaseline = -fm.ascent
+                canvas.drawText(box.label, 0f, yBaseline, textOutlinePaint)
+                canvas.drawText(box.label, 0f, yBaseline, textPaint)
+                canvas.restore()
+            }
         }
 
         // Draw profile stat highlights if any
@@ -222,16 +231,30 @@ class ScannerBoxesView(context: Context) : View(context) {
             canvas.drawRect(actualBox, profileFillPaint)
             canvas.drawRect(actualBox, profileBoxPaint)
             
+            val boxWidth = actualBox.width().toFloat()
             val boxHeight = actualBox.height().toFloat()
-            val textSz = java.lang.Math.max(1f, boxHeight * 0.95f)
-            textPaint.textSize = textSz
-            textOutlinePaint.textSize = textSz
-            
-            val xPos = actualBox.left.toFloat()
-            val yPos = actualBox.bottom.toFloat() - textPaint.descent()
-            
-            canvas.drawText(box.label, xPos, yPos, textOutlinePaint)
-            canvas.drawText(box.label, xPos, yPos, textPaint)
+            if (boxWidth > 0 && boxHeight > 0 && box.label.isNotEmpty()) {
+                val baseTextSize = 100f
+                textPaint.textSize = baseTextSize
+                textOutlinePaint.textSize = baseTextSize
+                textOutlinePaint.strokeWidth = 3f
+
+                val textW = textPaint.measureText(box.label)
+                val fm = textPaint.fontMetrics
+                val textH = fm.descent - fm.ascent
+
+                val scaleX = boxWidth / textW
+                val scaleY = boxHeight / textH
+
+                canvas.save()
+                canvas.translate(actualBox.left.toFloat(), actualBox.top.toFloat())
+                canvas.scale(scaleX, scaleY)
+                
+                val yBaseline = -fm.ascent
+                canvas.drawText(box.label, 0f, yBaseline, textOutlinePaint)
+                canvas.drawText(box.label, 0f, yBaseline, textPaint)
+                canvas.restore()
+            }
         }
         } catch (e: Throwable) {
             android.util.Log.e("ScannerBoxesView", "Error drawing scanner boxes", e)
