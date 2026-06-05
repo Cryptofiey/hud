@@ -191,8 +191,8 @@ class ScreenScanner(
             history.removeAt(0)
         }
         
-        // If last 2 frames were completely empty, reset history
-        if (history.size >= 2 && history.takeLast(2).all { list -> list.all { it == null } }) {
+        // If last 4 frames were completely empty, reset history
+        if (history.size >= 4 && history.takeLast(4).all { list -> list.all { it == null } }) {
             history.clear()
             confirmed.clear()
             return emptyList()
@@ -547,8 +547,8 @@ class ScreenScanner(
                 }
             }
 
-            var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, confirmedHole, windowSize = 3)
-            var smoothedComm = getSmoothedCards(commHistory, foundCommCardsRaw, confirmedComm, windowSize = 3)
+            var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, confirmedHole, windowSize = 5)
+            var smoothedComm = getSmoothedCards(commHistory, foundCommCardsRaw, confirmedComm, windowSize = 5)
             
             val smoothedAll = (smoothedHole + smoothedComm).filterNotNull()
             if (smoothedAll.size != smoothedAll.toSet().size) {
@@ -642,7 +642,7 @@ class ScreenScanner(
         // Keep only letters, digits, and suit symbols to form a dense string
         val raw = preProcessed.replace(Regex("[^A-Z0-9\u2660\u2663\u2665\u2666]"), "")
             
-        if (raw.length > 6) return emptyList() // Too long to be just 1-2 cards
+        if (raw.length > 8) return emptyList() // Too long to be just 1-2 cards
         if (raw.isEmpty()) return emptyList()
         
         // Block obvious chip stacks or bets
@@ -650,7 +650,7 @@ class ScreenScanner(
         if (noSymbols.matches(Regex(".*\\d{3,}.*"))) return emptyList() // 100, 500 etc.
         // Ignore obvious standalone numbers/stacks
         val digits = raw.count { it.isDigit() }
-        val hasTen = Regex("10|I0|1O|IO|L0|LO|IQ|1Q").containsMatchIn(raw)
+        val hasTen = Regex("10|I0|1O|IO|L0|LO|IQ|1Q|T0|TO").containsMatchIn(raw)
         
         if (digits > 4) return emptyList()
         if (digits > 2 && !hasTen) return emptyList() // E.g., "125", "500", "250" 
@@ -662,7 +662,7 @@ class ScreenScanner(
             // Check for 10 first
             if (i + 1 < raw.length) {
                 val sub = raw.substring(i, i + 2)
-                if (sub == "10" || sub == "I0" || sub == "1O" || sub == "IQ" || sub == "1Q" || sub == "L0" || sub == "LO") {
+                if (sub == "10" || sub == "I0" || sub == "1O" || sub == "IQ" || sub == "1Q" || sub == "L0" || sub == "LO" || sub == "T0" || sub == "TO") {
                     found.add(Rank.TEN)
                     i += 2
                     matched = true
@@ -684,6 +684,7 @@ class ScreenScanner(
                     '4' -> Rank.FOUR
                     '3' -> Rank.THREE
                     '2', 'Z' -> Rank.TWO
+                    'T' -> Rank.TEN
                     else -> null
                 }
                 
