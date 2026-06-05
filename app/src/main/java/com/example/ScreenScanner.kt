@@ -597,10 +597,15 @@ class ScreenScanner(
             }
 
             val rawBoxes = if (PokerHudSharedState.showScannerBoxes.value) {
+<<<<<<< HEAD
                 result.textBlocks.flatMap { block ->
                     block.lines.mapNotNull { line ->
                         line.boundingBox?.let { rect -> ScannedBox(rect, line.text) }
                     }
+=======
+                result.textBlocks.mapNotNull { block ->
+                    block.boundingBox?.let { rect -> ScannedBox(rect, block.text) }
+>>>>>>> origin/main
                 }
             } else {
                 null

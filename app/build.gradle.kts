@@ -134,6 +134,7 @@ dependencies {
   "ksp"(libs.moshi.kotlin.codegen)
 }
 
+<<<<<<< HEAD
 tasks.register<Exec>("githubSync") {
     // We execute the bash script at the root
     commandLine("bash", "${rootProject.rootDir}/scripts/github_sync.sh")
@@ -147,4 +148,6 @@ afterEvaluate {
     }
 }
 
+=======
+>>>>>>> origin/main
 

@@ -46,15 +46,27 @@ class ScannerBoxesView(context: Context) : View(context) {
     }
 
     private val textPaint = Paint().apply {
+<<<<<<< HEAD
         color = Color.parseColor("#8000FFC8") // Semi-transparent cyan
         style = Paint.Style.FILL
+=======
+        color = Color.parseColor("#00FFC8") // Bright Neon Teal/Cyan
+        style = Paint.Style.FILL
+        // setShadowLayer(10f, 0f, 0f, Color.parseColor("#FF00FFC8")) // Remove shadow for crispness
+>>>>>>> origin/main
         isAntiAlias = true
     }
 
     private val textOutlinePaint = Paint().apply {
+<<<<<<< HEAD
         color = Color.parseColor("#40000000") // Very light dark stroke
         style = Paint.Style.STROKE
         strokeWidth = 1f
+=======
+        color = Color.BLACK
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+>>>>>>> origin/main
         isAntiAlias = true
     }
 
@@ -112,6 +124,7 @@ class ScannerBoxesView(context: Context) : View(context) {
         super.onDraw(canvas)
 
         try {
+<<<<<<< HEAD
             val location = IntArray(2)
             this.getLocationOnScreen(location)
             val viewOffsetX = location[0]
@@ -123,6 +136,10 @@ class ScannerBoxesView(context: Context) : View(context) {
                 // Log dimensions
                 android.util.Log.d("ScannerBoxesView", "onDraw size: w=$w, h=$h, rawBoxes=${state.rawScannerBoxes?.size}")
             }
+=======
+            val w = width.toFloat()
+            val h = height.toFloat()
+>>>>>>> origin/main
 
             // Draw grid if enabled
             if (showGrid) {
@@ -157,10 +174,17 @@ class ScannerBoxesView(context: Context) : View(context) {
                     val box = opp.boundingBox
                     if (box != null) {
                         val actualBox = Rect(
+<<<<<<< HEAD
                             box.left + offsetX.toInt() - viewOffsetX,
                             box.top + offsetY.toInt() - viewOffsetY,
                             box.right + offsetX.toInt() - viewOffsetX,
                             box.bottom + offsetY.toInt() - viewOffsetY
+=======
+                            box.left + offsetX.toInt(),
+                            box.top + offsetY.toInt(),
+                            box.right + offsetX.toInt(),
+                            box.bottom + offsetY.toInt()
+>>>>>>> origin/main
                         )
                         
                         if (opp.isActive) {
@@ -182,10 +206,17 @@ class ScannerBoxesView(context: Context) : View(context) {
         // Draw generic scanned text boxes continuously
         state.rawScannerBoxes?.forEach { box ->
             val actualBox = Rect(
+<<<<<<< HEAD
                 box.rect.left + offsetX.toInt() - viewOffsetX,
                 box.rect.top + offsetY.toInt() - viewOffsetY,
                 box.rect.right + offsetX.toInt() - viewOffsetX,
                 box.rect.bottom + offsetY.toInt() - viewOffsetY
+=======
+                box.rect.left + offsetX.toInt(),
+                box.rect.top + offsetY.toInt(),
+                box.rect.right + offsetX.toInt(),
+                box.rect.bottom + offsetY.toInt()
+>>>>>>> origin/main
             )
 
             canvas.drawRect(actualBox, profileFillPaint)
@@ -197,6 +228,10 @@ class ScannerBoxesView(context: Context) : View(context) {
                 val baseTextSize = 100f
                 textPaint.textSize = baseTextSize
                 textOutlinePaint.textSize = baseTextSize
+<<<<<<< HEAD
+=======
+                textOutlinePaint.strokeWidth = 3f
+>>>>>>> origin/main
 
                 val textW = textPaint.measureText(box.label)
                 val fm = textPaint.fontMetrics
@@ -219,10 +254,17 @@ class ScannerBoxesView(context: Context) : View(context) {
         // Draw profile stat highlights if any
         state.profileBoxes?.forEach { box ->
             val actualBox = Rect(
+<<<<<<< HEAD
                 box.rect.left + offsetX.toInt() - viewOffsetX,
                 box.rect.top + offsetY.toInt() - viewOffsetY,
                 box.rect.right + offsetX.toInt() - viewOffsetX,
                 box.rect.bottom + offsetY.toInt() - viewOffsetY
+=======
+                box.rect.left + offsetX.toInt(),
+                box.rect.top + offsetY.toInt(),
+                box.rect.right + offsetX.toInt(),
+                box.rect.bottom + offsetY.toInt()
+>>>>>>> origin/main
             )
             
             // Skip false-positive boxes detected in the top-left area
@@ -241,6 +283,7 @@ class ScannerBoxesView(context: Context) : View(context) {
             val boxWidth = actualBox.width().toFloat()
             val boxHeight = actualBox.height().toFloat()
             if (boxWidth > 0 && boxHeight > 0 && box.label.isNotEmpty()) {
+<<<<<<< HEAD
                 val predictedTextSize = boxHeight * 0.85f
                 textPaint.textSize = predictedTextSize
                 textOutlinePaint.textSize = predictedTextSize
@@ -252,6 +295,28 @@ class ScannerBoxesView(context: Context) : View(context) {
 
                 canvas.drawText(box.label, actualBox.left.toFloat(), textY, textOutlinePaint)
                 canvas.drawText(box.label, actualBox.left.toFloat(), textY, textPaint)
+=======
+                val baseTextSize = 100f
+                textPaint.textSize = baseTextSize
+                textOutlinePaint.textSize = baseTextSize
+                textOutlinePaint.strokeWidth = 3f
+
+                val textW = textPaint.measureText(box.label)
+                val fm = textPaint.fontMetrics
+                val textH = fm.descent - fm.ascent
+
+                val scaleX = boxWidth / textW
+                val scaleY = boxHeight / textH
+
+                canvas.save()
+                canvas.translate(actualBox.left.toFloat(), actualBox.top.toFloat())
+                canvas.scale(scaleX, scaleY)
+                
+                val yBaseline = -fm.ascent
+                canvas.drawText(box.label, 0f, yBaseline, textOutlinePaint)
+                canvas.drawText(box.label, 0f, yBaseline, textPaint)
+                canvas.restore()
+>>>>>>> origin/main
             }
         }
         } catch (e: Throwable) {
