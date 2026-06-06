@@ -482,7 +482,7 @@ class PokerHudService : Service() {
                 AndroidColor.parseColor("#FFD500F9"), // Neon Purple Outline
                 dpToPx(28f).toFloat() // Reduced Cutout radius for player avatar to avoid overflow
             )
-            val shadowParams = FrameLayout.LayoutParams((resources.displayMetrics.widthPixels * 56 / 100), WindowManager.LayoutParams.WRAP_CONTENT)
+            val shadowParams = FrameLayout.LayoutParams((resources.displayMetrics.widthPixels * 75 / 100), WindowManager.LayoutParams.WRAP_CONTENT)
             layoutParams = shadowParams
         }
         expandedLayout = expanded
@@ -536,9 +536,9 @@ class PokerHudService : Service() {
             textSize = 8f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF1976D2"), 4f)
-            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
-            layoutParams = LinearLayout.LayoutParams(dpToPx(56f), dpToPx(24f)).apply {
-                setMargins(0, 0, dpToPx(2f), 0)
+            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(24f)).apply {
+                setMargins(0, 0, dpToPx(3f), 0)
             }
             setOnClickListener {
                 if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
@@ -574,9 +574,9 @@ class PokerHudService : Service() {
             text = "РАМКИ"
             textSize = 8f
             setTextColor(AndroidColor.WHITE)
-            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
-            layoutParams = LinearLayout.LayoutParams(dpToPx(46f), dpToPx(24f)).apply {
-                setMargins(0, 0, dpToPx(2f), 0)
+            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(24f)).apply {
+                setMargins(0, 0, dpToPx(3f), 0)
             }
             setOnClickListener {
                 PokerHudSharedState.showScannerBoxes.value = !PokerHudSharedState.showScannerBoxes.value
@@ -595,9 +595,9 @@ class PokerHudService : Service() {
             textSize = 8f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF37474F"), 4f)
-            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
-            layoutParams = LinearLayout.LayoutParams(dpToPx(46f), dpToPx(24f)).apply {
-                setMargins(0, 0, dpToPx(2f), 0)
+            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(24f)).apply {
+                setMargins(0, 0, dpToPx(3f), 0)
             }
             setOnClickListener {
                 PokerHudSharedState.isControllerHudMinimized.value = true
@@ -609,8 +609,10 @@ class PokerHudService : Service() {
             textSize = 8f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF1E88E5"), 4f)
-            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
-            layoutParams = LinearLayout.LayoutParams(dpToPx(42f), dpToPx(24f))
+            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(24f)).apply {
+                setMargins(0, 0, dpToPx(1f), 0)
+            }
             setOnClickListener {
                 stopFloatingOverlay()
                 stopSelf()
@@ -899,14 +901,14 @@ class PokerHudService : Service() {
                 emojiContainer.visibility = View.VISIBLE
             } else {
                 // Horizontal state
-                params.width = resources.displayMetrics.widthPixels / 2
+                params.width = resources.displayMetrics.widthPixels * 75 / 100
                 params.height = WindowManager.LayoutParams.WRAP_CONTENT
                 if (params.x < 0) {
                     params.x = dpToPx(2f)
                 }
                 
                 expanded.layoutParams = (expanded.layoutParams as FrameLayout.LayoutParams).apply {
-                    width = resources.displayMetrics.widthPixels / 2
+                    width = resources.displayMetrics.widthPixels * 75 / 100
                     height = FrameLayout.LayoutParams.WRAP_CONTENT
                 }
                 
@@ -1094,6 +1096,10 @@ class PokerHudService : Service() {
 
         // 6. OBSERVE PROGRAMMATIC CONTROL COMMANDS VIA BROADCASTS (e.g. from Termux scripts)
         var backgroundSimulationJob: kotlinx.coroutines.Job? = null
+        var lastLaunchedHero1: Card? = null
+        var lastLaunchedHero2: Card? = null
+        var lastLaunchedBoard: List<Card?> = emptyList()
+        var lastLaunchedOpponentsActive: List<Boolean> = emptyList()
         serviceScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             PokerHudSharedState.externalActions.collect { action ->
                 if (action is ExternalAction.UpdateCards) {
@@ -1234,10 +1240,21 @@ class PokerHudService : Service() {
                         }
                     }
                     
-                    backgroundSimulationJob?.cancel()
-                    backgroundSimulationJob = serviceScope.launch(kotlinx.coroutines.Dispatchers.Default) {
-                        try {
-                            kotlinx.coroutines.delay(100)
+                    val simulationKeyChanged = lastLaunchedHero1 != updatedState.heroCard1 ||
+                            lastLaunchedHero2 != updatedState.heroCard2 ||
+                            lastLaunchedBoard != updatedState.board ||
+                            lastLaunchedOpponentsActive != updatedState.opponents.map { it.isActive }
+
+                    if (simulationKeyChanged || backgroundSimulationJob == null || backgroundSimulationJob?.isActive != true) {
+                        backgroundSimulationJob?.cancel()
+                        lastLaunchedHero1 = updatedState.heroCard1
+                        lastLaunchedHero2 = updatedState.heroCard2
+                        lastLaunchedBoard = updatedState.board
+                        lastLaunchedOpponentsActive = updatedState.opponents.map { it.isActive }
+
+                        backgroundSimulationJob = serviceScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                            try {
+                                kotlinx.coroutines.delay(200)
                             // Reduced sim size for persistent HUD for battery/thermal/memory safety
                             val simSize = 1200 
                             
@@ -1338,6 +1355,7 @@ class PokerHudService : Service() {
                         } catch (e: Exception) {
                             android.util.Log.e("PokerHudService", "Simulation err", e)
                         }
+                    }
                     }
                 } else if (action is ExternalAction.ControlHud) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -1963,8 +1981,8 @@ class PokerHudService : Service() {
     private fun showProbsOverlay() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
-            dpToPx(144f),
-            dpToPx(155f),
+            dpToPx(160f),
+            dpToPx(210f),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -2339,8 +2357,8 @@ class PokerHudService : Service() {
                 }
             } else {
                 val isAdvVisible = PokerHudSharedState.showActionAdvisor.value
-                params.width = dpToPx(144f)
-                params.height = if (isAdvVisible) dpToPx(155f) else dpToPx(100f)
+                params.width = dpToPx(160f)
+                params.height = if (isAdvVisible) dpToPx(210f) else dpToPx(110f)
                 if (params.x < 0) {
                     params.x = dpToPx(100f)
                 }
