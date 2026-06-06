@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Poker Equity HUD</string>
+    <string name="accessibility_description">Enables the Poker HUD Automated clicker/swiper script agent to perform safe screen actions.</string>
+</resources>
