@@ -387,13 +387,9 @@ class PokerHudService : Service() {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
-<<<<<<< HEAD
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_SECURE,
-=======
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
->>>>>>> origin/main
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -1062,7 +1058,6 @@ class PokerHudService : Service() {
                 windowManager?.removeView(v)
                 windowManager?.addView(v, p)
             }
-<<<<<<< HEAD
             floatingCommOverlay?.let { v ->
                 val p = v.layoutParams
                 windowManager?.removeView(v)
@@ -1073,8 +1068,6 @@ class PokerHudService : Service() {
                 windowManager?.removeView(v)
                 windowManager?.addView(v, p)
             }
-=======
->>>>>>> origin/main
         } catch (e: Exception) {
             android.util.Log.e("PokerHudService", "bringHudsToFront error", e)
         }
@@ -1225,12 +1218,8 @@ class PokerHudService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-<<<<<<< HEAD
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                     WindowManager.LayoutParams.FLAG_SECURE,
-=======
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
->>>>>>> origin/main
             android.graphics.PixelFormat.TRANSLUCENT
         )
         val view = ScannerBoxesView(this)
@@ -1291,13 +1280,9 @@ class PokerHudService : Service() {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
-<<<<<<< HEAD
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_SECURE,
-=======
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
->>>>>>> origin/main
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -1440,13 +1425,9 @@ class PokerHudService : Service() {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
-<<<<<<< HEAD
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_SECURE,
-=======
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
->>>>>>> origin/main
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -1584,13 +1565,9 @@ class PokerHudService : Service() {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
-<<<<<<< HEAD
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_SECURE,
-=======
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
->>>>>>> origin/main
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START

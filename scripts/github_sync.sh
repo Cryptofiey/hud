@@ -26,7 +26,6 @@ git config --global user.email "bot@aistudio.com"
 git config --global user.name "AI Studio Bot"
 git config --global pull.rebase false
 
-<<<<<<< HEAD
 # Heal git if corrupted or re-init if missing
 if [ -d ".git" ]; then
   if ! git status &>/dev/null; then
@@ -34,10 +33,6 @@ if [ -d ".git" ]; then
     rm -rf .git
   fi
 fi
-
-=======
-# Init git if necessary
->>>>>>> origin/main
 if [ ! -d ".git" ]; then
   git init
 fi
@@ -54,11 +49,7 @@ git fetch origin main 2>/dev/null
 
 # Attempt an initial local commit so merge works
 git add -A
-<<<<<<< HEAD
 git commit --allow-empty -m "Auto sync from AI Studio Build"
-=======
-git commit -m "Auto sync from AI Studio Build" || echo "No local changes to commit"
->>>>>>> origin/main
 git branch -M main
 
 # Merge remote changes if they exist (to not overwrite previous state without history)
