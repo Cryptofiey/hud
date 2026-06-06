@@ -1651,7 +1651,7 @@ class PokerHudService : Service() {
         }
         
         val title = TextView(this).apply {
-            text = "LHD | Поб: 0.0% | L3: 0.0%"
+            text = "LHD | L1: 0.0% | L2: 0.0% | L3: 0.0%"
             setTextColor(AndroidColor.parseColor("#FFFFD54F"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -1862,8 +1862,15 @@ class PokerHudService : Service() {
                         }
                     }
 
-                    if (heroCardsChanged || boardChanged || simResultChanged || opponentsChanged) {
-                        title.text = "LHD | Поб: $currentWin | L3: $currentAdvWin"
+                    if (heroCardsChanged || boardChanged || simResultChanged || opponentsChanged || recommendationChanged) {
+                        val l3Val = if (state.heroCard1 != null && state.heroCard2 != null && advRec != null) {
+                            String.format(Locale.US, "%.0f%%", advRec.confidence)
+                        } else if (state.heroCard1 != null && state.heroCard2 != null) {
+                            "Ждем..."
+                        } else {
+                            "0.0%"
+                        }
+                        title.text = "LHD | L1: $currentWin | L2: $currentAdvWin | L3: $l3Val"
                         txtCardsBoard.text = android.text.Html.fromHtml("<b>Карты:</b> $currentCardsStr | <b>Борд:</b> $currentBoardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
                         txtHandRankStrength.text = "Комбо: $currentHandRank | Сила: $currentStrength"
                     }
