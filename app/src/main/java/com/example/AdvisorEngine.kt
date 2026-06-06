@@ -725,6 +725,131 @@ object AdvisorEngine {
 
         return Recommendation(action, confidence, explanation)
     }
+
+    fun computeRecommendationL4(
+        heroCard1: Card?,
+        heroCard2: Card?,
+        board: List<Card?>,
+        potSize: Float,
+        heroBet: Float,
+        opponents: List<OpponentState>,
+        activeOpponentsCount: Int,
+        simResult: SimulationResult?,
+        settings: AdvisorSettings,
+        position: TablePosition,
+        stage: TournamentStage,
+        smallBlind: Float,
+        bigBlind: Float,
+        heroStack: Float,
+        lastActions: String = ""
+    ): Recommendation {
+        if (heroCard1 == null || heroCard2 == null) {
+            return Recommendation("FOLD", 100f, "Enter cards.")
+        }
+
+        // Get L3 advanced recommendation to base our adaptive adjustments upon
+        val baseL3 = computeRecommendationAdvanced(
+            heroCard1, heroCard2, board, potSize, heroBet,
+            opponents, activeOpponentsCount, simResult, settings, position, stage, smallBlind, bigBlind, heroStack, lastActions
+        )
+
+        // Find the main active opponent
+        val opponent = opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
+        val stats = opponent?.stats
+
+        var action = baseL3.action
+        var confidence = baseL3.confidence
+        var customExplanation = "DNA: Адаптивное решение"
+
+        if (stats != null) {
+            val vpip = stats.histVpip ?: stats.vpip
+            val pfr = stats.histPfr ?: stats.pfr
+            val wtsd = stats.histWtsd ?: 30f
+            val wsd = stats.histWsd ?: 50f
+
+            // Define "Creature's DNA" profile subtypes of active opponent:
+            val dnaProfile = when {
+                vpip > 50f && pfr < 10f -> "Гиппопотам" // Super loose-passive whale
+                vpip > 35f && pfr > 25f -> "Гепард" // Aggressive maniac
+                vpip < 16f && pfr < 12f -> "Хамелеон" // Passive Nit
+                wtsd > 35f && wsd < 45f -> "Обезьяна" // Showdown-station
+                else -> "Акула" // Decent regular
+            }
+
+            // High pressure or short stack DNA response
+            val bigBlinds = heroStack / (bigBlind.coerceAtLeast(1f))
+            if (bigBlinds < 15f && board.filterNotNull().isEmpty()) {
+                // Short stack preflop Push/Fold DNA adjustment
+                val sklansky = getSklanskyGroup(heroCard1, heroCard2)
+                if (sklansky <= 4) {
+                    action = "RAISE" // Recommend raise/push instead of call
+                    confidence = 90f
+                    customExplanation = "DNA ($dnaProfile): Пуш/Фолд при <15бб"
+                } else if (action == "CALL") {
+                    action = "FOLD"
+                    confidence = 85f
+                    customExplanation = "DNA ($dnaProfile): Сброс маргинала при <15бб"
+                } else {
+                    customExplanation = "DNA ($dnaProfile): Сброс рук"
+                }
+            } else {
+                // Preflop / Postflop adaptive meta game behavior matching DNA profiles:
+                when (dnaProfile) {
+                    "Гиппопотам" -> {
+                        // Against passive whale, NEVER bluff, only thin value raise/bet
+                        if (action == "RAISE" || action == "BET") {
+                            confidence = (confidence + 15f).coerceAtMost(98f)
+                            customExplanation = "DNA: Велью-напор против Гиппопотама"
+                        } else if (action == "CALL" && baseL3.confidence < 60f) {
+                            action = "FOLD"
+                            confidence = 75f
+                            customExplanation = "DNA: Сброс маргинальной руки против Гиппопотама"
+                        }
+                    }
+                    "Гепард" -> {
+                        // cheetah is super aggressive. Let's trap / check-call or let him bluff
+                        if (action == "BET" && board.filterNotNull().isNotEmpty()) {
+                            action = "CHECK"
+                            confidence = 80f
+                            customExplanation = "DNA: Ловушка (чекаем вперед Гепарда)"
+                        } else if (action == "CALL") {
+                            confidence = (confidence + 10f).coerceAtMost(95f)
+                            customExplanation = "DNA: Взвешенный прием ставки Гепарда"
+                        }
+                    }
+                    "Хамелеон" -> {
+                        // Chameleon is tight-passive. Overfold to his bets, steal his blinds.
+                        if (action == "RAISE" && baseL3.confidence < 65f) {
+                            action = "FOLD"
+                            confidence = 90f
+                            customExplanation = "DNA: Падаем под силу Хамелеона"
+                        } else if (action == "CHECK" && position == TablePosition.BTN) {
+                            action = "BET"
+                            confidence = 70f
+                            customExplanation = "DNA: Кража пота у Хамелеона"
+                        }
+                    }
+                    "Обезьяна" -> {
+                        // Showdown station, loves calling. Don't pull big multi-street bluffs.
+                        if (action == "BET" && baseL3.confidence < 60f) {
+                            action = "CHECK"
+                            confidence = 85f
+                            customExplanation = "DNA: Обезьяну не напугать, чек"
+                        } else {
+                            customExplanation = "DNA: Чистый велью-пуш в Обезьяну"
+                        }
+                    }
+                    else -> {
+                        customExplanation = "DNA (Акула): Адаптивный сбалансированный эксплойт"
+                    }
+                }
+            }
+        } else {
+            customExplanation = "DNA: Ожидание профиля (Баланс)"
+        }
+
+        return Recommendation(action, confidence, customExplanation)
+    }
 }
 
 // 5. High-performance clean player stats and preferences database helper (SharedPreferences)

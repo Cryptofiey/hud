@@ -51,6 +51,7 @@ data class PokerUiState(
     val advancedSimulationResult: SimulationResult? = null,
     val l2Recommendation: Recommendation? = null,
     val advancedRecommendation: Recommendation? = null,
+    val l4Recommendation: Recommendation? = null,
     val profileBoxes: List<ScannedBox>? = null,
     val rawScannerBoxes: List<ScannedBox>? = null
 ) {
@@ -428,6 +429,23 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     heroStack = state.heroStack
                 )
 
+                val l4Recommendation = AdvisorEngine.computeRecommendationL4(
+                    heroCard1 = state.heroCard1,
+                    heroCard2 = state.heroCard2,
+                    board = state.board,
+                    potSize = state.potSize,
+                    heroBet = state.heroBet,
+                    opponents = state.opponents,
+                    activeOpponentsCount = state.opponents.count { it.isActive },
+                    simResult = advResult,
+                    settings = state.settings,
+                    position = state.position,
+                    stage = state.stage,
+                    smallBlind = state.smallBlind,
+                    bigBlind = state.bigBlind,
+                    heroStack = state.heroStack
+                )
+
                 withContext(Dispatchers.Main) {
                     _uiState.update {
                         it.copy(
@@ -436,7 +454,8 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                             recommendation = recommendation,
                             advancedSimulationResult = advResult,
                             l2Recommendation = l2Recommendation,
-                            advancedRecommendation = advRecommendation
+                            advancedRecommendation = advRecommendation,
+                            l4Recommendation = l4Recommendation
                         )
                     }
                 }
