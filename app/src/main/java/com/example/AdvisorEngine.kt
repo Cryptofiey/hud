@@ -173,7 +173,55 @@ object AdvisorEngine {
         }
     }
 
-    // 4. Advanced Advisor Recommendation Engine (Intellectual solver port)
+    // Mathematical Chen Formula Score for Pocket Cards Evaluation
+    fun getChenScore(card1: Card, card2: Card): Float {
+        val r1 = maxOf(card1.rank.value, card2.rank.value)
+        val r2 = minOf(card1.rank.value, card2.rank.value)
+        val suited = card1.suit == card2.suit
+        val pair = r1 == r2
+
+        // 1. Base points based on the highest card
+        var points = when (r1) {
+            14 -> 10.0f // Ace
+            13 -> 8.0f  // King
+            12 -> 7.0f  // Queen
+            11 -> 6.0f  // Jack
+            else -> r1.toFloat() / 2.0f
+        }
+
+        // 2. Adjustments for pocket pairs
+        if (pair) {
+            points *= 2.0f
+            if (points < 5.0f) points = 5.0f // Minimum pair score threshold
+        }
+
+        // 3. Suited cards bonus
+        if (suited) {
+            points += 2.0f
+        }
+
+        // 4. Closeness gap penalty
+        val gap = r1 - r2 - 1
+        if (gap > 0) {
+            val penalty = when (gap) {
+                1 -> -1.0f
+                2 -> -2.0f
+                3 -> -4.0f
+                else -> -5.0f
+            }
+            points += penalty
+        }
+
+        // 5. Straight connector bonus (small adjustments for no-gap/1-gap and card < Q)
+        if (!pair && gap <= 1 && r1 < 12) {
+            points += 1.0f
+        }
+
+        // Standard maximum Chen points is 20 (AAs). Normalize points from [-5.0f, 20.0f] range to [0.0f, 1.0f] range
+        return (points / 20.0f).coerceIn(0.0f, 1.0f)
+    }
+
+    // 4. Level 1 (L1) Bare GTO Mathematical Recommendation (Extracts truth from 4 independent sources)
     fun computeRecommendation(
         heroCard1: Card?,
         heroCard2: Card?,
@@ -200,26 +248,26 @@ object AdvisorEngine {
             )
         }
 
-        // 0. Local weights definition to prevent singleton state leakage across calls
-        var weightEquity = 0.30f
-        var weightSklansky = 0.20f
-        var weightStats = 0.20f
-        val weightPosition = 0.15f
-        val weightStage = 0.10f
-        val weightDynamic = 0.05f
+        // 1. Source 1: Monte Carlo Simulation clean equity (EV_Sim)
+        val s1 = (simResult?.heroWinPct ?: 0f) / 100f
 
-        // 1. Extract equity
-        val equity = (simResult?.heroWinPct ?: 0f) / 100f
-
-        // 2. Equity factor (Fixed inverse/inverted step gap bug where 0.66 equity performed worse than 0.64)
-        val equityFactor: Float = when {
-            equity > 0.65f -> 0.5f + ((equity - 0.65f) / 0.35f) * 0.5f
-            equity > 0.50f -> 0.5f
-            equity > 0.35f -> 0.25f
-            else -> 0.0f
+        // 2. Source 2: Sklansky-Malmuth Group EV (EV_Sklansky)
+        val sklanskyGroup = getSklanskyGroup(heroCard1, heroCard2)
+        val s2 = when (sklanskyGroup) {
+            1 -> 1.0f
+            2 -> 0.9f
+            3 -> 0.8f
+            4 -> 0.65f
+            5 -> 0.5f
+            6 -> 0.35f
+            7 -> 0.2f
+            else -> 0.1f
         }
 
-        // Calculate bets
+        // 3. Source 3: Mathematical Chen Formula Score (EV_Chen)
+        val s3 = getChenScore(heroCard1, heroCard2)
+
+        // Calculate maximum opponent bet & pots
         var maxOpponentBet = 0f
         opponents.filter { it.isActive }.forEach { opp ->
             val pBet = if (settings.usePip) opp.betSize else 0f
@@ -229,206 +277,96 @@ object AdvisorEngine {
         }
         val betToCall = maxOf(0f, maxOpponentBet - heroBet)
         val activePot = potSize + betToCall
-
-        // 3. Pot odds
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
-        val profitableCall = equity > potOdds
 
-        // 4. Sklansky factor
-        val sklanskyGroup = getSklanskyGroup(heroCard1, heroCard2)
-        val sklanskyFactor = when (sklanskyGroup) {
-            1 -> 1.0f
-            2 -> 0.9f
-            3 -> 0.8f
-            4 -> 0.6f
-            5 -> 0.5f
-            6 -> 0.4f
-            7 -> 0.2f
-            else -> 0.1f
+        // 4. Source 4: Pot Odds & Margin Factor (EV_OddsGap)
+        val s4 = if (betToCall > 0f) {
+            val gap = s1 - potOdds
+            ((gap + 1f) / 2f).coerceIn(0f, 1f)
+        } else {
+            (s1 * 1.15f).coerceIn(0f, 1f)
         }
 
-        // 5. Stats factor (Historical Data Filter)
-        var statsFactor = 0.5f
-        if (settings.useAdvancedStats && opponents.isNotEmpty()) {
-            val opponent = opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
-            val profile = opponent?.stats
+        // Pure GTO Math Core - clean of any psychological or position heuristics
+        val l1Score = (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
 
-            if (profile != null) {
-                val useVpip = PokerHudSharedState.useVpipPfrFilter.value
-                val useWsd = PokerHudSharedState.useWsdWtsdFilter.value
+        // Perfect GTO Tighter Standards for Multi-Way fields to avoid equity dilution
+        val isMultiway = activeOpponentsCount >= 2
+        val raiseThreshold = if (isMultiway) 0.68f else 0.60f
+        val betThreshold = if (isMultiway) 0.55f else 0.45f
 
-                val hasHistorical = profile.histVpip != null && useVpip
-                val hasEnoughLocalHands = profile.handsPlayed >= 20
-                
-                if (hasHistorical || hasEnoughLocalHands) {
-                    val vpip = if (useVpip && profile.histVpip != null) profile.histVpip!! / 100f else profile.vpip / 100f
-                    val pfr = if (useVpip && profile.histPfr != null) profile.histPfr!! / 100f else profile.pfr / 100f
-                    
-                    // Specific logic for VPIP and Sklansky relationship:
-                    // If VPIP is very low (tight player), they only play premium hands. We need premium hands to engage.
-                    if (vpip < 0.20f) {
-                        statsFactor = 0.3f
-                    } 
-                    // If VPIP is high (loose player), they play garbage. We can have higher confidence.
-                    else if (vpip > 0.40f) {
-                        statsFactor = 0.8f
-                    }
-                    
-                    // If player folds to C-Bet very rarely (calling station), decrease confidence on bluffs
-                    val foldToCBet = profile.histFoldToCBet?.div(100f) ?: 0.5f
-                    if (foldToCBet < 0.30f && betToCall == 0f) {
-                        statsFactor -= 0.1f // Don't bluff a calling station
-                    } else if (foldToCBet > 0.60f && betToCall == 0f) {
-                        statsFactor += 0.1f // Good target for C-bet squeeze
-                    }
-                    
-                    // WTSD (Went to Showdown) and WSD (Won at Showdown)
-                    val wtsd = if (useWsd && profile.histWtsd != null) profile.histWtsd!! / 100f else 0.30f
-                    val wsd = if (useWsd && profile.histWsd != null) profile.histWsd!! / 100f else 0.50f
-                    
-                    if (wtsd > 0.35f && wsd < 0.45f) {
-                        // Calling station that loses often. Value bet them heavily!
-                        statsFactor += 0.15f 
-                    } else if (wtsd < 0.25f && wsd > 0.55f) {
-                        // Tight player that only bluffs occasionally or only shows nuts
-                        statsFactor -= 0.1f
-                    }
-
-                    // Constrain the statsFactor between 0 and 1
-                    statsFactor = maxOf(0.1f, minOf(0.9f, statsFactor))
-
-                    val handsWeight = if (hasHistorical) 1.0f else minOf(1.0f, profile.handsPlayed / 200.0f)
-                    weightStats = 0.20f + (0.15f * handsWeight)
-                    weightSklansky = 0.20f - (0.05f * handsWeight)
-                    weightEquity = 1.0f - weightStats - weightSklansky - weightPosition - weightStage - weightDynamic
-                }
-            }
-        }
-
-        // 6. Position factor
-        val posIndex = when (position) {
-            TablePosition.SB -> 0
-            TablePosition.BB -> 1
-            TablePosition.UTG -> 2
-            TablePosition.MP -> 3
-            TablePosition.CO -> 4
-            TablePosition.BTN -> 5
-        }
-        val lateThreshold = maxOf(3, activeOpponentsCount - 2)
-        val positionFactor = when {
-            posIndex >= lateThreshold -> 1.0f
-            posIndex >= 3 -> 0.6f
-            posIndex >= 1 -> 0.3f
-            else -> 0.1f
-        }
-
-        // 7. Stage factor
-        val mRatio = if (heroStack > 0 && bigBlind > 0) (heroStack.toFloat() / bigBlind) / maxOf(1, activeOpponentsCount * 2) else 20.0f
-        val blindLevel = when (stage) {
-            TournamentStage.LATE -> 2
-            TournamentStage.MIDDLE -> 1
-            TournamentStage.EARLY -> 0
-        }
-        val stageFactor = when {
-            blindLevel >= 2 || mRatio < 10.0f -> 0.3f
-            blindLevel >= 1 || mRatio < 20.0f -> 0.5f
-            else -> 0.8f
-        }
-
-        // 8. Dynamic factor
-        var dynamicFactor = 0.5f
-        if (lastActions.length >= 3) {
-            var raiseCount = 0
-            for (c in lastActions) {
-                if (c == 'R' || c == 'A') raiseCount++
-            }
-            if (raiseCount >= 3) {
-                dynamicFactor = 0.3f
-            } else if (raiseCount == 0) {
-                dynamicFactor = 0.7f
-            }
-        }
-
-        // 9. Weighted score
-        val rawScore = (equityFactor * weightEquity) +
-                (sklanskyFactor * weightSklansky) +
-                (statsFactor * weightStats) +
-                (positionFactor * weightPosition) +
-                (stageFactor * weightStage) +
-                (dynamicFactor * weightDynamic)
-
-        // 10. Action selection
         val action: String
         val explanation: String
+        val profitableCall = s1 > potOdds
 
         fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
         fun fmt(f: Float): String = String.format(Locale.US, "%.1f", f)
 
+        val mRatio = if (heroStack > 0 && bigBlind > 0) (heroStack.toFloat() / bigBlind) else 20.0f
+
         if (betToCall > 0) {
             if (profitableCall) {
-                // Positively expected call (equity > potOdds)
-                if (equity > 0.65f && rawScore > 0.6f) {
-                    if (mRatio < 10.0f || (equity > 0.80f && positionFactor > 0.5f)) {
+                if (s1 > 0.65f && l1Score > raiseThreshold) {
+                    if (mRatio < 12.0f) {
                         action = "ALL-IN"
-                        explanation = "ОЛЛ-ИН: премиум ${pct(equity)}%, M=${fmt(mRatio)}"
+                        explanation = "ОЛЛ-ИН: превосходное EV ${pct(s1)}% [M=${fmt(mRatio)}]"
                     } else {
                         action = "RAISE"
-                        explanation = "Рейз: премиум эквити ${pct(equity)}%"
+                        explanation = "Рейз: сильное велью-эквити ${pct(s1)}%"
                     }
-                } else if (equity > 0.50f && rawScore > 0.4f && rawScore > 0.5f) {
-                    action = "RAISE"
-                    explanation = "Рейз: выгодно, эквити ${pct(equity)}% > шансы ${pct(potOdds)}%"
                 } else {
                     action = "CALL"
-                    explanation = "Колл: выгодно по шансам, эквити ${pct(equity)}% > шансы ${pct(potOdds)}%"
+                    explanation = "Колл: выгодно по шансам банка, эквити ${pct(s1)}% > шансы ${pct(potOdds)}%"
                 }
             } else {
-                // Unprofitable call based on raw equity (equity <= potOdds)
-                // Fold unless rawScore/hand playability is high (rawScore > 0.5f)
-                if (rawScore > 0.5f && equity > 0.25f) {
-                    if (equity > 0.50f && rawScore > 0.6f) {
+                // Unprofitable call based on raw win percentage. Check if playability score offers GTO defense
+                if (l1Score > 0.52f && s1 > 0.28f) {
+                    if (s1 > 0.45f && l1Score > raiseThreshold) {
                         action = "RAISE"
-                        explanation = "Рейз (полублеф): сильный скор ${pct(rawScore)}, эквити ${pct(equity)}%"
+                        explanation = "Рейз (полублеф): сильная математическая структура, эквити ${pct(s1)}%"
                     } else {
                         action = "CALL"
-                        explanation = "Колл (полублеф): сильная позиция/рука, эквити ${pct(equity)}%"
+                        explanation = "Колл (оборона): высокая играбельность карт, эквити ${pct(s1)}%"
                     }
                 } else {
                     action = "FOLD"
-                    explanation = "Фолд: эквити ${pct(equity)}% < шансы банка ${pct(potOdds)}%"
+                    explanation = "Фолд: математически невыгодно, эквити ${pct(s1)}% < шансы ${pct(potOdds)}%"
                 }
             }
         } else {
-            // No bet to call (betToCall == 0) — We check or bet/raise.
-            if (equity > 0.65f && rawScore > 0.6f) {
-                if (mRatio < 10.0f || (equity > 0.80f && positionFactor > 0.5f)) {
+            // No bet to call (betToCall == 0) -> Check/Bet/Raise solver
+            if (s1 > 0.60f && l1Score > raiseThreshold) {
+                if (mRatio < 12.0f && (s1 > 0.80f || sklanskyGroup <= 2)) {
                     action = "ALL-IN"
-                    explanation = "ОЛЛ-ИН: премиум ${pct(equity)}%, M=${fmt(mRatio)}"
+                    explanation = "ОЛЛ-ИН: математический превосходный пуш, эквити ${pct(s1)}%"
                 } else {
                     action = "RAISE"
-                    explanation = "Рейз: превосходное эквити ${pct(equity)}%"
+                    explanation = "Рейз: велью-агрессия, эквити ${pct(s1)}%"
                 }
-            } else if (equity > 0.50f && rawScore > 0.4f) {
-                action = "RAISE"
-                explanation = "Рейз: хорошее эквити ${pct(equity)}%"
-            } else if (rawScore > 0.5f) {
-                action = "RAISE"
-                explanation = "Рейз (блеф/защита): эквити ${pct(equity)}%, позиция"
+            } else if (s1 > 0.45f && l1Score > betThreshold) {
+                action = "BET"
+                explanation = "Ставка: получено математическое преимущество, эквити ${pct(s1)}%"
+            } else if (l1Score > 0.50f) {
+                action = "BET"
+                explanation = "Ставка (блеф): защита структуры, эквити ${pct(s1)}%"
             } else {
                 action = "CHECK"
-                explanation = "Чек: умеренно, эквити ${pct(equity)}%"
+                explanation = "Чек: ведение банка по шансам, эквити ${pct(s1)}%"
             }
         }
 
+        // Formulate highly detailed explanation with mathematical weights tracking
+        val detailExplanation = "GTO L1: EV[Sim=${pct(s1)}%|Skl=${pct(s2)}%|Chen=${pct(s3)}%|Mrg=${pct(s4)}%] (СрВыч=${pct(l1Score)}%) | $explanation"
+
         val confidence = when(action) {
-            "RAISE", "ALL-IN" -> (((rawScore - 0.4f) / 0.6f) * 100f).coerceIn(0f, 100f)
-            "FOLD" -> (((0.5f - rawScore) / 0.5f) * 100f).coerceIn(0f, 100f)
-            "CALL" -> ((1.0f - kotlin.math.abs(rawScore - 0.45f) / 0.55f) * 100f).coerceIn(0f, 100f)
-            "CHECK" -> ((1.0f - kotlin.math.abs(rawScore - 0.35f) / 0.65f) * 100f).coerceIn(0f, 100f)
+            "RAISE", "ALL-IN" -> (((l1Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
+            "FOLD" -> (((0.5f - l1Score) / 0.5f) * 100f).coerceIn(10f, 98f)
+            "CALL" -> ((1.0f - kotlin.math.abs(l1Score - 0.45f) / 0.55f) * 100f).coerceIn(10f, 98f)
+            "CHECK", "BET" -> ((1.0f - kotlin.math.abs(l1Score - 0.35f) / 0.65f) * 100f).coerceIn(10f, 98f)
             else -> 50f
         }
 
-        return Recommendation(action, confidence, explanation)
+        return Recommendation(action, confidence, detailExplanation)
     }
 
     fun computeRecommendationL2(
