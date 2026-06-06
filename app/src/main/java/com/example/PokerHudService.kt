@@ -94,6 +94,8 @@ object PokerHudSharedState {
     val showProbsBox = MutableStateFlow(true)
     val isProbsHudVertical = MutableStateFlow(false)
     val isProbsHudMinimized = MutableStateFlow(false)
+    val isControllerHudVertical = MutableStateFlow(false)
+    val isControllerHudMinimized = MutableStateFlow(false)
     val isScanning = MutableStateFlow(false)
     val isUserInteracting = MutableStateFlow(false)
     // Modules basic settings
@@ -489,6 +491,19 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
+        val btnSwitchToVert = TextView(this).apply {
+            text = "🔁"
+            textSize = 8f
+            setTextColor(AndroidColor.WHITE)
+            layoutParams = LinearLayout.LayoutParams(dpToPx(18f), dpToPx(18f)).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setMargins(0, 0, dpToPx(4f), 0)
+            }
+            setOnClickListener {
+                PokerHudSharedState.isControllerHudVertical.value = true
+            }
+        }
+
         val readProfileBtn = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "ПРОФИЛЬ"
             textSize = 8f
@@ -550,6 +565,7 @@ class PokerHudService : Service() {
         }
 
         headerRow.addView(txtTitle)
+        headerRow.addView(btnSwitchToVert)
         headerRow.addView(readProfileBtn)
         headerRow.addView(btnMinimize)
         headerRow.addView(btnExit)
@@ -634,83 +650,227 @@ class PokerHudService : Service() {
 
         parentFrame.addView(expanded)
 
-        // 3. SET WINDOW SEAMLESS TOUCH DRAGGING LISTENERS
-        var initialX = 0
-        var initialY = 0
-        var initialTouchX = 0f
-        var initialTouchY = 0f
-
-        val dragListener = View.OnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    notifyInteraction()
-                    initialX = params.x
-                    initialY = params.y
-                    initialTouchX = event.rawX
-                    initialTouchY = event.rawY
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    params.x = initialX + (event.rawX - initialTouchX).toInt()
-                    params.y = initialY + (event.rawY - initialTouchY).toInt()
-                    try {
-                        windowManager?.updateViewLayout(parentFrame, params)
-                    } catch (ignored: Exception) {}
-                    true
-                }
-                else -> false
+        // 2.5 VERTICAL SPECIFIC LAYOUTS FOR CONTROLLER
+        val vertToolbar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dpToPx(2f)
+            }
+            visibility = View.GONE
+        }
+        
+        val btnSwitchToHoriz = TextView(this).apply {
+            text = "🔁"
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            setOnClickListener {
+                PokerHudSharedState.isControllerHudVertical.value = false
             }
         }
+        
+        val btnMiniVert = TextView(this).apply {
+            text = "➖"
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            setOnClickListener {
+                PokerHudSharedState.isControllerHudMinimized.value = true
+            }
+        }
+        
+        val btnCloseVert = TextView(this).apply {
+            text = "❌"
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            setOnClickListener {
+                stopFloatingOverlay()
+                stopSelf()
+            }
+        }
+        vertToolbar.addView(btnSwitchToHoriz)
+        vertToolbar.addView(btnMiniVert)
+        vertToolbar.addView(btnCloseVert)
+        
+        expanded.addView(vertToolbar, 0) // Prepend inside expanded container!
 
-        // Dedicated drag & click-tap detector for the minimized widget badge
-        var miniInitialX = 0
-        var miniInitialY = 0
-        var miniInitialTouchX = 0f
-        var miniInitialTouchY = 0f
-        var miniClickStartTime = 0L
+        val emojiContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dpToPx(4f)
+            }
+            visibility = View.GONE
+        }
 
-        val miniDragListener = View.OnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    notifyInteraction()
-                    miniInitialX = params.x
-                    miniInitialY = params.y
-                    miniInitialTouchX = event.rawX
-                    miniInitialTouchY = event.rawY
-                    miniClickStartTime = System.currentTimeMillis()
-                    true
+        fun createControllerEmojiButton(emoji: String, flow: StateFlow<Boolean>, strokeColorHex: String): TextView {
+            val sizePx = dpToPx(26f)
+            val btn = TextView(this).apply {
+                text = emoji
+                textSize = 11f
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(sizePx, sizePx).apply {
+                    setMargins(0, dpToPx(3f), 0, dpToPx(3f))
                 }
-                MotionEvent.ACTION_MOVE -> {
-                    params.x = miniInitialX + (event.rawX - miniInitialTouchX).toInt()
-                    params.y = miniInitialY + (event.rawY - miniInitialTouchY).toInt()
-                    try {
-                        windowManager?.updateViewLayout(parentFrame, params)
-                    } catch (ignored: Exception) {}
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    val duration = System.currentTimeMillis() - miniClickStartTime
-                    val distanceX = java.lang.Math.abs(event.rawX - miniInitialTouchX)
-                    val distanceY = java.lang.Math.abs(event.rawY - miniInitialTouchY)
-                    if (duration < 280 && distanceX < 15f && distanceY < 15f) {
-                        mini.visibility = View.GONE
-                        expanded.visibility = View.VISIBLE
+                setOnClickListener {
+                    if (flow is MutableStateFlow<Boolean>) {
+                        flow.value = !flow.value
                     }
-                    true
                 }
-                else -> false
+            }
+            serviceScope.launch {
+                flow.collect { active ->
+                    btn.background = createDynamicGlow(active, strokeColorHex)
+                }
+            }
+            return btn
+        }
+
+        val btnProfile = TextView(this).apply {
+            text = "👤"
+            textSize = 11f
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(dpToPx(26f), dpToPx(26f)).apply {
+                setMargins(0, dpToPx(3f), 0, dpToPx(3f))
+            }
+            background = createDynamicGlow(true, "#FFD500F9")
+            setOnClickListener {
+                if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
+                    val originalVisibility = floatingOverlayView?.visibility ?: View.VISIBLE
+                    floatingOverlayView?.visibility = View.INVISIBLE
+                    floatingCommOverlay?.visibility = View.INVISIBLE
+                    floatingHoleOverlay?.visibility = View.INVISIBLE
+                    floatingProbsOverlay?.visibility = View.INVISIBLE
+                    floatingScannerOverlay?.visibility = View.INVISIBLE
+                    
+                    serviceScope.launch {
+                        kotlinx.coroutines.delay(2000)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            floatingOverlayView?.visibility = originalVisibility
+                            updateBoxOverlays()
+                        }
+                    }
+
+                    if (screenScanner != null) {
+                        screenScanner?.requestProfileScan = true
+                    } else {
+                        startForegroundServiceNotification()
+                        val tempScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode, stopAfterProfileScan = true)
+                        tempScanner.start()
+                    }
+                } else {
+                    android.widget.Toast.makeText(this@PokerHudService, "Enable Screen Projection first", android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
-        // Expanded is dragged via the top part or header
-        headerRow.setOnTouchListener(dragListener)
-        // Minimized is fully draggable and clickable
-        mini.setOnTouchListener(miniDragListener)
+        val btnBoard = createControllerEmojiButton("📋", PokerHudSharedState.showCommBox, "#FF2ECC71")
+        val btnCards = createControllerEmojiButton("🎴", PokerHudSharedState.showHoleBox, "#FFF39C12")
+        val btnProbs = createControllerEmojiButton("📊", PokerHudSharedState.showProbsBox, "#FF3498DB")
+        val btnScan = createControllerEmojiButton("🔍", PokerHudSharedState.showScannerBoxes, "#FF9B59B6")
+
+        emojiContainer.addView(btnProfile)
+        emojiContainer.addView(btnBoard)
+        emojiContainer.addView(btnCards)
+        emojiContainer.addView(btnProbs)
+        emojiContainer.addView(btnScan)
+        
+        expanded.addView(emojiContainer)
+
+        val miniHandleView = TextView(this).apply {
+            text = "◀️🕹️"
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setTextColor(AndroidColor.parseColor("#FFD500F9"))
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+            visibility = View.GONE
+        }
+        
+        parentFrame.addView(miniHandleView)
+
+        setupControllerDragListener(parentFrame, params)
+
+        fun applyControllerHudLayoutState() {
+            val isVertical = PokerHudSharedState.isControllerHudVertical.value
+            val isMinimized = PokerHudSharedState.isControllerHudMinimized.value
+
+            if (isMinimized) {
+                params.width = dpToPx(55f)
+                params.height = dpToPx(55f)
+                params.x = -dpToPx(38f) // SNAP to left edge, half-hidden!
+                
+                parentFrame.background = createBackgroundDrawable(AndroidColor.parseColor("#CC111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FFD500F9"))
+                
+                mini.visibility = View.GONE
+                expanded.visibility = View.GONE
+                miniHandleView.visibility = View.VISIBLE
+            } else if (isVertical) {
+                params.width = dpToPx(55f)
+                params.height = dpToPx(240f) // Tall vertical shape
+                if (params.x < 0) {
+                    params.x = dpToPx(10f)
+                }
+                
+                parentFrame.background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FFD500F9"))
+                
+                mini.visibility = View.GONE
+                expanded.visibility = View.VISIBLE
+                miniHandleView.visibility = View.GONE
+                
+                headerRow.visibility = View.GONE
+                divider1.visibility = View.GONE
+                toggles1.visibility = View.GONE
+                
+                vertToolbar.visibility = View.VISIBLE
+                emojiContainer.visibility = View.VISIBLE
+            } else {
+                params.width = resources.displayMetrics.widthPixels / 2
+                params.height = WindowManager.LayoutParams.WRAP_CONTENT
+                if (params.x < 0) {
+                    params.x = dpToPx(2f)
+                }
+                
+                parentFrame.background = null // Let expanded cutout background drawable render
+                expanded.background = CutoutBackgroundDrawable(
+                    AndroidColor.parseColor("#F50D151D"), // Dark blue/grey high contrast
+                    dpToPx(10f).toFloat(),
+                    dpToPx(2f).toFloat(),
+                    AndroidColor.parseColor("#FFD500F9"), // Neon Purple Outline
+                    dpToPx(40f).toFloat() // Cutout radius for player avatar
+                )
+                
+                mini.visibility = View.GONE
+                expanded.visibility = View.VISIBLE
+                miniHandleView.visibility = View.GONE
+                
+                headerRow.visibility = View.VISIBLE
+                divider1.visibility = View.VISIBLE
+                toggles1.visibility = View.VISIBLE
+                
+                vertToolbar.visibility = View.GONE
+                emojiContainer.visibility = View.GONE
+            }
+            try {
+                windowManager?.updateViewLayout(parentFrame, params)
+            } catch (ignored: Exception) {}
+        }
+
+        serviceScope.launch {
+            combine(
+                PokerHudSharedState.isControllerHudVertical,
+                PokerHudSharedState.isControllerHudMinimized
+            ) { isVertical, isMinimized ->
+                Pair(isVertical, isMinimized)
+            }.collect {
+                applyControllerHudLayoutState()
+            }
+        }
 
         // 4. SET GONE TOGGLES
         btnMinimize.setOnClickListener {
-            expanded.visibility = View.GONE
-            mini.visibility = View.VISIBLE
+            PokerHudSharedState.isControllerHudMinimized.value = true
         }
 
         btnExit.setOnClickListener {
@@ -1278,6 +1438,61 @@ class PokerHudService : Service() {
         }
     }
 
+    private fun setupControllerDragListener(view: View, params: WindowManager.LayoutParams) {
+        var initialX = 0
+        var initialY = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+        var clickStartTime = 0L
+
+        view.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    notifyInteraction()
+                    initialX = params.x
+                    initialY = params.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    clickStartTime = System.currentTimeMillis()
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val deltaX = (event.rawX - initialTouchX).toInt()
+                    val deltaY = (event.rawY - initialTouchY).toInt()
+                    
+                    val isMinimized = PokerHudSharedState.isControllerHudMinimized.value
+                    if (isMinimized) {
+                        params.x = -dpToPx(38f)
+                        params.y = initialY + deltaY
+                    } else {
+                        val isEnd = (params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.END || (params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.RIGHT
+                        val isBottom = (params.gravity and Gravity.VERTICAL_GRAVITY_MASK) == Gravity.BOTTOM
+                        
+                        params.x = if (isEnd) initialX - deltaX else initialX + deltaX
+                        params.y = if (isBottom) initialY - deltaY else initialY + deltaY
+                    }
+                    try {
+                        windowManager?.updateViewLayout(view, params)
+                    } catch (ignored: Exception) {}
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val duration = System.currentTimeMillis() - clickStartTime
+                    val distanceX = Math.abs(event.rawX - initialTouchX)
+                    val distanceY = Math.abs(event.rawY - initialTouchY)
+                    if (duration < 250 && distanceX < 12 && distanceY < 12) {
+                        val isMinimized = PokerHudSharedState.isControllerHudMinimized.value
+                        if (isMinimized) {
+                            PokerHudSharedState.isControllerHudMinimized.value = false
+                        }
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
     private fun setupResizeListener(resizer: View, parentFrame: View, params: WindowManager.LayoutParams, minWidth: Int, minHeight: Int) {
         var initialWidth = 0
         var initialHeight = 0
@@ -1676,8 +1891,8 @@ class PokerHudService : Service() {
     private fun showProbsOverlay() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
-            dpToPx(200f),
-            dpToPx(195f),
+            dpToPx(176f),
+            dpToPx(155f),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -1698,7 +1913,7 @@ class PokerHudService : Service() {
                 dpToPx(10f).toFloat(), 
                 dpToPx(1.5f).toFloat(), 
                 AndroidColor.parseColor("#FF4CAF50"),
-                dpToPx(42f).toFloat(),
+                dpToPx(32f).toFloat(),
                 CutoutCorner.BOTTOM_LEFT
             )
             setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
@@ -1755,7 +1970,7 @@ class PokerHudService : Service() {
         val infoRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(42f) // Align with other views
+                leftMargin = dpToPx(32f) // Align with other views
                 rightMargin = dpToPx(16f) // Keep clear of close button
             }
         }
@@ -1819,7 +2034,7 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
                 topMargin = dpToPx(2f)
                 bottomMargin = dpToPx(2f)
-                leftMargin = dpToPx(42f) // Keep clear of cutout
+                leftMargin = dpToPx(32f) // Keep clear of cutout
                 rightMargin = dpToPx(4f)
             }
         }
@@ -1830,7 +2045,7 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
                 topMargin = dpToPx(2f)
                 bottomMargin = dpToPx(2f)
-                leftMargin = dpToPx(42f) // Keep clear of cutout
+                leftMargin = dpToPx(32f) // Keep clear of cutout
                 rightMargin = dpToPx(20f) // Keep clear of close button area
             }
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
@@ -1844,7 +2059,7 @@ class PokerHudService : Service() {
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(42f)
+                leftMargin = dpToPx(32f)
                 rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(1.5f)
             }
@@ -1856,7 +2071,7 @@ class PokerHudService : Service() {
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(42f)
+                leftMargin = dpToPx(32f)
                 rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(1.5f)
             }
@@ -1868,7 +2083,7 @@ class PokerHudService : Service() {
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(42f)
+                leftMargin = dpToPx(32f)
                 rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(1.5f)
             }
@@ -1880,7 +2095,7 @@ class PokerHudService : Service() {
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(42f)
+                leftMargin = dpToPx(32f)
                 rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(1.5f)
             }
@@ -1892,7 +2107,7 @@ class PokerHudService : Service() {
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(42f)
+                leftMargin = dpToPx(32f)
                 rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(4f)
             }
@@ -2071,8 +2286,9 @@ class PokerHudService : Service() {
                     rightMargin = 0
                 }
             } else {
-                params.width = dpToPx(200f)
-                params.height = dpToPx(210f)
+                val isAdvVisible = PokerHudSharedState.showActionAdvisor.value
+                params.width = dpToPx(176f)
+                params.height = if (isAdvVisible) dpToPx(155f) else dpToPx(100f)
                 if (params.x < 0) {
                     params.x = dpToPx(100f)
                 }
@@ -2082,7 +2298,7 @@ class PokerHudService : Service() {
                     dpToPx(10f).toFloat(), 
                     dpToPx(1.5f).toFloat(), 
                     AndroidColor.parseColor("#FF4CAF50"),
-                    dpToPx(42f).toFloat(),
+                    dpToPx(32f).toFloat(),
                     CutoutCorner.BOTTOM_LEFT
                 )
                 
@@ -2098,7 +2314,6 @@ class PokerHudService : Service() {
                 
                 infoRow.visibility = View.VISIBLE
                 
-                val isAdvVisible = PokerHudSharedState.showActionAdvisor.value
                 advDivider.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
                 scrollAdvisor.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
                 
@@ -2106,7 +2321,7 @@ class PokerHudService : Service() {
                 equalizer.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
                     topMargin = dpToPx(2f)
                     bottomMargin = dpToPx(2f)
-                    leftMargin = dpToPx(42f)
+                    leftMargin = dpToPx(32f)
                     rightMargin = dpToPx(4f)
                 }
             }
