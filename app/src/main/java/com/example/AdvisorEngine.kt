@@ -173,14 +173,6 @@ object AdvisorEngine {
         }
     }
 
-    // Variables mapping from Java implementation
-    private var weightEquity = 0.30f
-    private var weightSklansky = 0.20f
-    private var weightStats = 0.20f
-    private var weightPosition = 0.15f
-    private var weightStage = 0.10f
-    private var weightDynamic = 0.05f
-
     // 4. Advanced Advisor Recommendation Engine (Intellectual solver port)
     fun computeRecommendation(
         heroCard1: Card?,
@@ -208,12 +200,20 @@ object AdvisorEngine {
             )
         }
 
+        // 0. Local weights definition to prevent singleton state leakage across calls
+        var weightEquity = 0.30f
+        var weightSklansky = 0.20f
+        var weightStats = 0.20f
+        val weightPosition = 0.15f
+        val weightStage = 0.10f
+        val weightDynamic = 0.05f
+
         // 1. Extract equity
         val equity = (simResult?.heroWinPct ?: 0f) / 100f
 
-        // 2. Equity factor
+        // 2. Equity factor (Fixed inverse/inverted step gap bug where 0.66 equity performed worse than 0.64)
         val equityFactor: Float = when {
-            equity > 0.65f -> minOf(1.0f, (equity - 0.65f) / 0.35f)
+            equity > 0.65f -> 0.5f + ((equity - 0.65f) / 0.35f) * 0.5f
             equity > 0.50f -> 0.5f
             equity > 0.35f -> 0.25f
             else -> 0.0f
@@ -364,51 +364,67 @@ object AdvisorEngine {
         fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
         fun fmt(f: Float): String = String.format(Locale.US, "%.1f", f)
 
-        when {
-            betToCall > 0 && !profitableCall && rawScore < 0.35f -> {
-                action = "FOLD"
-                explanation = "Фолд: эквити ${pct(equity)}% < шансы банка ${pct(potOdds)}%"
+        if (betToCall > 0) {
+            if (profitableCall) {
+                // Positively expected call (equity > potOdds)
+                if (equity > 0.65f && rawScore > 0.6f) {
+                    if (mRatio < 10.0f || (equity > 0.80f && positionFactor > 0.5f)) {
+                        action = "ALL-IN"
+                        explanation = "ОЛЛ-ИН: премиум ${pct(equity)}%, M=${fmt(mRatio)}"
+                    } else {
+                        action = "RAISE"
+                        explanation = "Рейз: премиум эквити ${pct(equity)}%"
+                    }
+                } else if (equity > 0.50f && rawScore > 0.4f && rawScore > 0.5f) {
+                    action = "RAISE"
+                    explanation = "Рейз: выгодно, эквити ${pct(equity)}% > шансы ${pct(potOdds)}%"
+                } else {
+                    action = "CALL"
+                    explanation = "Колл: выгодно по шансам, эквити ${pct(equity)}% > шансы ${pct(potOdds)}%"
+                }
+            } else {
+                // Unprofitable call based on raw equity (equity <= potOdds)
+                // Fold unless rawScore/hand playability is high (rawScore > 0.5f)
+                if (rawScore > 0.5f && equity > 0.25f) {
+                    if (equity > 0.50f && rawScore > 0.6f) {
+                        action = "RAISE"
+                        explanation = "Рейз (полублеф): сильный скор ${pct(rawScore)}, эквити ${pct(equity)}%"
+                    } else {
+                        action = "CALL"
+                        explanation = "Колл (полублеф): сильная позиция/рука, эквити ${pct(equity)}%"
+                    }
+                } else {
+                    action = "FOLD"
+                    explanation = "Фолд: эквити ${pct(equity)}% < шансы банка ${pct(potOdds)}%"
+                }
             }
-            equity > 0.65f && rawScore > 0.6f -> {
+        } else {
+            // No bet to call (betToCall == 0) — We check or bet/raise.
+            if (equity > 0.65f && rawScore > 0.6f) {
                 if (mRatio < 10.0f || (equity > 0.80f && positionFactor > 0.5f)) {
                     action = "ALL-IN"
                     explanation = "ОЛЛ-ИН: премиум ${pct(equity)}%, M=${fmt(mRatio)}"
                 } else {
                     action = "RAISE"
-                    explanation = "Рейз: эквити ${pct(equity)}%"
+                    explanation = "Рейз: превосходное эквити ${pct(equity)}%"
                 }
-            }
-            equity > 0.50f && rawScore > 0.4f -> {
-                if (betToCall > 0 && profitableCall && rawScore > 0.5f) {
-                    action = "RAISE"
-                    explanation = "Рейз: выгодно, эквити ${pct(equity)}%"
-                } else if (betToCall > 0) {
-                    action = "CALL"
-                    explanation = "Колл: маргинально ${pct(equity)}%"
-                } else {
-                    action = "CHECK"
-                    explanation = "Чек: умеренно ${pct(equity)}%"
-                }
-            }
-            betToCall > 0 && rawScore < 0.3f -> {
-                action = "FOLD"
-                explanation = "Фолд: слабо ${pct(equity)}%"
-            }
-            betToCall > 0 -> {
-                action = "CALL"
-                explanation = "Колл: маргинально, эквити ${pct(equity)}%"
-            }
-            else -> {
+            } else if (equity > 0.50f && rawScore > 0.4f) {
+                action = "RAISE"
+                explanation = "Рейз: хорошее эквити ${pct(equity)}%"
+            } else if (rawScore > 0.5f) {
+                action = "RAISE"
+                explanation = "Рейз (блеф/защита): эквити ${pct(equity)}%, позиция"
+            } else {
                 action = "CHECK"
-                explanation = "Чек: ${pct(equity)}% эквити"
+                explanation = "Чек: умеренно, эквити ${pct(equity)}%"
             }
         }
 
         val confidence = when(action) {
-            "RAISE", "ALL-IN" -> ((rawScore - 0.5f) / 0.5f).coerceAtLeast(0f) * 100f
-            "FOLD" -> ((0.3f - rawScore) / 0.3f).coerceAtLeast(0f) * 100f
-            "CALL" -> (1.0f - kotlin.math.abs(rawScore - 0.5f) / 0.5f).coerceAtLeast(0f) * 100f
-            "CHECK" -> if (rawScore < 0.3f) ((0.3f - rawScore)/0.3f).coerceAtLeast(0f) * 100f else (1.0f - kotlin.math.abs(rawScore - 0.5f) / 0.5f).coerceAtLeast(0f) * 100f
+            "RAISE", "ALL-IN" -> (((rawScore - 0.4f) / 0.6f) * 100f).coerceIn(0f, 100f)
+            "FOLD" -> (((0.5f - rawScore) / 0.5f) * 100f).coerceIn(0f, 100f)
+            "CALL" -> ((1.0f - kotlin.math.abs(rawScore - 0.45f) / 0.55f) * 100f).coerceIn(0f, 100f)
+            "CHECK" -> ((1.0f - kotlin.math.abs(rawScore - 0.35f) / 0.65f) * 100f).coerceIn(0f, 100f)
             else -> 50f
         }
 
