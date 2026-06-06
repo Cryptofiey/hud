@@ -1088,8 +1088,6 @@ class PokerHudService : Service() {
         addRect(floatingOverlayView)
         addRect(floatingProbsOverlay)
         addRect(floatingAdvisorOverlay)
-        addRect(floatingCommOverlay)
-        addRect(floatingHoleOverlay)
         
         return rects
     }

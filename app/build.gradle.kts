@@ -18,7 +18,7 @@ android {
     // Auto-versioning for GitHub Actions / Obtainium
     val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
     versionCode = runNumber
-    versionName = "0.0.$runNumber"
+    versionName = "1.0.$runNumber"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
