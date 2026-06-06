@@ -30,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -91,6 +92,8 @@ object PokerHudSharedState {
     val showCommBox = MutableStateFlow(true)
     val showHoleBox = MutableStateFlow(true)
     val showProbsBox = MutableStateFlow(true)
+    val isProbsHudVertical = MutableStateFlow(false)
+    val isProbsHudMinimized = MutableStateFlow(false)
     val isScanning = MutableStateFlow(false)
     val isUserInteracting = MutableStateFlow(false)
     // Modules basic settings
@@ -342,6 +345,21 @@ class PokerHudService : Service() {
         }
     }
 
+    private fun createDynamicGlow(active: Boolean, strokeColorHex: String): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            if (active) {
+                val cleanedColor = strokeColorHex.removePrefix("#").removePrefix("FF")
+                val coloredBackHex = "#3F$cleanedColor"
+                setColor(AndroidColor.parseColor(coloredBackHex))
+                setStroke(dpToPx(1.5f), AndroidColor.parseColor(strokeColorHex))
+            } else {
+                setColor(AndroidColor.parseColor("#22666666"))
+                setStroke(dpToPx(1f), AndroidColor.parseColor("#44888888"))
+            }
+        }
+    }
+
     private fun formatCardColoredText(card: Card?): String {
         if (card == null) return "?"
         val suitChar = when (card.suit) {
@@ -578,30 +596,35 @@ class PokerHudService : Service() {
         }
         this.togglesRow1 = toggles1
 
-        fun createToggleButton(icon: String, initialState: Boolean, onChange: (Boolean) -> Unit): TextView {
-            return TextView(this).apply {
+        fun createToggleButton(icon: String, flow: StateFlow<Boolean>): TextView {
+            val tv = TextView(this).apply {
                 text = icon
                 textSize = 10f
                 gravity = Gravity.CENTER
                 setTextColor(AndroidColor.WHITE)
-                background = createBackgroundDrawable(if (initialState) AndroidColor.parseColor("#FFD500F9") else AndroidColor.parseColor("#FF37474F"), 6f)
+                background = createBackgroundDrawable(if (flow.value) AndroidColor.parseColor("#FFD500F9") else AndroidColor.parseColor("#FF37474F"), 6f)
                 setPadding(0, dpToPx(4f), 0, dpToPx(4f))
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                     setMargins(dpToPx(2f), 0, dpToPx(2f), 0)
                 }
-                var state = initialState
                 setOnClickListener {
-                    state = !state
-                    background = createBackgroundDrawable(if (state) AndroidColor.parseColor("#FFD500F9") else AndroidColor.parseColor("#FF37474F"), 6f)
-                    onChange(state)
+                    if (flow is MutableStateFlow<Boolean>) {
+                        flow.value = !flow.value
+                    }
                 }
             }
+            serviceScope.launch {
+                flow.collect { active ->
+                    tv.background = createBackgroundDrawable(if (active) AndroidColor.parseColor("#FFD500F9") else AndroidColor.parseColor("#FF37474F"), 6f)
+                }
+            }
+            return tv
         }
 
-        val commCheckBox = createToggleButton("Борд", PokerHudSharedState.showCommBox.value) { PokerHudSharedState.showCommBox.value = it }
-        val holeCheckBox = createToggleButton("Карты", PokerHudSharedState.showHoleBox.value) { PokerHudSharedState.showHoleBox.value = it }
-        val probsCheckBox = createToggleButton("Статы", PokerHudSharedState.showProbsBox.value) { PokerHudSharedState.showProbsBox.value = it }
-        val scannerCheckBox = createToggleButton("Рамки", PokerHudSharedState.showScannerBoxes.value) { PokerHudSharedState.showScannerBoxes.value = it }
+        val commCheckBox = createToggleButton("Борд", PokerHudSharedState.showCommBox)
+        val holeCheckBox = createToggleButton("Карты", PokerHudSharedState.showHoleBox)
+        val probsCheckBox = createToggleButton("Статы", PokerHudSharedState.showProbsBox)
+        val scannerCheckBox = createToggleButton("Рамки", PokerHudSharedState.showScannerBoxes)
         
         toggles1.addView(commCheckBox)
         toggles1.addView(holeCheckBox)
@@ -1205,6 +1228,7 @@ class PokerHudService : Service() {
         var initialY = 0
         var initialTouchX = 0f
         var initialTouchY = 0f
+        var clickStartTime = 0L
 
         view.setOnTouchListener { _, event ->
             when (event.action) {
@@ -1214,20 +1238,39 @@ class PokerHudService : Service() {
                     initialY = params.y
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
+                    clickStartTime = System.currentTimeMillis()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val deltaX = (event.rawX - initialTouchX).toInt()
                     val deltaY = (event.rawY - initialTouchY).toInt()
                     
-                    val isEnd = (params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.END || (params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.RIGHT
-                    val isBottom = (params.gravity and Gravity.VERTICAL_GRAVITY_MASK) == Gravity.BOTTOM
-                    
-                    params.x = if (isEnd) initialX - deltaX else initialX + deltaX
-                    params.y = if (isBottom) initialY - deltaY else initialY + deltaY
+                    val isMinimized = PokerHudSharedState.isProbsHudMinimized.value
+                    if (isMinimized) {
+                        params.x = -dpToPx(38f)
+                        params.y = initialY + deltaY
+                    } else {
+                        val isEnd = (params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.END || (params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.RIGHT
+                        val isBottom = (params.gravity and Gravity.VERTICAL_GRAVITY_MASK) == Gravity.BOTTOM
+                        
+                        params.x = if (isEnd) initialX - deltaX else initialX + deltaX
+                        params.y = if (isBottom) initialY - deltaY else initialY + deltaY
+                    }
                     try {
                         windowManager?.updateViewLayout(view, params)
                     } catch (ignored: Exception) {}
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val duration = System.currentTimeMillis() - clickStartTime
+                    val distanceX = Math.abs(event.rawX - initialTouchX)
+                    val distanceY = Math.abs(event.rawY - initialTouchY)
+                    if (duration < 250 && distanceX < 12 && distanceY < 12) {
+                        val isMinimized = PokerHudSharedState.isProbsHudMinimized.value
+                        if (isMinimized) {
+                            PokerHudSharedState.isProbsHudMinimized.value = false
+                        }
+                    }
                     true
                 }
                 else -> false
@@ -1678,6 +1721,36 @@ class PokerHudService : Service() {
             setColorFilter(AndroidColor.parseColor("#888888"))
             setOnClickListener { PokerHudSharedState.showProbsBox.value = false }
         }
+
+        // Horizontal toolbar additions for switching layout / minimizing
+        val minimizeBtnHorizontal = TextView(this).apply {
+            text = "➖"
+            textSize = 8f
+            setTextColor(AndroidColor.parseColor("#888888"))
+            layoutParams = FrameLayout.LayoutParams(dpToPx(14f), dpToPx(14f)).apply {
+                gravity = Gravity.TOP or Gravity.END
+                topMargin = dpToPx(2f)
+                rightMargin = dpToPx(20f)
+            }
+            setOnClickListener {
+                PokerHudSharedState.isProbsHudVertical.value = true
+                PokerHudSharedState.isProbsHudMinimized.value = true
+            }
+        }
+        
+        val toggleBtnHorizontal = TextView(this).apply {
+            text = "🔁"
+            textSize = 8f
+            setTextColor(AndroidColor.parseColor("#888888"))
+            layoutParams = FrameLayout.LayoutParams(dpToPx(14f), dpToPx(14f)).apply {
+                gravity = Gravity.TOP or Gravity.END
+                topMargin = dpToPx(2f)
+                rightMargin = dpToPx(38f)
+            }
+            setOnClickListener {
+                PokerHudSharedState.isProbsHudVertical.value = true
+            }
+        }
         
         val infoRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1842,11 +1915,219 @@ class PokerHudService : Service() {
         scrollAdvisor.addView(advVert)
         
         mainVert.addView(scrollAdvisor)
+
+        // Vertical specific layouts
+        val vertToolbar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dpToPx(2f)
+            }
+            visibility = View.GONE
+        }
         
+        val btnSwitchToHoriz = TextView(this).apply {
+            text = "🔁"
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            setOnClickListener {
+                PokerHudSharedState.isProbsHudVertical.value = false
+            }
+        }
+        
+        val btnMiniVert = TextView(this).apply {
+            text = "➖"
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            setOnClickListener {
+                PokerHudSharedState.isProbsHudMinimized.value = true
+            }
+        }
+        
+        val btnCloseVert = TextView(this).apply {
+            text = "❌"
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            setOnClickListener {
+                PokerHudSharedState.showProbsBox.value = false
+            }
+        }
+        vertToolbar.addView(btnSwitchToHoriz)
+        vertToolbar.addView(btnMiniVert)
+        vertToolbar.addView(btnCloseVert)
+        
+        mainVert.addView(vertToolbar, 0)
+
+        val emojiContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dpToPx(4f)
+            }
+            visibility = View.GONE
+        }
+
+        fun createEmojiButton(emoji: String, flow: StateFlow<Boolean>, strokeColorHex: String): TextView {
+            val sizePx = dpToPx(26f)
+            val btn = TextView(this).apply {
+                text = emoji
+                textSize = 11f
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(sizePx, sizePx).apply {
+                    setMargins(0, dpToPx(3f), 0, dpToPx(3f))
+                }
+                setOnClickListener {
+                    if (flow is MutableStateFlow<Boolean>) {
+                        flow.value = !flow.value
+                    }
+                }
+            }
+            serviceScope.launch {
+                flow.collect { active ->
+                    btn.background = createDynamicGlow(active, strokeColorHex)
+                }
+            }
+            return btn
+        }
+
+        val btnBoard = createEmojiButton("📋", PokerHudSharedState.showCommBox, "#FF2ECC71")
+        val btnCards = createEmojiButton("🎴", PokerHudSharedState.showHoleBox, "#FFF39C12")
+        val btnAdv = createEmojiButton("📊", PokerHudSharedState.showActionAdvisor, "#FF3498DB")
+        val btnScan = createEmojiButton("🔍", PokerHudSharedState.showScannerBoxes, "#FF9B59B6")
+        val btnRobot = createEmojiButton("🤖", RobotPlayer.isRobotModeEnabled, "#FF00E676")
+
+        emojiContainer.addView(btnBoard)
+        emojiContainer.addView(btnCards)
+        emojiContainer.addView(btnAdv)
+        emojiContainer.addView(btnScan)
+        emojiContainer.addView(btnRobot)
+
+        mainVert.addView(emojiContainer)
+
+        val miniHandleView = TextView(this).apply {
+            text = "◀️📊"
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setTextColor(AndroidColor.parseColor("#FF00FFCC"))
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+            visibility = View.GONE
+        }
+
         content.addView(mainVert)
         content.addView(closeBtn)
+        content.addView(minimizeBtnHorizontal)
+        content.addView(toggleBtnHorizontal)
+        
         frame.addView(content)
+        frame.addView(miniHandleView)
+        
         setupDragListener(frame, params)
+        
+        fun applyHudLayoutState() {
+            val isVertical = PokerHudSharedState.isProbsHudVertical.value
+            val isMinimized = PokerHudSharedState.isProbsHudMinimized.value
+
+            if (isMinimized) {
+                params.width = dpToPx(55f)
+                params.height = dpToPx(55f)
+                params.x = -dpToPx(38f) // SNAP to left edge, half-hidden!
+                
+                frame.background = createBackgroundDrawable(AndroidColor.parseColor("#CC111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FF4CAF50"))
+                
+                content.visibility = View.GONE
+                mainVert.visibility = View.GONE
+                miniHandleView.visibility = View.VISIBLE
+            } else if (isVertical) {
+                params.width = dpToPx(55f)
+                params.height = dpToPx(270f)
+                if (params.x < 0) {
+                    params.x = dpToPx(10f)
+                }
+                
+                frame.background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FF4CAF50"))
+                
+                content.visibility = View.VISIBLE
+                mainVert.visibility = View.VISIBLE
+                closeBtn.visibility = View.GONE
+                toggleBtnHorizontal.visibility = View.GONE
+                minimizeBtnHorizontal.visibility = View.GONE
+                miniHandleView.visibility = View.GONE
+                
+                infoRow.visibility = View.GONE
+                advDivider.visibility = View.GONE
+                scrollAdvisor.visibility = View.GONE
+                
+                vertToolbar.visibility = View.VISIBLE
+                emojiContainer.visibility = View.VISIBLE
+                
+                equalizer.isVertical = true
+                equalizer.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(55f)).apply {
+                    topMargin = dpToPx(4f)
+                    bottomMargin = dpToPx(4f)
+                    leftMargin = 0
+                    rightMargin = 0
+                }
+            } else {
+                params.width = dpToPx(200f)
+                params.height = dpToPx(210f)
+                if (params.x < 0) {
+                    params.x = dpToPx(100f)
+                }
+                
+                frame.background = CutoutBackgroundDrawable(
+                    AndroidColor.parseColor("#E6111C24"), 
+                    dpToPx(10f).toFloat(), 
+                    dpToPx(1.5f).toFloat(), 
+                    AndroidColor.parseColor("#FF4CAF50"),
+                    dpToPx(42f).toFloat(),
+                    CutoutCorner.BOTTOM_LEFT
+                )
+                
+                content.visibility = View.VISIBLE
+                mainVert.visibility = View.VISIBLE
+                closeBtn.visibility = View.VISIBLE
+                toggleBtnHorizontal.visibility = View.VISIBLE
+                minimizeBtnHorizontal.visibility = View.VISIBLE
+                miniHandleView.visibility = View.GONE
+                
+                vertToolbar.visibility = View.GONE
+                emojiContainer.visibility = View.GONE
+                
+                infoRow.visibility = View.VISIBLE
+                
+                val isAdvVisible = PokerHudSharedState.showActionAdvisor.value
+                advDivider.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
+                scrollAdvisor.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
+                
+                equalizer.isVertical = false
+                equalizer.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
+                    topMargin = dpToPx(2f)
+                    bottomMargin = dpToPx(2f)
+                    leftMargin = dpToPx(42f)
+                    rightMargin = dpToPx(4f)
+                }
+            }
+            
+            try {
+                windowManager?.updateViewLayout(frame, params)
+            } catch (ignored: Exception) {}
+        }
+
+        serviceScope.launch {
+            combine(
+                PokerHudSharedState.isProbsHudVertical,
+                PokerHudSharedState.isProbsHudMinimized,
+                PokerHudSharedState.showActionAdvisor
+            ) { isVertical, isMinimized, showAdv ->
+                Triple(isVertical, isMinimized, showAdv)
+            }.collect {
+                applyHudLayoutState()
+            }
+        }
+
         try {
             windowManager?.addView(frame, params)
             floatingProbsOverlay = frame

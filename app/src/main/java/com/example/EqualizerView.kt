@@ -37,6 +37,12 @@ class EqualizerView(context: Context) : View(context) {
         typeface = android.graphics.Typeface.DEFAULT_BOLD
     }
 
+    var isVertical: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     fun updateState(newState: EqualizerState) {
         state = newState
         invalidate()
@@ -49,22 +55,85 @@ class EqualizerView(context: Context) : View(context) {
         val h = height.toFloat()
         if (w == 0f || h == 0f) return
 
-        val gap = w * 0.02f
-        val blockWidth = (w - gap * 3) / 4f
+        if (!isVertical) {
+            val gap = w * 0.02f
+            val blockWidth = (w - gap * 3) / 4f
 
-        // Draw L1 (Math)
-        drawBlock(canvas, 0f, blockWidth, h, state.l1Fill, state.l1Color, "L1")
+            // Draw L1 (Math)
+            drawBlock(canvas, 0f, blockWidth, h, state.l1Fill, state.l1Color, "L1")
 
-        // Draw L2 (Table Data)
-        drawBlock(canvas, blockWidth + gap, blockWidth, h, state.l2Fill, state.l2Color, "L2")
+            // Draw L2 (Table Data)
+            drawBlock(canvas, blockWidth + gap, blockWidth, h, state.l2Fill, state.l2Color, "L2")
 
-        // Draw L3 (Profiles - custom segments)
-        val l3Left = (blockWidth + gap) * 2
-        drawL3Block(canvas, l3Left, blockWidth, h, state.l3Segments)
+            // Draw L3 (Profiles - custom segments)
+            val l3Left = (blockWidth + gap) * 2
+            drawL3Block(canvas, l3Left, blockWidth, h, state.l3Segments)
 
-        // Draw L4 (Robot)
-        val l4Left = (blockWidth + gap) * 3
-        drawBlock(canvas, l4Left, blockWidth, h, state.l4Fill, state.l4Color, "L4")
+            // Draw L4 (Robot)
+            val l4Left = (blockWidth + gap) * 3
+            drawBlock(canvas, l4Left, blockWidth, h, state.l4Fill, state.l4Color, "L4")
+        } else {
+            val gap = h * 0.02f
+            val blockHeight = (h - gap * 3) / 4f
+
+            drawBlockVertical(canvas, 0f, w, blockHeight, state.l1Fill, state.l1Color, "L1")
+            drawBlockVertical(canvas, blockHeight + gap, w, blockHeight, state.l2Fill, state.l2Color, "L2")
+            val l3Top = (blockHeight + gap) * 2
+            drawL3BlockVertical(canvas, l3Top, w, blockHeight, state.l3Segments)
+            val l4Top = (blockHeight + gap) * 3
+            drawBlockVertical(canvas, l4Top, w, blockHeight, state.l4Fill, state.l4Color, "L4")
+        }
+    }
+
+    private fun drawBlockVertical(canvas: Canvas, top: Float, width: Float, height: Float, fillPct: Float, fillColor: Int, label: String) {
+        val bottom = top + height
+        
+        // Background
+        val bgRect = RectF(0f, top, width, bottom)
+        canvas.drawRoundRect(bgRect, 3f, 3f, bgPaint)
+
+        // Fill
+        val fillHeight = height * fillPct.coerceIn(0f, 1f)
+        if (fillHeight > 0) {
+            val fillRect = RectF(0f, bottom - fillHeight, width, bottom)
+            fillPaint.color = fillColor
+            canvas.drawRoundRect(fillRect, 3f, 3f, fillPaint)
+        }
+        
+        // Label shadow
+        textPaint.color = Color.BLACK
+        canvas.drawText(label, width / 2f + 1f, top + height / 2f + textPaint.textSize / 3f + 1f, textPaint)
+        // Label
+        textPaint.color = Color.WHITE
+        canvas.drawText(label, width / 2f, top + height / 2f + textPaint.textSize / 3f, textPaint)
+    }
+
+    private fun drawL3BlockVertical(canvas: Canvas, top: Float, width: Float, height: Float, segments: List<Int>) {
+        val bottom = top + height
+        // Background
+        val bgRect = RectF(0f, top, width, bottom)
+        canvas.drawRoundRect(bgRect, 3f, 3f, bgPaint)
+
+        val segmentCount = segments.size
+        if (segmentCount > 0) {
+            val segGap = 1.5f
+            val segWidth = (width - segGap * (segmentCount - 1)) / segmentCount
+            
+            for (i in 0 until segmentCount) {
+                val segLeft = i * (segWidth + segGap)
+                val segRight = segLeft + segWidth
+                val segRect = RectF(segLeft, top + 1f, segRight, bottom - 1f)
+                
+                fillPaint.color = segments[i]
+                canvas.drawRoundRect(segRect, 1.5f, 1.5f, fillPaint)
+            }
+        }
+        
+        val label = "L3"
+        textPaint.color = Color.BLACK
+        canvas.drawText(label, width / 2f + 1f, top + height / 2f + textPaint.textSize / 3f + 1f, textPaint)
+        textPaint.color = Color.WHITE
+        canvas.drawText(label, width / 2f, top + height / 2f + textPaint.textSize / 3f, textPaint)
     }
 
     private fun drawBlock(canvas: Canvas, left: Float, width: Float, height: Float, fillPct: Float, fillColor: Int, label: String) {
