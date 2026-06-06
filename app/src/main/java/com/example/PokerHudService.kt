@@ -1333,6 +1333,7 @@ class PokerHudService : Service() {
                 gravity = Gravity.CENTER_VERTICAL or Gravity.END
             }
             setShadowLayer(4f, 0f, 2f, AndroidColor.BLACK)
+            visibility = View.GONE // Hide completely so it does not interfere with OCR/Scanning
         }
         commTxt = txtCardsInfo
 
@@ -1347,6 +1348,7 @@ class PokerHudService : Service() {
         val resizeBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_crop)
             setColorFilter(AndroidColor.parseColor("#90CAF9"))
+            alpha = 0.10f // Make it extremely faint so it won't obstruct cards OCR and suit detection
             layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
             }
@@ -1448,6 +1450,7 @@ class PokerHudService : Service() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            visibility = View.GONE // Hide completely from the card scanning window area
         }
 
         val spacerTitle = View(this).apply {
@@ -1477,6 +1480,7 @@ class PokerHudService : Service() {
                 gravity = Gravity.CENTER_VERTICAL or Gravity.END
             }
             setShadowLayer(4f, 0f, 2f, AndroidColor.BLACK)
+            visibility = View.GONE // Hide completely so it does not interfere with OCR/Scanning
         }
         holeTxt = txtCardsInfo
 
@@ -1491,6 +1495,7 @@ class PokerHudService : Service() {
         val resizeBtn = ImageView(this).apply {
             setImageResource(android.R.drawable.ic_menu_crop)
             setColorFilter(AndroidColor.parseColor("#90CAF9"))
+            alpha = 0.10f // Make it extremely faint so it won't obstruct cards OCR and suit detection
             layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
             }
@@ -1583,6 +1588,7 @@ class PokerHudService : Service() {
         val mainVert = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+            setPadding(dpToPx(6f), dpToPx(5f), dpToPx(6f), dpToPx(5f))
         }
         
         val closeBtn = ImageView(this).apply {
@@ -1597,28 +1603,18 @@ class PokerHudService : Service() {
         }
         
         val infoRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        }
-        
-        val leftInfoCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        
-        val rightInfoCol = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                rightMargin = dpToPx(20f) // Keep clear of close button
-                leftMargin = dpToPx(4f)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                rightMargin = dpToPx(16f) // Keep clear of close button
             }
         }
-
+        
         val title = TextView(this).apply {
             text = "LHD | Поб: 0.0% | L3: 0.0%"
             setTextColor(AndroidColor.parseColor("#FFFFD54F"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         
         // Info Slot Content
@@ -1626,37 +1622,34 @@ class PokerHudService : Service() {
             text = "Карты: -- | Борд: --"
             setTextColor(AndroidColor.parseColor("#FFD54F"))
             textSize = 8f
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dpToPx(2f)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dpToPx(1.5f)
             }
         }
-        
-        leftInfoCol.addView(title)
-        leftInfoCol.addView(txtCardsBoard)
 
         val txtHandRankStrength = TextView(this).apply {
             text = "Комбо: -- | Сила: --"
             setTextColor(AndroidColor.parseColor("#90CAF9"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dpToPx(1f) // Align with Карты text if needed
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dpToPx(1.5f)
             }
         }
+        
         val txtSklan = TextView(this).apply {
             text = "Группа: [Нет карт]"
             setTextColor(AndroidColor.parseColor("#FFFF7043"))
             textSize = 8f
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dpToPx(2f)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dpToPx(1.5f)
             }
         }
         
-        rightInfoCol.addView(txtHandRankStrength)
-        rightInfoCol.addView(txtSklan)
-        
-        infoRow.addView(leftInfoCol)
-        infoRow.addView(rightInfoCol)
+        infoRow.addView(title)
+        infoRow.addView(txtCardsBoard)
+        infoRow.addView(txtHandRankStrength)
+        infoRow.addView(txtSklan)
         
         mainVert.addView(infoRow)
         
