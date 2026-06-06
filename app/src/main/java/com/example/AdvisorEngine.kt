@@ -451,39 +451,110 @@ object AdvisorEngine {
             return Recommendation("FOLD", 100f, "Enter cards.")
         }
 
-        // Base equity is from advanced simulation (which filters opponent ranges using historical vpip/pfr data)
+        // Base equity is from advanced simulation
         val equity = (simResult?.heroWinPct ?: 0f) / 100f
 
-        // Get main active opponent stats
-        val opponent = opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
-        val profile = opponent?.stats
-
-        // Synthetic parameter 1: Delta SD = WSD - WTSD (Showdown win vs Showdown entry)
-        val wtsd = profile?.histWtsd ?: 30f
-        val wsd = profile?.histWsd ?: 50f
-        val deltaSD = wsd - wtsd
-
-        // Synthetic parameter 2: Preflop Focus Factor = PFR / VPIP
-        val vpip = profile?.histVpip ?: profile?.vpip ?: 30f
-        val pfr = profile?.histPfr ?: profile?.pfr ?: 20f
-        val preflopFocus = if (vpip > 0) (pfr / vpip) else 0f
-
-        // Adjust raw mathematics score using these synthetic calculations
-        var adjustedScore = equity
-
-        // If high deltaSD (e.g. > 15%), they rarely get to showdown without strong hands. Play tighter.
-        if (deltaSD > 15f) {
-            adjustedScore -= 0.05f
-        } else if (deltaSD < -5f) {
-            // Low deltaSD (< -5%), they are regular folders or showdown losers, we can bet/raise more freely.
-            adjustedScore += 0.05f
+        // 1. Calculate weighted table averages across all players with stats for robust fallback
+        val opponentsWithStats = opponents.filter { it.stats != null }
+        val avgTableVpip = if (opponentsWithStats.isNotEmpty()) {
+            opponentsWithStats.map { it.stats?.histVpip ?: it.stats?.vpip ?: 30f }.average().toFloat()
+        } else {
+            28f
+        }
+        val avgTablePfr = if (opponentsWithStats.isNotEmpty()) {
+            opponentsWithStats.map { it.stats?.histPfr ?: it.stats?.pfr ?: 18f }.average().toFloat()
+        } else {
+            18f
+        }
+        val avgTableWtsd = if (opponentsWithStats.isNotEmpty()) {
+            opponentsWithStats.map { it.stats?.histWtsd ?: 30f }.average().toFloat()
+        } else {
+            30f
+        }
+        val avgTableWsd = if (opponentsWithStats.isNotEmpty()) {
+            opponentsWithStats.map { it.stats?.histWsd ?: 50f }.average().toFloat()
+        } else {
+            50f
         }
 
-        // Focus factor: if close to 1.0, they play extremely focused/solid preflop.
-        // If very low (< 0.3), they are hyper passive fish who check/call preflop but don't raise.
-        if (preflopFocus < 0.3f && vpip > 35f) {
-            // Passive calling station. Don't bluff him, but value bet wider.
-            adjustedScore += 0.03f
+        // 2. Loop through EACH active opponent to aggregate individual math adjustments
+        val activeOpponents = opponents.filter { it.isActive }
+        var totalDeltaAdj = 0f
+        var totalFocusAdj = 0f
+        var totalVpipAdj = 0f
+        var countedOpponents = 0
+
+        for (opp in activeOpponents) {
+            val stats = opp.stats
+            val hasProfile = stats?.histVpip != null
+            val hasSession = stats != null && stats.handsPlayed > 2
+
+            // Fallback strategy: try Profile (hist), then try duplicate (session), then blend population average and table average
+            val vpip = stats?.histVpip ?: stats?.vpip ?: (25f * 0.4f + avgTableVpip * 0.6f)
+            val pfr = stats?.histPfr ?: stats?.pfr ?: (15f * 0.4f + avgTablePfr * 0.6f)
+            val wtsd = stats?.histWtsd ?: (30f * 0.4f + avgTableWtsd * 0.6f)
+            val wsd = stats?.histWsd ?: (50f * 0.4f + avgTableWsd * 0.6f)
+
+            val deltaSD = wsd - wtsd
+            val preflopFocus = if (vpip > 0f) pfr / vpip else 0f
+
+            var oppDeltaAdj = 0f
+            var oppFocusAdj = 0f
+            var oppVpipAdj = 0f
+
+            // Delta SD adjustments
+            if (deltaSD > 15f) {
+                oppDeltaAdj = -0.05f // Tight at showdown -> play tighter
+            } else if (deltaSD < -5f) {
+                oppDeltaAdj = 0.05f  // Loose showdown entry -> play looser
+            }
+
+            // Preflop focus and calling station adjustments
+            if (preflopFocus < 0.3f && vpip > 35f) {
+                oppFocusAdj = 0.03f  // Calling station -> value bet wider
+            } else if (preflopFocus > 0.8f && vpip < 20f) {
+                oppFocusAdj = -0.04f // Aggressive preflop nit -> play tighter
+            }
+
+            // VPIP adjustments
+            if (vpip < 15f) {
+                oppVpipAdj = -0.06f // Extreme nit -> play tighter
+            } else if (vpip > 45f) {
+                oppVpipAdj = 0.04f  // Loose fish -> exploit with wider value
+            }
+
+            // Alternative Mechanism: completely disable personal data adjustments for blank players
+            if (!hasProfile && !hasSession) {
+                oppDeltaAdj = 0f
+                oppFocusAdj = 0f
+                oppVpipAdj = 0f
+            }
+
+            totalDeltaAdj += oppDeltaAdj
+            totalFocusAdj += oppFocusAdj
+            totalVpipAdj += oppVpipAdj
+            countedOpponents++
+        }
+
+        // Apply average or bounded cumulative adjustments to prevent uncontrolled deviation (never goes crazy)
+        val rawNetAdj = totalDeltaAdj + totalFocusAdj + totalVpipAdj
+        val netAdjustment = rawNetAdj.coerceIn(-0.15f, 0.15f)
+        val adjustedScore = (equity + netAdjustment).coerceIn(0f, 1f)
+
+        // Synthesize average metrics for the UI/explanations
+        val avgDeltaSD = if (activeOpponents.any { it.stats != null }) {
+            activeOpponents.filter { it.stats != null }.map { (it.stats?.histWsd ?: 50f) - (it.stats?.histWtsd ?: 30f) }.average().toFloat()
+        } else {
+            avgTableWsd - avgTableWtsd
+        }
+        val avgFocus = if (activeOpponents.any { it.stats != null }) {
+            activeOpponents.filter { it.stats != null }.map {
+                val v = it.stats?.histVpip ?: it.stats?.vpip ?: 30f
+                val p = it.stats?.histPfr ?: it.stats?.pfr ?: 18f
+                if (v > 0) p / v else 0.5f
+            }.average().toFloat()
+        } else {
+            if (avgTableVpip > 0) avgTablePfr / avgTableVpip else 0.5f
         }
 
         // Sklansky factor
@@ -498,42 +569,60 @@ object AdvisorEngine {
         val betToCall = maxOf(0f, maxOpponentBet - heroBet)
         val activePot = potSize + betToCall
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
-
-        // Actions choice
-        val action: String
-        val explanation: String
+        val profitableCall = adjustedScore > potOdds
         val isPreflop = board.filterNotNull().isEmpty()
 
+        val action: String
+        val explanation: String
+        fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
+
         if (betToCall > 0) {
-            val callMargin = adjustedScore - potOdds
-            when {
-                callMargin > 0.15f || (isPreflop && sklanskyGroup <= 2 && adjustedScore > 0.45f) -> {
-                    action = "RAISE"
-                    explanation = "Рейз на велью, ΔSD ${deltaSD.toInt()}%"
-                }
-                callMargin >= 0f -> {
+            if (profitableCall) {
+                if (adjustedScore > 0.65f || (isPreflop && sklanskyGroup <= 2 && adjustedScore > 0.45f)) {
+                    val mRatio = heroStack / (bigBlind + 0.01f)
+                    if (mRatio < 10.0f || adjustedScore > 0.80f) {
+                        action = "ALL-IN"
+                        explanation = "L2 ОЛЛ-ИН: сила ${pct(adjustedScore)}%, M=${String.format(Locale.US, "%.1f", mRatio)}"
+                    } else {
+                        action = "RAISE"
+                        explanation = "L2 Рейз (велью): выгоден, сила ${pct(adjustedScore)}%, ΔSD ${avgDeltaSD.toInt()}%"
+                    }
+                } else {
                     action = "CALL"
-                    explanation = "Математический колл"
+                    explanation = "L2 Колл (по оддсам): сила ${pct(adjustedScore)}% > шансы ${pct(potOdds)}%"
                 }
-                else -> {
+            } else {
+                if (adjustedScore > 0.48f && (isPreflop && sklanskyGroup <= 4)) {
+                    action = "CALL"
+                    explanation = "L2 Колл (полублеф): сильная позиция, сила ${pct(adjustedScore)}%"
+                } else {
                     action = "FOLD"
-                    explanation = "Фолд по оддсам"
+                    explanation = "L2 Фолд: сила ${pct(adjustedScore)}% < шансы ${pct(potOdds)}%"
                 }
             }
         } else {
-            when {
-                adjustedScore > 0.52f || (isPreflop && sklanskyGroup <= 3) -> {
-                    action = "BET"
-                    explanation = "Математический бет, КПФ ${String.format(Locale.US, "%.1f", preflopFocus)}"
-                }
-                else -> {
-                    action = "CHECK"
-                    explanation = "Математический чек"
-                }
+            if (adjustedScore > 0.60f) {
+                action = "RAISE"
+                explanation = "L2 Рейз: превосходная сила ${pct(adjustedScore)}%, КПФ ${String.format(Locale.US, "%.1f", avgFocus)}"
+            } else if (adjustedScore > 0.45f || (isPreflop && sklanskyGroup <= 3)) {
+                action = "BET"
+                explanation = "L2 Ставка (велью): сила ${pct(adjustedScore)}%, КПФ ${String.format(Locale.US, "%.1f", avgFocus)}"
+            } else if (adjustedScore > 0.35f) {
+                action = "CHECK"
+                explanation = "L2 Чек: умеренно, сила ${pct(adjustedScore)}%"
+            } else {
+                action = "CHECK"
+                explanation = "L2 Чек: слабость, сила ${pct(adjustedScore)}%"
             }
         }
 
-        val confidenceValue = (adjustedScore * 100f).coerceIn(10f, 95f)
+        val confidenceValue = when(action) {
+            "RAISE", "ALL-IN" -> (((adjustedScore - 0.4f) / 0.6f) * 100f).coerceIn(10f, 95f)
+            "FOLD" -> (((0.5f - adjustedScore) / 0.5f) * 100f).coerceIn(10f, 95f)
+            "CALL" -> ((1.0f - kotlin.math.abs(adjustedScore - 0.45f) / 0.55f) * 100f).coerceIn(10f, 95f)
+            "CHECK", "BET" -> ((1.0f - kotlin.math.abs(adjustedScore - 0.35f) / 0.65f) * 100f).coerceIn(10f, 95f)
+            else -> 50f
+        }
 
         return Recommendation(action, confidenceValue, explanation)
     }
