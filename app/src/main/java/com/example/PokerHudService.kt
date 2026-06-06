@@ -795,6 +795,17 @@ class PokerHudService : Service() {
         fun applyControllerHudLayoutState() {
             val isVertical = PokerHudSharedState.isControllerHudVertical.value
             val isMinimized = PokerHudSharedState.isControllerHudMinimized.value
+            val gameMode = PokerHudSharedState.isGameMode.value
+
+            // 1. Update touchability flags based on gameMode
+            if (gameMode) {
+                params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            } else {
+                params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            }
+
+            // 2. Hide/Show scanner log box based on gameMode and user settings
+            scannerStatusBox?.visibility = if (gameMode) View.GONE else (if (PokerHudSharedState.multiDataScannerToggle.value) View.VISIBLE else View.GONE)
 
             if (isMinimized) {
                 params.width = dpToPx(55f)
@@ -807,11 +818,28 @@ class PokerHudService : Service() {
                 mini.visibility = View.GONE
                 expanded.visibility = View.GONE
                 miniHandleView.visibility = View.VISIBLE
+            } else if (gameMode) {
+                // Game mode - completely invisible and non-interactive
+                params.width = dpToPx(1f)
+                params.height = dpToPx(1f)
+                
+                parentFrame.background = null
+                expanded.background = null
+                
+                mini.visibility = View.GONE
+                expanded.visibility = View.GONE
+                miniHandleView.visibility = View.GONE
             } else if (isVertical) {
                 params.width = dpToPx(55f)
                 params.height = dpToPx(240f) // Tall vertical shape
                 if (params.x < 0) {
                     params.x = dpToPx(10f)
+                }
+                
+                // Match expanded layout dimensions to vertical parent size
+                expanded.layoutParams = (expanded.layoutParams as FrameLayout.LayoutParams).apply {
+                    width = dpToPx(55f)
+                    height = dpToPx(240f)
                 }
                 
                 parentFrame.background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FFD500F9"))
@@ -828,10 +856,16 @@ class PokerHudService : Service() {
                 vertToolbar.visibility = View.VISIBLE
                 emojiContainer.visibility = View.VISIBLE
             } else {
+                // Horizontal state
                 params.width = resources.displayMetrics.widthPixels / 2
                 params.height = WindowManager.LayoutParams.WRAP_CONTENT
                 if (params.x < 0) {
                     params.x = dpToPx(2f)
+                }
+                
+                expanded.layoutParams = (expanded.layoutParams as FrameLayout.LayoutParams).apply {
+                    width = resources.displayMetrics.widthPixels / 2
+                    height = FrameLayout.LayoutParams.WRAP_CONTENT
                 }
                 
                 parentFrame.background = null // Let expanded cutout background drawable render
@@ -855,6 +889,7 @@ class PokerHudService : Service() {
                 emojiContainer.visibility = View.GONE
             }
             try {
+                expanded.requestLayout()
                 windowManager?.updateViewLayout(parentFrame, params)
             } catch (ignored: Exception) {}
         }
@@ -862,9 +897,10 @@ class PokerHudService : Service() {
         serviceScope.launch {
             combine(
                 PokerHudSharedState.isControllerHudVertical,
-                PokerHudSharedState.isControllerHudMinimized
-            ) { isVertical, isMinimized ->
-                Pair(isVertical, isMinimized)
+                PokerHudSharedState.isControllerHudMinimized,
+                PokerHudSharedState.isGameMode
+            ) { isVertical, isMinimized, gameMode ->
+                Triple(isVertical, isMinimized, gameMode)
             }.collect {
                 applyControllerHudLayoutState()
             }
@@ -997,36 +1033,6 @@ class PokerHudService : Service() {
 
         serviceScope.launch {
             PokerHudSharedState.isGameMode.collect { gameMode ->
-                val parent = floatingOverlayView
-                if (parent != null) {
-                    if (gameMode) {
-                        params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                    } else {
-                        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-                    }
-                    try { windowManager?.updateViewLayout(parent, params) } catch (ignored: Exception) {}
-                }
-
-                val visibilityMode = if (gameMode) View.GONE else View.VISIBLE
-                headerRow.visibility = visibilityMode
-                divider1.visibility = visibilityMode
-                togglesRow1?.visibility = visibilityMode
-                txtPreText?.visibility = visibilityMode
-
-                // Scanner status is completely hidden in game play to not draw any blocks on screen
-                scannerStatusBox?.visibility = if (gameMode) View.GONE else (if (PokerHudSharedState.multiDataScannerToggle.value) View.VISIBLE else View.GONE)
-
-                if (gameMode) {
-                    expanded.background = createBackgroundDrawable(AndroidColor.TRANSPARENT, 0f)
-                } else {
-                    expanded.background = CutoutBackgroundDrawable(
-                        AndroidColor.parseColor("#F50D151D"),
-                        dpToPx(10f).toFloat(),
-                        dpToPx(2f).toFloat(),
-                        AndroidColor.parseColor("#FFD500F9"),
-                        dpToPx(40f).toFloat()
-                    )
-                }
                 updateBoxOverlays()
             }
         }
