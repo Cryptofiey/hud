@@ -802,6 +802,7 @@ class PokerHudService : Service() {
                 params.x = -dpToPx(38f) // SNAP to left edge, half-hidden!
                 
                 parentFrame.background = createBackgroundDrawable(AndroidColor.parseColor("#CC111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FFD500F9"))
+                expanded.background = null
                 
                 mini.visibility = View.GONE
                 expanded.visibility = View.GONE
@@ -814,6 +815,7 @@ class PokerHudService : Service() {
                 }
                 
                 parentFrame.background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FFD500F9"))
+                expanded.background = null
                 
                 mini.visibility = View.GONE
                 expanded.visibility = View.VISIBLE
