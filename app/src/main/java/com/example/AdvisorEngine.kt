@@ -644,191 +644,217 @@ object AdvisorEngine {
         heroStack: Float,
         lastActions: String = ""
     ): Recommendation {
-        // Advanced logic uses the 10 parameters more deeply
         if (heroCard1 == null || heroCard2 == null) {
             return Recommendation("FOLD", 100f, "Enter cards.")
         }
 
-        val equity = (simResult?.heroWinPct ?: 0f) / 100f
-        
-        // Find the main opponent (most hands or currently active with highest aggression)
-        val opponent = opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
-        val profile = opponent?.stats
-        
-        var adjustedScore = equity
+        // 1. Core Source 1: Monte Carlo Simulation win pct
+        val s1 = (simResult?.heroWinPct ?: 0f) / 100f
 
-        // Pot odds and profit check
+        // Core Source 2: Sklansky-Malmuth Group EV
+        val sklanskyGroup = getSklanskyGroup(heroCard1, heroCard2)
+        val s2 = when (sklanskyGroup) {
+            1 -> 1.0f
+            2 -> 0.9f
+            3 -> 0.8f
+            4 -> 0.65f
+            5 -> 0.5f
+            6 -> 0.35f
+            7 -> 0.2f
+            else -> 0.1f
+        }
+
+        // Core Source 3: Mathematical Chen Score
+        val s3 = getChenScore(heroCard1, heroCard2)
+
+        // Calculate bets and Pot Odds elements
         var maxOpponentBet = 0f
         opponents.filter { it.isActive }.forEach { opp ->
             val pBet = if (settings.usePip) opp.betSize else 0f
-            if (pBet > maxOpponentBet) maxOpponentBet = pBet
+            if (pBet > maxOpponentBet) {
+                maxOpponentBet = pBet
+            }
         }
         val betToCall = maxOf(0f, maxOpponentBet - heroBet)
-
-        if (profile != null) {
-            // Integrate ALL 10 parameters into the calculation
-            val vpip = profile.histVpip ?: profile.vpip
-            val pfr = profile.histPfr ?: profile.pfr
-            val bet3 = profile.hist3Bet ?: profile.foldTo3bet // fallback
-            val fold3 = profile.histFoldTo3Bet ?: 45f
-            val cbet = profile.histCBet ?: 55f
-            val foldCbet = profile.histFoldToCBet ?: 45f
-            val steal = profile.histSteal ?: 35f
-            val cr = profile.histCheckRaise ?: 10f
-            val wtsd = profile.histWtsd ?: 30f
-            val wsd = profile.histWsd ?: 50f
-
-            val isPreflop = board.filterNotNull().isEmpty()
-            val isPostflop = !isPreflop
-            var exploitReason = ""
-            
-            // Эксплуатационная машина на основе 10 параметров:
-            
-            // 1. Поздняя позиция и защита блайндов (Steal)
-            if (isPreflop && (position == TablePosition.SB || position == TablePosition.BB) && steal > 40f) {
-                adjustedScore += 0.15f
-                if (exploitReason.isEmpty()) exploitReason = "Steal >40% (Авто-Защита)"
-            }
-            
-            // 2. Эксплойт Фолд эквити (Fold to 3-Bet, Fold to C-Bet)
-            if (isPreflop && fold3 > 60f) {
-                if (adjustedScore < 0.6f && betToCall > 0) {
-                    adjustedScore += 0.20f // бустим для возможного блеф-рейза
-                    if (exploitReason.isEmpty()) exploitReason = "Оверфолд на 3-Bet (>60%)"
-                }
-            } else if (isPostflop && betToCall == 0f && foldCbet > 55f) {
-                if (adjustedScore < 0.5f) {
-                    adjustedScore += 0.20f
-                    if (exploitReason.isEmpty()) exploitReason = "Авто-блеф (Fold to CB >55%)"
-                }
-            }
-            
-            // 3. Вычисляем тип оппонента (Archetypes) и подстраиваем общую ширину
-            val gap = profile.vpipPfrGap
-            val honesty = profile.honestyIndex
-            
-            if (wtsd > 32f || (gap > 20f && vpip > 35f) || honesty < 18f) {
-                // Calling Station (Телефон) - Не блефуем, только велью
-                if (adjustedScore < 0.5f) {
-                    adjustedScore -= 0.15f // Понижаем силу слабых рук (нет фолд эквити)
-                } else {
-                    adjustedScore += 0.15f // Улучшаем силу велью-бета (шире велью)
-                }
-                if (exploitReason.isEmpty()) exploitReason = "Опп - телефон (Нет блефам)"
-            } else if ((wtsd < 25f && wsd > 55f) || honesty > 30f) {
-                // Nit (Скала)
-                if (betToCall > bigBlind) {
-                    adjustedScore -= 0.20f // Скала ставит - у него натс, сильно занижаем наше эквити
-                    if (exploitReason.isEmpty()) exploitReason = "Респект агрессии (Скала)"
-                } else if (betToCall == 0f && adjustedScore < 0.7f) {
-                    adjustedScore += 0.10f // Можно пытаться подблефовывать мелкие банки
-                }
-            }
-            
-            // 4. Реагируем на C-Bet оппонента
-            if (isPostflop && betToCall > 0 && cbet > 70f) {
-                // Он ставит контбет слишком часто - можно флотить.
-                if (adjustedScore in 0.35f..0.6f) {
-                    adjustedScore += 0.15f // Не падаем с маргинальным эквити
-                    if (exploitReason.isEmpty()) exploitReason = "Флоат против шир. CB"
-                }
-            }
-
-            // 5. Эксплойт агрессивных префлоперов, падающих на отпор
-            if (isPreflop && profile.preflopBluffingTendency > 15f && betToCall > 0) {
-                 if (adjustedScore in 0.45f..0.7f) {
-                     adjustedScore += 0.25f // Огромный буст под блеф 3-бет или пуш, так как он открывается широко и часто фолдит
-                     if (exploitReason.isEmpty()) exploitReason = "Опп открывает мусор (Блеф 3-бет/Пуш)"
-                 }
-            }
-            
-            // 5. Уважение чек-рейза
-            if (isPostflop && cr > 15f && betToCall > 0) {
-                adjustedScore -= 0.15f // Осторожно
-                if (exploitReason.isEmpty()) exploitReason = "Агрессивный Чек-Рейз!"
-            }
-            
-            // 6. Учет диапазонов Sklansky
-            val sRange = getSklanskyRangeForVpip(vpip)
-            val mySGroup = getSklanskyGroup(heroCard1, heroCard2)
-            if (mySGroup <= sRange && adjustedScore > 0.4f) {
-                 adjustedScore += 0.05f 
-            }
-            
-            // Pass the exploitReason back through the system implicitly... wait, we need it in explanation.
-            // Let's store it so we can append it later.
-            // But we don't have a way to pass it down easily outside the if(profile != null) block.
-        }
-
         val activePot = potSize + betToCall
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
+
+        // Core Source 4: Margin / Potential Odds Gap
+        val s4 = if (betToCall > 0f) {
+            val gap = s1 - potOdds
+            ((gap + 1f) / 2f).coerceIn(0f, 1f)
+        } else {
+            (s1 * 1.15f).coerceIn(0f, 1f)
+        }
+
+        val baseL1Score = (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
+
+        // 2. Identify active opponent, build robust fallback profile for first zone if none exists
+        val opponent = opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
+        val profile = opponent?.stats
+        val profileStats = profile ?: PlayerStats(
+            nickname = opponent?.nickname ?: "Opponent",
+            handsPlayed = 15,
+            vpipCount = 4,
+            pfrCount = 2,
+            histVpip = 28f,
+            histPfr = 18f,
+            hist3Bet = 8f,
+            histFoldTo3Bet = 45f,
+            histCBet = 55f,
+            histFoldToCBet = 45f,
+            histSteal = 32f,
+            histCheckRaise = 10f,
+            histWtsd = 30f,
+            histWsd = 50f
+        )
+
+        // 3. Multiparameter recompilation (Синтезированные перемноженные параметры)
+        val gap = profileStats.vpipPfrGap
+        val showdownResilience = ((profileStats.histWtsd ?: 30f) / 100f) * ((profileStats.histWsd ?: 50f) / 100f)
+        val preflopBluffingTendency = profileStats.preflopBluffingTendency
+        val postflopDanger = profileStats.postflopDangerIndex
+        val foldVulnerability = ((profileStats.histFoldToCBet ?: 45f) / 100f) * ((profileStats.histFoldTo3Bet ?: 45f) / 100f)
+
+        // 4. Persona Matching (Сопоставление типажей игрового поведения)
+        val vpipVal = profileStats.histVpip ?: profileStats.vpip
+        val pfrVal = profileStats.histPfr ?: profileStats.pfr
+        val wtsdVal = profileStats.histWtsd ?: 30f
+        val wsdVal = profileStats.histWsd ?: 50f
+
+        val archetype = when {
+            vpipVal > 40f && pfrVal < 12f -> "Гиппопотам (Calling Station)"
+            vpipVal > 35f && pfrVal > 25f && postflopDanger > 40f -> "Гепард (Aggressive Maniac)"
+            vpipVal < 16f && pfrVal < 12f && showdownResilience < 0.12f -> "Хамелеон (Passive Nit)"
+            wtsdVal > 35f && wsdVal < 45f -> "Обезьяна (Showdown Station)"
+            else -> "Акула (Decent Regular)"
+        }
+
+        val isPreflop = board.filterNotNull().isEmpty()
+        val isPostflop = !isPreflop
+        val mRatio = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
+
+        // 5. Pathway Adjustment (Расчет ветвлений под разные сценарии: L2.5, L3.0, L3.5)
         
-        val isProfitable = adjustedScore > potOdds
-        
+        // Ветка L2.5: Пассивный путь (Чек / Колл / Медленное разыгрывание)
+        var evL2_5 = baseL1Score
+        if (archetype == "Гепард (Aggressive Maniac)") {
+            evL2_5 += 0.14f // Огромная выгода от ловушек против маньяка, даем ему блефовать
+        } else if (archetype == "Гиппопотам (Calling Station)" || archetype == "Обезьяна (Showdown Station)") {
+            evL2_5 -= 0.10f // Теряем тонну велью на чеках против телефона
+        }
+        if (mRatio < 12f) {
+            evL2_5 -= 0.12f // Короткий стек не имеет пространства для пассивного разыгрывания
+        }
+
+        // Ветка L3.0: Активный велью-путь (Стандартные лид-беты и рейзы)
+        var evL3_0 = baseL1Score + 0.02f
+        if (archetype == "Гиппопотам (Calling Station)" || archetype == "Обезьяна (Showdown Station)") {
+            evL3_0 += 0.15f // Максимизируем прибыль от широких коллов телефона
+        } else if (archetype == "Хамелеон (Passive Nit)") {
+            evL3_0 -= 0.06f // Скала сбросит все, кроме премиума, велью принесет мало
+        }
+
+        // Ветка L3.5: Агрессивный блеф-путь (Сквизы, 3-беты, баррелинг под фолд-эквити)
+        var evL3_5 = baseL1Score - 0.05f
+        if (foldVulnerability > 0.22f || archetype == "Хамелеон (Passive Nit)") {
+            evL3_5 += 0.18f // Огромное фолд-эквити, блефы крайне прибыльны
+        } else if (archetype == "Гиппопотам (Calling Station)" || archetype == "Обезьяна (Showdown Station)") {
+            evL3_5 -= 0.18f // Никаких блефов в телефона, он коллирует до конца
+        }
+        if (position == TablePosition.UTG || position == TablePosition.MP) {
+            evL3_5 -= 0.05f // Без позиции блефы менее прибыльны
+        }
+
+        // Выбираем оптимальный путь с максимальным математическим ожиданием
+        val bestBranch: String
+        val l3Score: Float
         val action: String
-        val confidence: Float
-        var explanation: String
-        
-        when {
-            adjustedScore > 0.7f -> {
-                action = "RAISE"
-                confidence = (adjustedScore * 100f).coerceAtLeast(0f)
-                explanation = "Adv: мощное EV ${String.format("%.0f", adjustedScore*100)}%"
-            }
-            adjustedScore > 0.5f -> {
-                action = if (betToCall > 0) "CALL" else "CHECK"
-                confidence = 70f
-                explanation = "Adv: прибыльный колл/чек"
-            }
-            isProfitable -> {
-                action = if (betToCall > 0) "CALL" else "CHECK"
-                confidence = 55f
-                explanation = "Adv: маргинально, EV>0"
-            }
-            else -> {
-                action = if (betToCall > 0) "FOLD" else "CHECK"
-                confidence = 80f
-                explanation = "Adv: отрицательное EV"
-            }
-        }
-        
-        // Retrieve exploit reason if available
-        var expReason = ""
-        if (profile != null) {
-            val isPreflop = board.filterNotNull().isEmpty()
-            val isPostflop = !isPreflop
-            val steal = profile.histSteal ?: 35f
-            val fold3 = profile.histFoldTo3Bet ?: 45f
-            val foldCbet = profile.histFoldToCBet ?: 45f
-            val gap = (profile.histVpip ?: profile.vpip) - (profile.histPfr ?: profile.pfr)
-            val wtsd = profile.histWtsd ?: 30f
-            val wsd = profile.histWsd ?: 50f
-            val cr = profile.histCheckRaise ?: 10f
-            val cbet = profile.histCBet ?: 55f
-            val vpip = profile.histVpip ?: profile.vpip
+        val branchSummary: String
 
-            if (isPreflop && (position == TablePosition.SB || position == TablePosition.BB) && steal > 40f) {
-                expReason = "Steal >40% авто-защита"
-            } else if (isPreflop && fold3 > 60f && adjustedScore >= 0.5f && action == "RAISE") {
-                expReason = "Оверфолд на 3-Bet"
-            } else if (isPostflop && betToCall == 0f && foldCbet > 55f && action != "FOLD") {
-                expReason = "Авто-блеф CB"
-            } else if (wtsd > 32f || (gap > 20f && vpip > 35f)) {
-                expReason = "Опп - телефон (респект)"
-            } else if (wtsd < 25f && wsd > 55f && betToCall > bigBlind) {
-                expReason = "Респект агрессии Скале!"
-            } else if (isPostflop && betToCall > 0 && cbet > 70f && action == "CALL") {
-                expReason = "Флоат против шир. CB"
-            } else if (isPostflop && cr > 15f && betToCall > 0) {
-                expReason = "Агрессивный Чек-Рейз!"
+        if (evL3_5 > evL3_0 && evL3_5 > evL2_5) {
+            bestBranch = "L3.5 (Squeeze/Bluff Path)"
+            l3Score = evL3_5
+            action = if (betToCall > 0) "RAISE" else "BET"
+            branchSummary = "Максимизация фолд-эквити блефом"
+        } else if (evL3_0 > evL2_5) {
+            bestBranch = "L3.0 (Value/Active Path)"
+            l3Score = evL3_0
+            if (betToCall > 0) {
+                action = if (l3Score > 0.60f || sklanskyGroup <= 2) "RAISE" else "CALL"
+            } else {
+                action = if (l3Score > 0.50f) "BET" else "CHECK"
             }
-        }
-        
-        if (expReason.isNotEmpty()) {
-            explanation = "$expReason | $explanation"
+            branchSummary = "Извлечение велью из сильной спектральной структуры"
+        } else {
+            bestBranch = "L2.5 (Passive/Trap Path)"
+            l3Score = evL2_5
+            action = if (betToCall > 0) "CALL" else "CHECK"
+            branchSummary = "Имитация слабости / Сбор блефов прокаткой"
         }
 
-        return Recommendation(action, confidence, explanation)
+        // Ограничиваем score в пределах [0, 1]
+        val finalScore = l3Score.coerceIn(0.0f, 1.0f)
+
+        // Превращаем оптимальный путь в действие во вскрытии
+        var finalAction = action
+        var explanation = branchSummary
+
+        // Специфический пуш-фолд эксплойт на коротких стеках
+        if (mRatio < 12f && isPreflop) {
+            if (sklanskyGroup <= 3 || finalScore > 0.58f) {
+                finalAction = "ALL-IN"
+                explanation = "ОЛЛ-ИН по короткому стеку префлоп [M=${String.format(Locale.US, "%.1f", mRatio)}]"
+            } else if (finalAction == "CALL") {
+                finalAction = "FOLD"
+                explanation = "Пас укороченного стека префлоп"
+            }
+        }
+
+        // Дополнительные точечные эксплойты в зависимости от ситуативности
+        var exploitReason = ""
+        val steal = profileStats.histSteal ?: 35f
+        val fold3 = profileStats.histFoldTo3Bet ?: profileStats.foldTo3bet
+        val foldCbet = profileStats.histFoldToCBet ?: 45f
+        val wtsd = profileStats.histWtsd ?: 30f
+        val wsd = profileStats.histWsd ?: if (profileStats.showdownTotal > 0) profileStats.showdownWinPct else 50f
+        val cr = profileStats.histCheckRaise ?: 10f
+        val cbet = profileStats.histCBet ?: 55f
+        val vpip = profileStats.histVpip ?: profileStats.vpip
+
+        if (isPreflop && (position == TablePosition.SB || position == TablePosition.BB) && steal > 40f) {
+            exploitReason = "Steal >40% авто-защита блайндов"
+        } else if (isPreflop && fold3 > 60f && finalScore >= 0.5f && finalAction == "RAISE") {
+            exploitReason = "Оверфолд на 3-Bet (>60%)"
+        } else if (isPostflop && betToCall == 0f && foldCbet > 55f && finalAction == "BET") {
+            exploitReason = "Авто-блеф (Fold to CB >55%)"
+        } else if (wtsd > 32f || (gap > 20f && vpip > 35f)) {
+            exploitReason = "Опп - телефон (респект)"
+        } else if (wtsd < 25f && wsd > 55f && betToCall > bigBlind) {
+            exploitReason = "Респект агрессии Скале!"
+        } else if (isPostflop && betToCall > 0 && cbet > 70f && finalAction == "CALL") {
+            exploitReason = "Флоат против шир. CB"
+        } else if (isPostflop && cr > 15f && betToCall > 0) {
+            exploitReason = "Агрессивный Чек-Рейз!"
+        }
+
+        fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
+        
+        val fullExpl: String = if (exploitReason.isNotEmpty()) {
+            "L3 ($bestBranch): Чек=${pct(evL2_5)}%|Акт=${pct(evL3_0)}%|Агр=${pct(evL3_5)}% [$archetype] -> $exploitReason | $explanation"
+        } else {
+            "L3 ($bestBranch): Чек=${pct(evL2_5)}%|Акт=${pct(evL3_0)}%|Агр=${pct(evL3_5)}% [$archetype] -> $explanation"
+        }
+
+        val confidence = when(finalAction) {
+            "RAISE", "ALL-IN" -> (((finalScore - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
+            "FOLD" -> (((0.5f - finalScore) / 0.5f) * 100f).coerceIn(10f, 98f)
+            "CALL" -> ((1.0f - kotlin.math.abs(finalScore - 0.45f) / 0.55f) * 100f).coerceIn(10f, 98f)
+            "CHECK", "BET" -> ((1.0f - kotlin.math.abs(finalScore - 0.35f) / 0.65f) * 100f).coerceIn(10f, 98f)
+            else -> 50f
+        }
+
+        return Recommendation(finalAction, confidence, fullExpl)
     }
 
     fun computeRecommendationL4(
