@@ -689,78 +689,118 @@ object AdvisorEngine {
 
         val baseL1Score = (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
 
-        // 2. Identify active opponent, build robust fallback profile for first zone if none exists
-        val opponent = opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
-        val profile = opponent?.stats
-        val profileStats = profile ?: PlayerStats(
-            nickname = opponent?.nickname ?: "Opponent",
-            handsPlayed = 15,
-            vpipCount = 4,
-            pfrCount = 2,
-            histVpip = 28f,
-            histPfr = 18f,
-            hist3Bet = 8f,
-            histFoldTo3Bet = 45f,
-            histCBet = 55f,
-            histFoldToCBet = 45f,
-            histSteal = 32f,
-            histCheckRaise = 10f,
-            histWtsd = 30f,
-            histWsd = 50f
-        )
-
-        // 3. Multiparameter recompilation (Синтезированные перемноженные параметры)
-        val gap = profileStats.vpipPfrGap
-        val showdownResilience = ((profileStats.histWtsd ?: 30f) / 100f) * ((profileStats.histWsd ?: 50f) / 100f)
-        val preflopBluffingTendency = profileStats.preflopBluffingTendency
-        val postflopDanger = profileStats.postflopDangerIndex
-        val foldVulnerability = ((profileStats.histFoldToCBet ?: 45f) / 100f) * ((profileStats.histFoldTo3Bet ?: 45f) / 100f)
-
-        // 4. Persona Matching (Сопоставление типажей игрового поведения)
-        val vpipVal = profileStats.histVpip ?: profileStats.vpip
-        val pfrVal = profileStats.histPfr ?: profileStats.pfr
-        val wtsdVal = profileStats.histWtsd ?: 30f
-        val wsdVal = profileStats.histWsd ?: 50f
-
-        val archetype = when {
-            vpipVal > 40f && pfrVal < 12f -> "Гиппопотам (Calling Station)"
-            vpipVal > 35f && pfrVal > 25f && postflopDanger > 40f -> "Гепард (Aggressive Maniac)"
-            vpipVal < 16f && pfrVal < 12f && showdownResilience < 0.12f -> "Хамелеон (Passive Nit)"
-            wtsdVal > 35f && wsdVal < 45f -> "Обезьяна (Showdown Station)"
-            else -> "Акула (Decent Regular)"
-        }
-
         val isPreflop = board.filterNotNull().isEmpty()
         val isPostflop = !isPreflop
         val mRatio = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
 
-        // 5. Pathway Adjustment (Расчет ветвлений под разные сценарии: L2.5, L3.0, L3.5)
+        // 2. Identify active opponents, build robust fallback profiles for first zone if none exists
+        val activeOpponents = opponents.filter { it.isActive }
+        val countedOpponents = activeOpponents.size
+        val divider = maxOf(1, countedOpponents)
+
+        var totalEvL2_5 = 0f
+        var totalEvL3_0 = 0f
+        var totalEvL3_5 = 0f
         
-        // Ветка L2.5: Пассивный путь (Чек / Колл / Медленное разыгрывание)
-        var evL2_5 = baseL1Score
-        if (archetype == "Гепард (Aggressive Maniac)") {
-            evL2_5 += 0.14f // Огромная выгода от ловушек против маньяка, даем ему блефовать
-        } else if (archetype == "Гиппопотам (Calling Station)" || archetype == "Обезьяна (Showdown Station)") {
-            evL2_5 -= 0.10f // Теряем тонну велью на чеках против телефона
+        var tableArchetype = "Неизвестный Пул"
+        var maxExploitReason = ""
+
+        if (activeOpponents.isEmpty()) {
+            totalEvL2_5 = baseL1Score
+            totalEvL3_0 = baseL1Score + 0.02f
+            totalEvL3_5 = baseL1Score - 0.05f
+        } else {
+            activeOpponents.forEach { opponent ->
+                val profile = opponent.stats
+                val profileStats = profile ?: PlayerStats(
+                    nickname = opponent.nickname,
+                    handsPlayed = 15,
+                    vpipCount = 4,
+                    pfrCount = 2,
+                    histVpip = 28f,
+                    histPfr = 18f,
+                    hist3Bet = 8f,
+                    histFoldTo3Bet = 45f,
+                    histCBet = 55f,
+                    histFoldToCBet = 45f,
+                    histSteal = 32f,
+                    histCheckRaise = 10f,
+                    histWtsd = 30f,
+                    histWsd = 50f
+                )
+
+                // 3. Multiparameter recompilation (Синтезированные перемноженные параметры)
+                val gap = profileStats.vpipPfrGap
+                val showdownResilience = ((profileStats.histWtsd ?: 30f) / 100f) * ((profileStats.histWsd ?: 50f) / 100f)
+                val postflopDanger = profileStats.postflopDangerIndex
+                val foldVulnerability = ((profileStats.histFoldToCBet ?: 45f) / 100f) * ((profileStats.histFoldTo3Bet ?: 45f) / 100f)
+
+                // 4. Persona Matching (Сопоставление типажей игрового поведения)
+                val vpipVal = profileStats.histVpip ?: profileStats.vpip
+                val pfrVal = profileStats.histPfr ?: profileStats.pfr
+                val wtsdVal = profileStats.histWtsd ?: 30f
+                val wsdVal = profileStats.histWsd ?: 50f
+
+                val archetype = when {
+                    vpipVal > 40f && pfrVal < 12f -> "Гиппопотам"
+                    vpipVal > 35f && pfrVal > 25f && postflopDanger > 40f -> "Гепард"
+                    vpipVal < 16f && pfrVal < 12f && showdownResilience < 0.12f -> "Хамелеон"
+                    wtsdVal > 35f && wsdVal < 45f -> "Обезьяна"
+                    else -> "Акула"
+                }
+                
+                tableArchetype = archetype
+
+                // 5. Pathway Adjustment for THIS specific opponent
+                var oppEvL2_5 = baseL1Score
+                if (archetype == "Гепард") oppEvL2_5 += 0.14f
+                else if (archetype == "Гиппопотам" || archetype == "Обезьяна") oppEvL2_5 -= 0.10f
+
+                var oppEvL3_0 = baseL1Score + 0.02f
+                if (archetype == "Гиппопотам" || archetype == "Обезьяна") oppEvL3_0 += 0.15f
+                else if (archetype == "Хамелеон") oppEvL3_0 -= 0.06f
+
+                var oppEvL3_5 = baseL1Score - 0.05f
+                if (foldVulnerability > 0.22f || archetype == "Хамелеон") oppEvL3_5 += 0.18f
+                else if (archetype == "Гиппопотам" || archetype == "Обезьяна") oppEvL3_5 -= 0.18f
+
+                totalEvL2_5 += oppEvL2_5
+                totalEvL3_0 += oppEvL3_0
+                totalEvL3_5 += oppEvL3_5
+
+                // Дополнительные точечные эксплойты в зависимости от ситуативности
+                val steal = profileStats.histSteal ?: 35f
+                val fold3 = profileStats.histFoldTo3Bet ?: profileStats.foldTo3bet
+                val foldCbet = profileStats.histFoldToCBet ?: 45f
+                val cr = profileStats.histCheckRaise ?: 10f
+                val cbet = profileStats.histCBet ?: 55f
+
+                if (isPreflop && (position == TablePosition.SB || position == TablePosition.BB) && steal > 40f) {
+                    maxExploitReason = "Steal >40% авто-защита блайндов"
+                } else if (isPreflop && fold3 > 60f) {
+                    maxExploitReason = "Оверфолд на 3-Bet (>60%)"
+                } else if (isPostflop && betToCall == 0f && foldCbet > 55f) {
+                    maxExploitReason = "Авто-блеф (Fold to CB >55%)"
+                } else if (wtsdVal > 32f || (gap > 20f && vpipVal > 35f)) {
+                    maxExploitReason = "Опп - телефон (респект)"
+                } else if (wtsdVal < 25f && wsdVal > 55f && betToCall > bigBlind) {
+                    maxExploitReason = "Респект агрессии Скале!"
+                } else if (isPostflop && betToCall > 0 && cbet > 70f) {
+                    maxExploitReason = "Флоат против шир. CB"
+                } else if (isPostflop && cr > 15f && betToCall > 0) {
+                    maxExploitReason = "Агрессивный Чек-Рейз!"
+                }
+            }
         }
+
+        // Average pathways across opponents
+        var evL2_5 = totalEvL2_5 / divider
+        var evL3_0 = totalEvL3_0 / divider
+        var evL3_5 = totalEvL3_5 / divider
+
+        // Global environmental bounds
         if (mRatio < 12f) {
             evL2_5 -= 0.12f // Короткий стек не имеет пространства для пассивного разыгрывания
-        }
-
-        // Ветка L3.0: Активный велью-путь (Стандартные лид-беты и рейзы)
-        var evL3_0 = baseL1Score + 0.02f
-        if (archetype == "Гиппопотам (Calling Station)" || archetype == "Обезьяна (Showdown Station)") {
-            evL3_0 += 0.15f // Максимизируем прибыль от широких коллов телефона
-        } else if (archetype == "Хамелеон (Passive Nit)") {
-            evL3_0 -= 0.06f // Скала сбросит все, кроме премиума, велью принесет мало
-        }
-
-        // Ветка L3.5: Агрессивный блеф-путь (Сквизы, 3-беты, баррелинг под фолд-эквити)
-        var evL3_5 = baseL1Score - 0.05f
-        if (foldVulnerability > 0.22f || archetype == "Хамелеон (Passive Nit)") {
-            evL3_5 += 0.18f // Огромное фолд-эквити, блефы крайне прибыльны
-        } else if (archetype == "Гиппопотам (Calling Station)" || archetype == "Обезьяна (Showdown Station)") {
-            evL3_5 -= 0.18f // Никаких блефов в телефона, он коллирует до конца
         }
         if (position == TablePosition.UTG || position == TablePosition.MP) {
             evL3_5 -= 0.05f // Без позиции блефы менее прибыльны
@@ -773,12 +813,12 @@ object AdvisorEngine {
         val branchSummary: String
 
         if (evL3_5 > evL3_0 && evL3_5 > evL2_5) {
-            bestBranch = "L3.5 (Squeeze/Bluff Path)"
+            bestBranch = "L3.5 (Блеф)"
             l3Score = evL3_5
             action = if (betToCall > 0) "RAISE" else "BET"
             branchSummary = "Максимизация фолд-эквити блефом"
         } else if (evL3_0 > evL2_5) {
-            bestBranch = "L3.0 (Value/Active Path)"
+            bestBranch = "L3.0 (Велью)"
             l3Score = evL3_0
             if (betToCall > 0) {
                 action = if (l3Score > 0.60f || sklanskyGroup <= 2) "RAISE" else "CALL"
@@ -787,7 +827,7 @@ object AdvisorEngine {
             }
             branchSummary = "Извлечение велью из сильной спектральной структуры"
         } else {
-            bestBranch = "L2.5 (Passive/Trap Path)"
+            bestBranch = "L2.5 (Пассив)"
             l3Score = evL2_5
             action = if (betToCall > 0) "CALL" else "CHECK"
             branchSummary = "Имитация слабости / Сбор блефов прокаткой"
@@ -810,40 +850,20 @@ object AdvisorEngine {
                 explanation = "Пас укороченного стека префлоп"
             }
         }
-
-        // Дополнительные точечные эксплойты в зависимости от ситуативности
-        var exploitReason = ""
-        val steal = profileStats.histSteal ?: 35f
-        val fold3 = profileStats.histFoldTo3Bet ?: profileStats.foldTo3bet
-        val foldCbet = profileStats.histFoldToCBet ?: 45f
-        val wtsd = profileStats.histWtsd ?: 30f
-        val wsd = profileStats.histWsd ?: if (profileStats.showdownTotal > 0) profileStats.showdownWinPct else 50f
-        val cr = profileStats.histCheckRaise ?: 10f
-        val cbet = profileStats.histCBet ?: 55f
-        val vpip = profileStats.histVpip ?: profileStats.vpip
-
-        if (isPreflop && (position == TablePosition.SB || position == TablePosition.BB) && steal > 40f) {
-            exploitReason = "Steal >40% авто-защита блайндов"
-        } else if (isPreflop && fold3 > 60f && finalScore >= 0.5f && finalAction == "RAISE") {
-            exploitReason = "Оверфолд на 3-Bet (>60%)"
-        } else if (isPostflop && betToCall == 0f && foldCbet > 55f && finalAction == "BET") {
-            exploitReason = "Авто-блеф (Fold to CB >55%)"
-        } else if (wtsd > 32f || (gap > 20f && vpip > 35f)) {
-            exploitReason = "Опп - телефон (респект)"
-        } else if (wtsd < 25f && wsd > 55f && betToCall > bigBlind) {
-            exploitReason = "Респект агрессии Скале!"
-        } else if (isPostflop && betToCall > 0 && cbet > 70f && finalAction == "CALL") {
-            exploitReason = "Флоат против шир. CB"
-        } else if (isPostflop && cr > 15f && betToCall > 0) {
-            exploitReason = "Агрессивный Чек-Рейз!"
-        }
+        
+        // Remove exploit reason if action contradicts it
+        if (maxExploitReason == "Оверфолд на 3-Bet (>60%)" && finalAction != "RAISE" && finalAction != "ALL-IN") maxExploitReason = ""
+        if (maxExploitReason == "Авто-блеф (Fold to CB >55%)" && finalAction != "BET" && finalAction != "ALL-IN" && finalAction != "RAISE") maxExploitReason = ""
+        if (maxExploitReason == "Флоат против шир. CB" && finalAction != "CALL" && finalAction != "RAISE") maxExploitReason = ""
 
         fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
         
-        val fullExpl: String = if (exploitReason.isNotEmpty()) {
-            "L3 ($bestBranch): Чек=${pct(evL2_5)}%|Акт=${pct(evL3_0)}%|Агр=${pct(evL3_5)}% [$archetype] -> $exploitReason | $explanation"
+        val archetypeLabel = if (countedOpponents > 1) "Смесь [$tableArchetype+]" else "[$tableArchetype]"
+        
+        val fullExpl: String = if (maxExploitReason.isNotEmpty()) {
+            "L3 $bestBranch: Чек=${pct(evL2_5)}%|Акт=${pct(evL3_0)}%|Агр=${pct(evL3_5)}% $archetypeLabel -> $maxExploitReason | $explanation"
         } else {
-            "L3 ($bestBranch): Чек=${pct(evL2_5)}%|Акт=${pct(evL3_0)}%|Агр=${pct(evL3_5)}% [$archetype] -> $explanation"
+            "L3 $bestBranch: Чек=${pct(evL2_5)}%|Акт=${pct(evL3_0)}%|Агр=${pct(evL3_5)}% $archetypeLabel -> $explanation"
         }
 
         val confidence = when(finalAction) {
