@@ -1893,7 +1893,7 @@ class PokerHudService : Service() {
     private fun showProbsOverlay() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
-            dpToPx(176f),
+            dpToPx(144f),
             dpToPx(155f),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -1910,13 +1910,11 @@ class PokerHudService : Service() {
             y = dpToPx(50f)
         }
         val frame = FrameLayout(this).apply {
-            background = CutoutBackgroundDrawable(
+            background = createBackgroundDrawable(
                 AndroidColor.parseColor("#E6111C24"), 
-                dpToPx(10f).toFloat(), 
-                dpToPx(1.5f).toFloat(), 
-                AndroidColor.parseColor("#FF4CAF50"),
-                dpToPx(32f).toFloat(),
-                CutoutCorner.BOTTOM_LEFT
+                8f, 
+                dpToPx(1.5f), 
+                AndroidColor.parseColor("#FF4CAF50")
             )
             setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
         }
@@ -1972,8 +1970,8 @@ class PokerHudService : Service() {
         val infoRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(32f) // Align with other views
-                rightMargin = dpToPx(16f) // Keep clear of close button
+                leftMargin = 0
+                rightMargin = dpToPx(4f)
             }
         }
         
@@ -1982,7 +1980,9 @@ class PokerHudService : Service() {
             setTextColor(AndroidColor.parseColor("#FFFFD54F"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                rightMargin = dpToPx(38f) // Keep clear of the 3 buttons at the top right!
+            }
         }
         
         // Info Slot Content
@@ -2036,7 +2036,7 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
                 topMargin = dpToPx(2f)
                 bottomMargin = dpToPx(2f)
-                leftMargin = dpToPx(32f) // Keep clear of cutout
+                leftMargin = 0
                 rightMargin = dpToPx(4f)
             }
         }
@@ -2047,8 +2047,8 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
                 topMargin = dpToPx(2f)
                 bottomMargin = dpToPx(2f)
-                leftMargin = dpToPx(32f) // Keep clear of cutout
-                rightMargin = dpToPx(20f) // Keep clear of close button area
+                leftMargin = 0
+                rightMargin = dpToPx(4f)
             }
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
         }
@@ -2061,7 +2061,7 @@ class PokerHudService : Service() {
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(32f)
+                leftMargin = 0
                 rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(1.5f)
             }
@@ -2073,7 +2073,7 @@ class PokerHudService : Service() {
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(32f)
+                leftMargin = 0
                 rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(1.5f)
             }
@@ -2085,7 +2085,7 @@ class PokerHudService : Service() {
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(32f)
+                leftMargin = 0
                 rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(1.5f)
             }
@@ -2097,7 +2097,7 @@ class PokerHudService : Service() {
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(32f)
+                leftMargin = 0
                 rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(1.5f)
             }
@@ -2109,7 +2109,7 @@ class PokerHudService : Service() {
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(32f)
+                leftMargin = 0
                 rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(4f)
             }
@@ -2289,19 +2289,17 @@ class PokerHudService : Service() {
                 }
             } else {
                 val isAdvVisible = PokerHudSharedState.showActionAdvisor.value
-                params.width = dpToPx(176f)
+                params.width = dpToPx(144f)
                 params.height = if (isAdvVisible) dpToPx(155f) else dpToPx(100f)
                 if (params.x < 0) {
                     params.x = dpToPx(100f)
                 }
                 
-                frame.background = CutoutBackgroundDrawable(
+                frame.background = createBackgroundDrawable(
                     AndroidColor.parseColor("#E6111C24"), 
-                    dpToPx(10f).toFloat(), 
-                    dpToPx(1.5f).toFloat(), 
-                    AndroidColor.parseColor("#FF4CAF50"),
-                    dpToPx(32f).toFloat(),
-                    CutoutCorner.BOTTOM_LEFT
+                    8f, 
+                    dpToPx(1.5f), 
+                    AndroidColor.parseColor("#FF4CAF50")
                 )
                 
                 content.visibility = View.VISIBLE
@@ -2323,7 +2321,7 @@ class PokerHudService : Service() {
                 equalizer.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
                     topMargin = dpToPx(2f)
                     bottomMargin = dpToPx(2f)
-                    leftMargin = dpToPx(32f)
+                    leftMargin = 0
                     rightMargin = dpToPx(4f)
                 }
             }
