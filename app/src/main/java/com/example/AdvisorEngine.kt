@@ -415,6 +415,113 @@ object AdvisorEngine {
         return Recommendation(action, confidence, explanation)
     }
 
+    fun computeRecommendationL2(
+        heroCard1: Card?,
+        heroCard2: Card?,
+        board: List<Card?>,
+        potSize: Float,
+        heroBet: Float,
+        opponents: List<OpponentState>,
+        activeOpponentsCount: Int,
+        simResult: SimulationResult?,
+        settings: AdvisorSettings,
+        position: TablePosition,
+        stage: TournamentStage,
+        smallBlind: Float,
+        bigBlind: Float,
+        heroStack: Float
+    ): Recommendation {
+        if (heroCard1 == null || heroCard2 == null) {
+            return Recommendation("FOLD", 100f, "Enter cards.")
+        }
+
+        // Base equity is from advanced simulation (which filters opponent ranges using historical vpip/pfr data)
+        val equity = (simResult?.heroWinPct ?: 0f) / 100f
+
+        // Get main active opponent stats
+        val opponent = opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
+        val profile = opponent?.stats
+
+        // Synthetic parameter 1: Delta SD = WSD - WTSD (Showdown win vs Showdown entry)
+        val wtsd = profile?.histWtsd ?: 30f
+        val wsd = profile?.histWsd ?: 50f
+        val deltaSD = wsd - wtsd
+
+        // Synthetic parameter 2: Preflop Focus Factor = PFR / VPIP
+        val vpip = profile?.histVpip ?: profile?.vpip ?: 30f
+        val pfr = profile?.histPfr ?: profile?.pfr ?: 20f
+        val preflopFocus = if (vpip > 0) (pfr / vpip) else 0f
+
+        // Adjust raw mathematics score using these synthetic calculations
+        var adjustedScore = equity
+
+        // If high deltaSD (e.g. > 15%), they rarely get to showdown without strong hands. Play tighter.
+        if (deltaSD > 15f) {
+            adjustedScore -= 0.05f
+        } else if (deltaSD < -5f) {
+            // Low deltaSD (< -5%), they are regular folders or showdown losers, we can bet/raise more freely.
+            adjustedScore += 0.05f
+        }
+
+        // Focus factor: if close to 1.0, they play extremely focused/solid preflop.
+        // If very low (< 0.3), they are hyper passive fish who check/call preflop but don't raise.
+        if (preflopFocus < 0.3f && vpip > 35f) {
+            // Passive calling station. Don't bluff him, but value bet wider.
+            adjustedScore += 0.03f
+        }
+
+        // Sklansky factor
+        val sklanskyGroup = getSklanskyGroup(heroCard1, heroCard2)
+
+        // Max opponent bet
+        var maxOpponentBet = 0f
+        opponents.filter { it.isActive }.forEach { opp ->
+            val pBet = if (settings.usePip) opp.betSize else 0f
+            if (pBet > maxOpponentBet) maxOpponentBet = pBet
+        }
+        val betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        val activePot = potSize + betToCall
+        val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
+
+        // Actions choice
+        val action: String
+        val explanation: String
+        val isPreflop = board.filterNotNull().isEmpty()
+
+        if (betToCall > 0) {
+            val callMargin = adjustedScore - potOdds
+            when {
+                callMargin > 0.15f || (isPreflop && sklanskyGroup <= 2 && adjustedScore > 0.45f) -> {
+                    action = "RAISE"
+                    explanation = "Рейз на велью, ΔSD ${deltaSD.toInt()}%"
+                }
+                callMargin >= 0f -> {
+                    action = "CALL"
+                    explanation = "Математический колл"
+                }
+                else -> {
+                    action = "FOLD"
+                    explanation = "Фолд по оддсам"
+                }
+            }
+        } else {
+            when {
+                adjustedScore > 0.52f || (isPreflop && sklanskyGroup <= 3) -> {
+                    action = "BET"
+                    explanation = "Математический бет, КПФ ${String.format(Locale.US, "%.1f", preflopFocus)}"
+                }
+                else -> {
+                    action = "CHECK"
+                    explanation = "Математический чек"
+                }
+            }
+        }
+
+        val confidenceValue = (adjustedScore * 100f).coerceIn(10f, 95f)
+
+        return Recommendation(action, confidenceValue, explanation)
+    }
+
     fun computeRecommendationAdvanced(
         heroCard1: Card?,
         heroCard2: Card?,

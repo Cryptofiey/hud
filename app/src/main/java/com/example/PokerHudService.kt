@@ -1048,11 +1048,29 @@ class PokerHudService : Service() {
                                 heroStack = updatedState.heroStack
                             )
 
+                            val l2Recommendation = com.example.AdvisorEngine.computeRecommendationL2(
+                                heroCard1 = updatedState.heroCard1,
+                                heroCard2 = updatedState.heroCard2,
+                                board = updatedState.board,
+                                potSize = updatedState.potSize,
+                                heroBet = updatedState.heroBet,
+                                opponents = updatedState.opponents,
+                                activeOpponentsCount = updatedState.opponents.count { it.isActive },
+                                simResult = advResult,
+                                settings = updatedState.settings,
+                                position = updatedState.position,
+                                stage = updatedState.stage,
+                                smallBlind = updatedState.smallBlind,
+                                bigBlind = updatedState.bigBlind,
+                                heroStack = updatedState.heroStack
+                            )
+
                             PokerHudSharedState.uiState.update { 
                                 it.copy(
                                     simulationResult = result,
                                     recommendation = recommendation,
                                     advancedSimulationResult = advResult,
+                                    l2Recommendation = l2Recommendation,
                                     advancedRecommendation = advRecommendation
                                 )
                             }
@@ -1598,7 +1616,7 @@ class PokerHudService : Service() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
             dpToPx(200f),
-            dpToPx(194f),
+            dpToPx(215f),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -1728,26 +1746,50 @@ class PokerHudService : Service() {
         mainVert.addView(advDivider)
         
         // Advisor Slot
-        val txtAdvisor = TextView(this).apply {
-            text = "🧮 ЖДЕМ..."
+        val txtL1Advisor = TextView(this).apply {
+            text = "🧮 L1: ЖДЕМ..."
             setTextColor(AndroidColor.parseColor("#FF90CAF9"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = dpToPx(42f) // Avoid cutout area
+                leftMargin = dpToPx(42f)
                 rightMargin = dpToPx(2f)
-                bottomMargin = dpToPx(2f)
+                bottomMargin = dpToPx(1.5f)
             }
         }
         
-        val txtAdvAdvisor = TextView(this).apply {
-            text = "✍️ ЖДЕМ..."
+        val txtL2Advisor = TextView(this).apply {
+            text = "🖩 L2: ЖДЕМ..."
+            setTextColor(AndroidColor.parseColor("#FFCC80"))
+            textSize = 8f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                leftMargin = dpToPx(42f)
+                rightMargin = dpToPx(2f)
+                bottomMargin = dpToPx(1.5f)
+            }
+        }
+        
+        val txtL3Advisor = TextView(this).apply {
+            text = "🖐️ L3: ЖДЕМ..."
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dpToPx(1f)
-                leftMargin = dpToPx(42f) // Avoid cutout area
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                leftMargin = dpToPx(42f)
+                rightMargin = dpToPx(2f)
+                bottomMargin = dpToPx(1.5f)
+            }
+        }
+
+        val txtL4Advisor = TextView(this).apply {
+            text = "🤖 Робот: Off"
+            setTextColor(AndroidColor.parseColor("#FFA7FFEB"))
+            textSize = 8f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                leftMargin = dpToPx(42f)
+                rightMargin = dpToPx(2f)
                 bottomMargin = dpToPx(4f)
             }
         }
@@ -1757,8 +1799,10 @@ class PokerHudService : Service() {
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT)
         }
         
-        advVert.addView(txtAdvisor)
-        advVert.addView(txtAdvAdvisor)
+        advVert.addView(txtL1Advisor)
+        advVert.addView(txtL2Advisor)
+        advVert.addView(txtL3Advisor)
+        advVert.addView(txtL4Advisor)
         
         val scrollAdvisor = android.widget.ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
@@ -1785,6 +1829,7 @@ class PokerHudService : Service() {
             var lastAdvSimulationResult: SimulationResult? = null
             var lastOpponents: List<OpponentState> = emptyList()
             var lastRecommendation: Recommendation? = null
+            var lastL2Recommendation: Recommendation? = null
             var lastAdvRecommendation: Recommendation? = null
 
             var currentHandRank = "--"
@@ -1796,6 +1841,7 @@ class PokerHudService : Service() {
 
             PokerHudSharedState.uiState.collect { state ->
                 try {
+                    val isRobotActive = RobotPlayer.isRobotModeEnabled.value
                     // 1. Update Probabilities & Cards
                     val res = state.simulationResult
                     val advRes = state.advancedSimulationResult
@@ -1804,8 +1850,9 @@ class PokerHudService : Service() {
                     val simResultChanged = res != lastSimulationResult || advRes != lastAdvSimulationResult
                     val opponentsChanged = state.opponents != lastOpponents
                     val rec = state.recommendation
+                    val l2Rec = state.l2Recommendation
                     val advRec = state.advancedRecommendation
-                    val recommendationChanged = rec != lastRecommendation || advRec != lastAdvRecommendation
+                    val recommendationChanged = rec != lastRecommendation || l2Rec != lastL2Recommendation || advRec != lastAdvRecommendation
 
                     if (heroCardsChanged || boardChanged || simResultChanged) {
                         // Render Board independent of Hero cards
@@ -1911,27 +1958,53 @@ class PokerHudService : Service() {
                     }
                     
                     if (recommendationChanged) {
-                        // Update original recommendation
+                        // 1. Update L1 recommendation
                         if (rec != null) {
                             val actName = translateAction(rec.action)
                             val exp = if (rec.explanation.isNotEmpty()) " | ${rec.explanation}" else ""
-                            txtAdvisor.text = "🧮 $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)})$exp"
-                            setRecommendationColor(txtAdvisor, rec.action)
+                            txtL1Advisor.text = "🧮 L1: $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)})$exp"
+                            setRecommendationColor(txtL1Advisor, rec.action)
                         } else {
-                            txtAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🧮 Ждем..." else "🧮 Ждем карты"
-                            txtAdvisor.setTextColor(AndroidColor.parseColor("#FFFFD54F"))
+                            txtL1Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🧮 L1: Ждем..." else "🧮 L1: Ждем карты"
+                            txtL1Advisor.setTextColor(AndroidColor.parseColor("#FFFFD54F"))
                         }
 
-                        // Update advanced recommendation
+                        // 2. Update L2 recommendation
+                        if (l2Rec != null) {
+                            val actName = translateAction(l2Rec.action)
+                            val exp = if (l2Rec.explanation.isNotEmpty()) " | ${l2Rec.explanation}" else ""
+                            txtL2Advisor.text = "🖩 L2: $actName (${String.format(Locale.US, "%.0f%%", l2Rec.confidence)})$exp"
+                            setRecommendationColor(txtL2Advisor, l2Rec.action)
+                        } else {
+                            txtL2Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🖩 L2: Ждем..." else ""
+                            txtL2Advisor.setTextColor(AndroidColor.parseColor("#FFCC80"))
+                        }
+
+                        // 3. Update L3 recommendation
                         if (advRec != null) {
                             val actName = translateAction(advRec.action)
                             val exp = if (advRec.explanation.isNotEmpty()) " | ${advRec.explanation}" else ""
-                            txtAdvAdvisor.text = "✍️ $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)})$exp"
-                            setRecommendationColor(txtAdvAdvisor, advRec.action)
+                            txtL3Advisor.text = "🖐️ L3: $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)})$exp"
+                            setRecommendationColor(txtL3Advisor, advRec.action)
                         } else {
-                            txtAdvAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "✍️ Ждем..." else ""
-                            txtAdvAdvisor.setTextColor(AndroidColor.parseColor("#FF00FFCC"))
+                            txtL3Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🖐️ L3: Ждем..." else ""
+                            txtL3Advisor.setTextColor(AndroidColor.parseColor("#FF00FFCC"))
                         }
+                    }
+
+                    // 4. Update L4 / Robot Status
+                    if (isRobotActive) {
+                        val buttons = RobotPlayer.availableActionButtons
+                        if (buttons.isEmpty()) {
+                            txtL4Advisor.text = "🤖 Робот: АКТИВЕН (Ожидание хода)"
+                        } else {
+                            val detectedActions = buttons.keys.joinToString(", ")
+                            txtL4Advisor.text = "🤖 Робот: АКТИВЕН (Ход: $detectedActions)"
+                        }
+                        txtL4Advisor.setTextColor(AndroidColor.parseColor("#FF00E676"))
+                    } else {
+                        txtL4Advisor.text = "🤖 Робот: ВЫКЛЮЧЕН"
+                        txtL4Advisor.setTextColor(AndroidColor.parseColor("#FF90A4AE"))
                     }
 
                     // Unconditional reactive Equalizer block updating
@@ -1977,7 +2050,6 @@ class PokerHudService : Service() {
                         }
                     }
                     
-                    val isRobotActive = RobotPlayer.isRobotModeEnabled.value
                     val l4FillValue = if (isRobotActive) 1f else 0f
                     val l4Col = if (isRobotActive) AndroidColor.parseColor("#00E676") else AndroidColor.parseColor("#555555")
                     
@@ -1998,6 +2070,7 @@ class PokerHudService : Service() {
                     lastAdvSimulationResult = advRes
                     lastOpponents = state.opponents
                     lastRecommendation = rec
+                    lastL2Recommendation = l2Rec
                     lastAdvRecommendation = advRec
                 } catch (e: Exception) {
                     android.util.Log.e("PokerHudService", "Error inside HUD uiState catch", e)
@@ -2023,8 +2096,10 @@ class PokerHudService : Service() {
         serviceScope.launch(probsJob!!) {
             PokerHudSharedState.showActionAdvisor.collect { isVisible ->
                 advDivider.visibility = if (isVisible) View.VISIBLE else View.GONE
-                txtAdvisor.visibility = if (isVisible) View.VISIBLE else View.GONE
-                txtAdvAdvisor.visibility = if (isVisible) View.VISIBLE else View.GONE
+                txtL1Advisor.visibility = if (isVisible) View.VISIBLE else View.GONE
+                txtL2Advisor.visibility = if (isVisible) View.VISIBLE else View.GONE
+                txtL3Advisor.visibility = if (isVisible) View.VISIBLE else View.GONE
+                txtL4Advisor.visibility = if (isVisible) View.VISIBLE else View.GONE
             }
         }
         
@@ -2043,8 +2118,10 @@ class PokerHudService : Service() {
         }
         serviceScope.launch(probsJob!!) {
             PokerHudSharedState.actionAdvisorScale.collect { scale -> 
-                txtAdvisor.textSize = 8f * scale
-                txtAdvAdvisor.textSize = 8f * scale
+                txtL1Advisor.textSize = 8f * scale
+                txtL2Advisor.textSize = 8f * scale
+                txtL3Advisor.textSize = 8f * scale
+                txtL4Advisor.textSize = 8f * scale
             }
         }
         // serviceScope.launch(probsJob!!) {
