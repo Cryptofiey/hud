@@ -531,6 +531,79 @@ class PokerHudService : Service() {
             }
         }
 
+        val readProfileBtn = Button(this, null, 0, android.R.style.Widget_Button).apply {
+            text = "ПРОФИЛЬ"
+            textSize = 8f
+            setTextColor(AndroidColor.WHITE)
+            background = createBackgroundDrawable(AndroidColor.parseColor("#FF1976D2"), 4f)
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(dpToPx(56f), dpToPx(24f)).apply {
+                setMargins(0, 0, dpToPx(2f), 0)
+            }
+            setOnClickListener {
+                if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
+                    val originalVisibility = floatingOverlayView?.visibility ?: View.VISIBLE
+                    floatingOverlayView?.visibility = View.INVISIBLE
+                    floatingCommOverlay?.visibility = View.INVISIBLE
+                    floatingHoleOverlay?.visibility = View.INVISIBLE
+                    floatingProbsOverlay?.visibility = View.INVISIBLE
+                    floatingScannerOverlay?.visibility = View.INVISIBLE
+                    
+                    serviceScope.launch {
+                        kotlinx.coroutines.delay(2000)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            floatingOverlayView?.visibility = originalVisibility
+                            updateBoxOverlays()
+                        }
+                    }
+
+                    if (screenScanner != null) {
+                        screenScanner?.requestProfileScan = true
+                    } else {
+                        startForegroundServiceNotification()
+                        val tempScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode, stopAfterProfileScan = true)
+                        tempScanner.start()
+                    }
+                } else {
+                    android.widget.Toast.makeText(this@PokerHudService, "Enable Screen Projection first", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        val btnFrames = Button(this, null, 0, android.R.style.Widget_Button).apply {
+            text = "РАМКИ"
+            textSize = 8f
+            setTextColor(AndroidColor.WHITE)
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(dpToPx(46f), dpToPx(24f)).apply {
+                setMargins(0, 0, dpToPx(2f), 0)
+            }
+            setOnClickListener {
+                PokerHudSharedState.showScannerBoxes.value = !PokerHudSharedState.showScannerBoxes.value
+            }
+        }
+        serviceScope.launch {
+            PokerHudSharedState.showScannerBoxes.collect { active ->
+                btnFrames.background = createBackgroundDrawable(
+                    if (active) AndroidColor.parseColor("#FFD500F9") else AndroidColor.parseColor("#FF37474F"), 4f
+                )
+            }
+        }
+
+        val btnMinimize = Button(this, null, 0, android.R.style.Widget_Button).apply {
+            text = "СКРЫТЬ"
+            textSize = 8f
+            setTextColor(AndroidColor.WHITE)
+            background = createBackgroundDrawable(AndroidColor.parseColor("#FF37474F"), 4f)
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(dpToPx(46f), dpToPx(24f)).apply {
+                setMargins(0, 0, dpToPx(2f), 0)
+            }
+            setOnClickListener {
+                PokerHudSharedState.isControllerHudMinimized.value = true
+            }
+        }
+
         val btnExit = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "ВЫХОД"
             textSize = 8f
@@ -546,6 +619,9 @@ class PokerHudService : Service() {
 
         headerRow.addView(txtTitle)
         headerRow.addView(btnSwitchToVert)
+        headerRow.addView(readProfileBtn)
+        headerRow.addView(btnFrames)
+        headerRow.addView(btnMinimize)
         headerRow.addView(btnExit)
         expanded.addView(headerRow)
 
@@ -618,12 +694,10 @@ class PokerHudService : Service() {
         val commCheckBox = createToggleButton("Борд", PokerHudSharedState.showCommBox)
         val holeCheckBox = createToggleButton("Карты", PokerHudSharedState.showHoleBox)
         val probsCheckBox = createToggleButton("Статы", PokerHudSharedState.showProbsBox)
-        val scannerCheckBox = createToggleButton("Рамки", PokerHudSharedState.showScannerBoxes)
         
         toggles1.addView(commCheckBox)
         toggles1.addView(holeCheckBox)
         toggles1.addView(probsCheckBox)
-        toggles1.addView(scannerCheckBox)
         expanded.addView(toggles1)
 
         parentFrame.addView(expanded)
