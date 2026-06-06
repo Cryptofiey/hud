@@ -1634,7 +1634,7 @@ class PokerHudService : Service() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
             dpToPx(200f),
-            dpToPx(225f),
+            dpToPx(195f),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -1682,6 +1682,7 @@ class PokerHudService : Service() {
         val infoRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                leftMargin = dpToPx(42f) // Align with other views
                 rightMargin = dpToPx(16f) // Keep clear of close button
             }
         }
@@ -1742,9 +1743,9 @@ class PokerHudService : Service() {
         
         // Equalizer View Integration
         val equalizer = EqualizerView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(38f)).apply {
-                topMargin = dpToPx(4f)
-                bottomMargin = dpToPx(4f)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
+                topMargin = dpToPx(2f)
+                bottomMargin = dpToPx(2f)
                 leftMargin = dpToPx(42f) // Keep clear of cutout
                 rightMargin = dpToPx(4f)
             }

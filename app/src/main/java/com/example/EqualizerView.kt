@@ -32,7 +32,7 @@ class EqualizerView(context: Context) : View(context) {
     
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 24f
+        textSize = context.resources.displayMetrics.density * 10f
         textAlign = Paint.Align.CENTER
         typeface = android.graphics.Typeface.DEFAULT_BOLD
     }
@@ -72,19 +72,19 @@ class EqualizerView(context: Context) : View(context) {
         
         // Background
         val bgRect = RectF(left, 0f, right, height)
-        canvas.drawRoundRect(bgRect, 4f, 4f, bgPaint)
+        canvas.drawRoundRect(bgRect, 3f, 3f, bgPaint)
 
         // Fill
         val fillHeight = height * fillPct.coerceIn(0f, 1f)
         if (fillHeight > 0) {
             val fillRect = RectF(left, height - fillHeight, right, height)
             fillPaint.color = fillColor
-            canvas.drawRoundRect(fillRect, 4f, 4f, fillPaint)
+            canvas.drawRoundRect(fillRect, 3f, 3f, fillPaint)
         }
         
         // Label shadow
         textPaint.color = Color.BLACK
-        canvas.drawText(label, left + width / 2f + 2f, height / 2f + textPaint.textSize / 3f + 2f, textPaint)
+        canvas.drawText(label, left + width / 2f + 1f, height / 2f + textPaint.textSize / 3f + 1f, textPaint)
         // Label
         textPaint.color = Color.WHITE
         canvas.drawText(label, left + width / 2f, height / 2f + textPaint.textSize / 3f, textPaint)
@@ -94,26 +94,26 @@ class EqualizerView(context: Context) : View(context) {
         val right = left + width
         // Background
         val bgRect = RectF(left, 0f, right, height)
-        canvas.drawRoundRect(bgRect, 4f, 4f, bgPaint)
+        canvas.drawRoundRect(bgRect, 3f, 3f, bgPaint)
 
         val segmentCount = segments.size
         if (segmentCount > 0) {
-            val segGap = 2f
+            val segGap = 1.5f
             val segWidth = (width - segGap * (segmentCount - 1)) / segmentCount
             
             for (i in 0 until segmentCount) {
                 val segLeft = left + i * (segWidth + segGap)
                 val segRight = segLeft + segWidth
-                val segRect = RectF(segLeft, 2f, segRight, height - 2f)
+                val segRect = RectF(segLeft, 1f, segRight, height - 1f)
                 
                 fillPaint.color = segments[i]
-                canvas.drawRoundRect(segRect, 2f, 2f, fillPaint)
+                canvas.drawRoundRect(segRect, 1.5f, 1.5f, fillPaint)
             }
         }
         
         val label = "L3"
         textPaint.color = Color.BLACK
-        canvas.drawText(label, left + width / 2f + 2f, height / 2f + textPaint.textSize / 3f + 2f, textPaint)
+        canvas.drawText(label, left + width / 2f + 1f, height / 2f + textPaint.textSize / 3f + 1f, textPaint)
         textPaint.color = Color.WHITE
         canvas.drawText(label, left + width / 2f, height / 2f + textPaint.textSize / 3f, textPaint)
     }
