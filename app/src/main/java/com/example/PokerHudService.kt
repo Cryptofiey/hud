@@ -1598,7 +1598,7 @@ class PokerHudService : Service() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
             dpToPx(200f),
-            dpToPx(178f),
+            dpToPx(194f),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -1686,11 +1686,21 @@ class PokerHudService : Service() {
                 topMargin = dpToPx(1.5f)
             }
         }
+
+        val txtSynthetic = TextView(this).apply {
+            text = "L2: ΔSD: -- | КоэфPF: -- | БлефPF: --"
+            setTextColor(AndroidColor.parseColor("#FFCC80"))
+            textSize = 8f
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dpToPx(1.5f)
+            }
+        }
         
         infoRow.addView(title)
         infoRow.addView(txtCardsBoard)
         infoRow.addView(txtHandRankStrength)
         infoRow.addView(txtSklan)
+        infoRow.addView(txtSynthetic)
         
         mainVert.addView(infoRow)
         
@@ -1837,14 +1847,12 @@ class PokerHudService : Service() {
                     }
 
                     if (heroCardsChanged || opponentsChanged) {
+                        val mainOpp = state.opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
+                        val vpip = mainOpp?.stats?.histVpip ?: mainOpp?.stats?.vpip ?: 100f
+                        val sRange = AdvisorEngine.getSklanskyRangeForVpip(vpip)
+
                         if (state.heroCard1 != null && state.heroCard2 != null) {
                             val groupNum = AdvisorEngine.getSklanskyGroup(state.heroCard1, state.heroCard2)
-                            
-                            // Find the target opponent for range comparison
-                            val mainOpp = state.opponents.filter { it.isActive }.maxByOrNull { it.stats?.handsPlayed ?: 0 }
-                            val vpip = mainOpp?.stats?.histVpip ?: mainOpp?.stats?.vpip ?: 100f
-                            val sRange = AdvisorEngine.getSklanskyRangeForVpip(vpip)
-                            
                             txtSklan.text = "Группа: $groupNum | Диапазон: 1-$sRange"
                             
                             val strengthDesc = when (groupNum) {
@@ -1859,6 +1867,33 @@ class PokerHudService : Service() {
                         } else {
                             txtSklan.text = "Группа: [Нет карт]"
                             currentStrength = "--"
+                        }
+
+                        // Update L2 Synthetic parameter values inside HUD overlay reactive collector
+                        val stats = mainOpp?.stats
+                        if (stats != null) {
+                            val v = stats.histVpip ?: stats.vpip
+                            val p = stats.histPfr ?: stats.pfr
+                            
+                            // Delta SD: WSD - WTSD
+                            val wtsd = stats.histWtsd ?: 30f
+                            val wsd = stats.histWsd ?: 50f
+                            val deltaSD = wsd - wtsd
+                            
+                            // Preflop Focus Factor representing PFR / VPIP
+                            val preflopFocus = if (v > 0) (p / v) else 0f
+                            
+                            // Preflop Bluff Tendency representing PFR * (Fold to 3-Bet / 100)
+                            val fold3 = stats.histFoldTo3Bet ?: 45f
+                            val preflopBluff = p * (fold3 / 100f)
+                            
+                            txtSynthetic.text = String.format(
+                                Locale.US,
+                                "L2: ΔSD: %+.0f%% | КоэфPF: %.2f | БлефPF: %.0f%%",
+                                deltaSD, preflopFocus, preflopBluff
+                            )
+                        } else {
+                            txtSynthetic.text = "L2: ΔSD: -- | КоэфPF: -- | БлефPF: --"
                         }
                     }
 
@@ -1879,7 +1914,8 @@ class PokerHudService : Service() {
                         // Update original recommendation
                         if (rec != null) {
                             val actName = translateAction(rec.action)
-                            txtAdvisor.text = "🧮 $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)})"
+                            val exp = if (rec.explanation.isNotEmpty()) " | ${rec.explanation}" else ""
+                            txtAdvisor.text = "🧮 $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)})$exp"
                             setRecommendationColor(txtAdvisor, rec.action)
                         } else {
                             txtAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🧮 Ждем..." else "🧮 Ждем карты"
@@ -1889,7 +1925,8 @@ class PokerHudService : Service() {
                         // Update advanced recommendation
                         if (advRec != null) {
                             val actName = translateAction(advRec.action)
-                            txtAdvAdvisor.text = "✍️ $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)})"
+                            val exp = if (advRec.explanation.isNotEmpty()) " | ${advRec.explanation}" else ""
+                            txtAdvAdvisor.text = "✍️ $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)})$exp"
                             setRecommendationColor(txtAdvAdvisor, advRec.action)
                         } else {
                             txtAdvAdvisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "✍️ Ждем..." else ""
