@@ -49,7 +49,11 @@ sealed class ExternalAction {
         val heroActionOptions: List<String> = emptyList(),
         val heroTurn: Boolean = false,
         val heroStack: Float? = null,
-        val heroBet: Float? = null
+        val heroBet: Float? = null,
+        val tablePosition: TablePosition? = null,
+        val smallBlind: Float? = null,
+        val bigBlind: Float? = null,
+        val tournamentStage: TournamentStage? = null
     ) : ExternalAction()
     data class ControlHud(val command: String) : ExternalAction()
 }
@@ -149,6 +153,7 @@ class PokerHudService : Service() {
     private val countedHandPlayers = mutableSetOf<String>()
     private val countedVpipPlayers = mutableSetOf<String>()
     private val countedPfrPlayers = mutableSetOf<String>()
+    private val countedShowdownPlayers = mutableSetOf<String>()
 
     // Layout components
     private var expandedLayout: LinearLayout? = null
@@ -882,6 +887,7 @@ class PokerHudService : Service() {
                         countedHandPlayers.clear()
                         countedVpipPlayers.clear()
                         countedPfrPlayers.clear()
+                        countedShowdownPlayers.clear()
                     }
 
                     if (action.opponents.isNotEmpty()) {
@@ -908,6 +914,37 @@ class PokerHudService : Service() {
                                             val stats = prefs.loadPlayerStats(name)
                                             prefs.savePlayerStats(stats.copy(vpipCount = stats.vpipCount + 1))
                                         }
+                                    }
+                                }
+                                
+                                // Showdown stats sequence tracking
+                                val numBoardCards = newBoard.filterNotNull().size
+                                if (numBoardCards == 5 && (opponent.card1 != null || opponent.card2 != null)) {
+                                    val showdownKey = "${heroCardsString}_showdown_${name}"
+                                    if (!countedShowdownPlayers.contains(showdownKey)) {
+                                        countedShowdownPlayers.add(showdownKey)
+                                        val stats = prefs.loadPlayerStats(name)
+                                        var updatedStats = stats.copy(showdownTotal = stats.showdownTotal + 1)
+                                        
+                                        // Evaluate hands and award win if opponent hand beats hero hand
+                                        val oppCards = listOf(opponent.card1, opponent.card2) + newBoard
+                                        val oppNotNull = oppCards.filterNotNull()
+                                        if (oppNotNull.size >= 5) {
+                                            val oppHand = HandEvaluator.findBest5CardHand(oppNotNull)
+                                            val heroCards = listOf(action.hero1, action.hero2) + newBoard
+                                            val heroNotNull = heroCards.filterNotNull()
+                                            if (heroNotNull.size >= 5) {
+                                                val heroHand = HandEvaluator.findBest5CardHand(heroNotNull)
+                                                if (oppHand.compareTo(heroHand) > 0) {
+                                                    updatedStats = updatedStats.copy(showdownWins = updatedStats.showdownWins + 1)
+                                                }
+                                            } else {
+                                                if (oppHand.category.value >= HandCategory.TWO_PAIR.value) {
+                                                    updatedStats = updatedStats.copy(showdownWins = updatedStats.showdownWins + 1)
+                                                }
+                                            }
+                                        }
+                                        prefs.savePlayerStats(updatedStats)
                                     }
                                 }
                             }
@@ -937,7 +974,11 @@ class PokerHudService : Service() {
                         heroActionOptions = action.heroActionOptions,
                         heroTurn = action.heroTurn,
                         heroStack = action.heroStack ?: currentState.heroStack,
-                        heroBet = action.heroBet ?: currentState.heroBet
+                        heroBet = action.heroBet ?: currentState.heroBet,
+                        position = action.tablePosition ?: currentState.position,
+                        smallBlind = action.smallBlind ?: currentState.smallBlind,
+                        bigBlind = action.bigBlind ?: currentState.bigBlind,
+                        stage = action.tournamentStage ?: currentState.stage
                     )
                     PokerHudSharedState.uiState.update { updatedState }
                     
@@ -1557,7 +1598,7 @@ class PokerHudService : Service() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
             dpToPx(200f),
-            dpToPx(130f),
+            dpToPx(178f),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -1653,10 +1694,21 @@ class PokerHudService : Service() {
         
         mainVert.addView(infoRow)
         
+        // Equalizer View Integration
+        val equalizer = EqualizerView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(38f)).apply {
+                topMargin = dpToPx(4f)
+                bottomMargin = dpToPx(4f)
+                leftMargin = dpToPx(42f) // Keep clear of cutout
+                rightMargin = dpToPx(4f)
+            }
+        }
+        mainVert.addView(equalizer)
+        
         // Divider before Advisor Slot
         val advDivider = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
-                topMargin = dpToPx(4f)
+                topMargin = dpToPx(2f)
                 bottomMargin = dpToPx(2f)
                 leftMargin = dpToPx(42f) // Keep clear of cutout
                 rightMargin = dpToPx(20f) // Keep clear of close button area
@@ -1837,6 +1889,63 @@ class PokerHudService : Service() {
                             txtAdvAdvisor.setTextColor(AndroidColor.parseColor("#FF00FFCC"))
                         }
                     }
+
+                    // Unconditional reactive Equalizer block updating
+                    val l1FillValue = if (state.heroCard1 != null && state.heroCard2 != null && res != null) {
+                        (res.heroWinPct + res.heroTiePct) / 100f
+                    } else if (state.heroCard1 != null && state.heroCard2 != null) {
+                        0.35f
+                    } else {
+                        0f
+                    }
+                    val l1Col = when {
+                        l1FillValue > 0.5f -> AndroidColor.parseColor("#4CAF50")
+                        l1FillValue > 0.3f -> AndroidColor.parseColor("#FFC107")
+                        l1FillValue > 0f -> AndroidColor.parseColor("#FF5252")
+                        else -> AndroidColor.GRAY
+                    }
+                    
+                    val l2FillValue = if (state.heroCard1 != null && state.heroCard2 != null && advRes != null) {
+                        (advRes.heroWinPct + advRes.heroTiePct) / 100f
+                    } else if (state.heroCard1 != null && state.heroCard2 != null) {
+                        0.35f
+                    } else {
+                        0f
+                    }
+                    val l2Col = when {
+                        l2FillValue > 0.5f -> AndroidColor.parseColor("#4CAF50")
+                        l2FillValue > 0.3f -> AndroidColor.parseColor("#FFC107")
+                        l2FillValue > 0f -> AndroidColor.parseColor("#FF5252")
+                        else -> AndroidColor.GRAY
+                    }
+                    
+                    val opponentsWithAngles = state.opponents.filter { it.nickname != "Unknown" && it.nickname != "Player" }
+                    val l3Sg = if (opponentsWithAngles.isEmpty()) {
+                        List(6) { AndroidColor.parseColor("#33FFFFFF") }
+                    } else {
+                        opponentsWithAngles.map { opp ->
+                            val v = opp.stats?.histVpip ?: opp.stats?.vpip ?: 30f
+                            when {
+                                v > 45f -> AndroidColor.parseColor("#FF5252")
+                                v < 15f -> AndroidColor.parseColor("#00E5FF")
+                                else -> AndroidColor.parseColor("#4CAF50")
+                            }
+                        }
+                    }
+                    
+                    val isRobotActive = RobotPlayer.isRobotModeEnabled.value
+                    val l4FillValue = if (isRobotActive) 1f else 0f
+                    val l4Col = if (isRobotActive) AndroidColor.parseColor("#00E676") else AndroidColor.parseColor("#555555")
+                    
+                    equalizer.updateState(EqualizerState(
+                        l1Fill = l1FillValue,
+                        l1Color = l1Col,
+                        l2Fill = l2FillValue,
+                        l2Color = l2Col,
+                        l3Segments = l3Sg,
+                        l4Fill = l4FillValue,
+                        l4Color = l4Col
+                    ))
 
                     lastHero1 = state.heroCard1
                     lastHero2 = state.heroCard2

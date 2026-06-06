@@ -156,7 +156,7 @@ class ScreenScanner(
         val columnIsCard = BooleanArray(w)
         for (x in 0 until w) {
             val avgPixel = columnActivity[x] / ySteps
-            columnIsCard[x] = columnActivity[x] > threshold && avgPixel > 35
+            columnIsCard[x] = columnActivity[x] > threshold && avgPixel > 15
         }
 
         val rawSlots = mutableListOf<android.graphics.Rect>()
@@ -606,19 +606,120 @@ class ScreenScanner(
                 finalOpponentsRaw = if (emptyOpponentsFrames < 3) currentState.opponents else emptyList()
             }
             
+            // Parse blinds and tournament stages from fullScanText
+            var parsedSB: Float? = null
+            var parsedBB: Float? = null
+            var parsedStage: TournamentStage? = null
+            
+            val nlhMatch = Regex("NLH\\s*-\\s*([0-9.,KM]+)\\s*/\\s*([0-9.,KM]+)(?:\\s*\\(LEVEL\\s*(\\d+)\\))?").find(fullScanText)
+            if (nlhMatch != null) {
+                parsedSB = parseCleanValue(nlhMatch.groupValues[1])
+                parsedBB = parseCleanValue(nlhMatch.groupValues[2])
+                
+                val levelValStr = nlhMatch.groupValues.getOrNull(3)
+                if (levelValStr != null) {
+                    val levelVal = levelValStr.toIntOrNull()
+                    if (levelVal != null) {
+                        parsedStage = when {
+                            levelVal <= 6 -> TournamentStage.EARLY
+                            levelVal <= 14 -> TournamentStage.MIDDLE
+                            else -> TournamentStage.LATE
+                        }
+                    }
+                }
+            }
+
             // Hero is usually at the bottom-center of the screen.
             // Exclude hero from opponents and extract hero stack.
             var scannedHeroStack: Float? = null
             var scannedHeroBet: Float? = null
+            var heroBoundingBox: android.graphics.Rect? = null
             val finalOpponents = finalOpponentsRaw.filter { opp ->
                 val box = opp.boundingBox
                 if (box != null && box.top > cleanBitmap!!.height * 0.70f && box.left > cleanBitmap.width * 0.2f && box.right < cleanBitmap.width * 0.8f) {
                     scannedHeroStack = opp.stackSize
                     scannedHeroBet = opp.betSize
+                    heroBoundingBox = box
                     false // EXCLUDE from opponents
                 } else {
                     true // Keep as opponent
                 }
+            }
+
+            // Build seated players list clockwise starting from Hero
+            val seatedPlayers = mutableListOf<OpponentState>()
+            val heroNick = "in2it"
+            
+            val heroState = OpponentState(
+                id = 0,
+                nickname = heroNick,
+                stackSize = scannedHeroStack ?: currentState.heroStack,
+                betSize = scannedHeroBet ?: currentState.heroBet,
+                isActive = true,
+                isRandom = false,
+                boundingBox = heroBoundingBox ?: android.graphics.Rect(
+                    (cleanBitmap!!.width * 0.4f).toInt(),
+                    (cleanBitmap!!.height * 0.72f).toInt(),
+                    (cleanBitmap!!.width * 0.6f).toInt(),
+                    (cleanBitmap!!.height * 0.95f).toInt()
+                )
+            )
+            seatedPlayers.add(heroState)
+            
+            for (opp in finalOpponents) {
+                if (opp.nickname != "Unknown" && opp.nickname != "Player") {
+                    seatedPlayers.add(opp)
+                }
+            }
+            
+            // Identify dynamic Dealer Button position
+            var dealerPlayer: OpponentState? = null
+            for (player in seatedPlayers) {
+                val box = player.boundingBox ?: continue
+                if (hasDealerButton(cleanBitmap!!, box, result.textBlocks)) {
+                    dealerPlayer = player
+                    break
+                }
+            }
+            
+            // Fallback rules if dealer button is temporarily blocked or hidden
+            if (dealerPlayer == null) {
+                val prevDealerOpp = currentState.opponents.firstOrNull { it.isDealer }
+                if (prevDealerOpp != null) {
+                    dealerPlayer = seatedPlayers.firstOrNull { it.nickname == prevDealerOpp.nickname }
+                } else if (currentState.position == TablePosition.BTN) {
+                    dealerPlayer = heroState
+                }
+            }
+            
+            val screenCenterX = cleanBitmap!!.width / 2f
+            val screenCenterY = cleanBitmap!!.height / 2f
+            
+            val playersWithAngles = seatedPlayers.map { player ->
+                val box = player.boundingBox!!
+                val dx = box.centerX() - screenCenterX
+                val dy = box.centerY() - screenCenterY
+                var angleDeg = Math.toDegrees(Math.atan2(dy.toDouble(), dx.toDouble()))
+                angleDeg = (angleDeg + 360.0) % 360.0
+                Pair(player, angleDeg)
+            }
+            
+            val heroAngle = playersWithAngles.firstOrNull { it.first.id == 0 }?.second ?: 90.0
+            
+            val orderedSeated = playersWithAngles.sortedBy { (_, angle) ->
+                (angle - heroAngle + 360.0) % 360.0
+            }.map { it.first }
+            
+            var btnIdx = orderedSeated.indexOfFirst { it.nickname == dealerPlayer?.nickname }
+            if (btnIdx == -1) btnIdx = 0
+            
+            val mappedPositions = assignPositions(orderedSeated, btnIdx)
+            val heroPos = mappedPositions[heroNick] ?: TablePosition.BTN
+            
+            val finalOpponentsWithPositions = finalOpponents.map { opp ->
+                val isD = (opp.nickname == dealerPlayer?.nickname)
+                val pos = mappedPositions[opp.nickname] ?: TablePosition.BTN
+                opp.copy(isDealer = isD, positionName = pos.name)
             }
 
             var profileBoxesToHighlight: List<ScannedBox>? = null
@@ -680,7 +781,7 @@ class ScreenScanner(
                     hero1 = finalH1, 
                     hero2 = finalH2, 
                     board = finalBoard, 
-                    opponents = finalOpponents, 
+                    opponents = finalOpponentsWithPositions, 
                     profileBoxes = profileBoxesToHighlight, 
                     updateProfileBoxes = (profileBoxesToHighlight != null), 
                     rawScannerBoxes = rawBoxes,
@@ -688,7 +789,11 @@ class ScreenScanner(
                     heroActionOptions = heroActionOptions.toList(),
                     heroTurn = heroActionOptions.isNotEmpty(),
                     heroStack = scannedHeroStack,
-                    heroBet = scannedHeroBet
+                    heroBet = scannedHeroBet,
+                    tablePosition = heroPos,
+                    smallBlind = parsedSB,
+                    bigBlind = parsedBB,
+                    tournamentStage = parsedStage
                 )
             )
             
@@ -845,6 +950,78 @@ class ScreenScanner(
         if (totalChroma + blkC < 2) return null
         
         return Suit.SPADES
+    }
+
+    private fun parseCleanValue(str: String): Float? {
+        val s = str.trim().uppercase()
+            .replace(",", ".")
+            .replace("A", "0")
+            .replace("O", "0")
+        val multiplier = when {
+            s.endsWith("K") -> 1000f
+            s.endsWith("M") -> 1000000f
+            else -> 1f
+        }
+        val numOnly = s.filter { it.isDigit() || it == '.' }
+        val parsed = numOnly.toFloatOrNull() ?: return null
+        return parsed * multiplier
+    }
+
+    private fun hasDealerButton(bitmap: Bitmap, box: android.graphics.Rect, textBlocks: List<com.google.mlkit.vision.text.Text.TextBlock>): Boolean {
+        for (block in textBlocks) {
+            for (line in block.lines) {
+                val txt = line.text.trim().uppercase()
+                val lineBox = line.boundingBox ?: continue
+                if ((txt == "D" || txt == "DEALER" || txt == "BTN") && 
+                    android.graphics.Rect.intersects(box, lineBox)) {
+                    return true
+                }
+            }
+        }
+        
+        val searchLeft = maxOf(0, box.left - 45)
+        val searchTop = maxOf(0, box.top - 45)
+        val searchRight = minOf(bitmap.width - 1, box.right + 45)
+        val searchBottom = minOf(bitmap.height - 1, box.bottom + 45)
+        
+        var redPixelsCount = 0
+        for (x in searchLeft..searchRight step 2) {
+            for (y in searchTop..searchBottom step 2) {
+                val p = bitmap.getPixel(x, y)
+                val r = android.graphics.Color.red(p)
+                val g = android.graphics.Color.green(p)
+                val b = android.graphics.Color.blue(p)
+                if (r > 165 && g < 65 && b < 65) {
+                    redPixelsCount++
+                    if (redPixelsCount > 15) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    private fun assignPositions(orderedPlayers: List<OpponentState>, dealerIdx: Int): Map<String, TablePosition> {
+        val mapping = mutableMapOf<String, TablePosition>()
+        val n = orderedPlayers.size
+        if (n == 0) return emptyMap()
+        
+        val positionsPattern = when (n) {
+            2 -> listOf(TablePosition.SB, TablePosition.BTN)
+            3 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB)
+            4 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG)
+            5 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG, TablePosition.CO)
+            else -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG, TablePosition.MP, TablePosition.CO)
+        }
+        
+        for (i in 0 until n) {
+            val player = orderedPlayers[i]
+            val relIdx = (i - dealerIdx + n) % n
+            val pos = positionsPattern.getOrNull(relIdx) ?: TablePosition.CO
+            mapping[player.nickname] = pos
+        }
+        return mapping
     }
 
 

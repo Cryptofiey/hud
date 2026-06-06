@@ -74,6 +74,8 @@ data class OpponentState(
     val stackSize: Float = 1000f,
     val stats: PlayerStats? = null,
     val currentAction: String = "NONE",
+    val isDealer: Boolean = false,
+    val positionName: String = "NONE",
     @Transient
     val boundingBox: android.graphics.Rect? = null
 )
