@@ -103,6 +103,7 @@ class ScreenScanner(
     
     private val confirmedHole = mutableListOf<Card?>()
     private val confirmedComm = mutableListOf<Card?>()
+    private var lastPasswordScreenTime = 0L
 
     private fun findCardSlots(bitmap: Bitmap, rect: android.graphics.Rect, expectedMaxCards: Int): List<android.graphics.Rect> {
         if (rect.width() <= 0 || rect.height() <= 0) return emptyList()
@@ -320,6 +321,23 @@ class ScreenScanner(
             var scannedPotSize: Float? = null
             
             val fullScanText = result.text.uppercase()
+            val textUpper = fullScanText
+            var isPasswordScreen = false
+            if (textUpper.contains("PASSWORD") || textUpper.contains("ПАРОЛЬ") || 
+                textUpper.contains("ПИН") || textUpper.contains("PIN") || 
+                textUpper.contains("ВВЕДИТЕ") || textUpper.contains("ENTER CODE") ||
+                textUpper.contains("LOG IN") || textUpper.contains("LOGIN")) {
+                isPasswordScreen = true
+                lastPasswordScreenTime = System.currentTimeMillis()
+            }
+            
+            val elapsedSinceLastPass = System.currentTimeMillis() - lastPasswordScreenTime
+            val triggerHide = isPasswordScreen || (elapsedSinceLastPass < 15000 && result.textBlocks.isEmpty())
+            
+            if (triggerHide) {
+                PokerHudSharedState.triggerPasswordHiding()
+            }
+
             val potMatch = Regex("(POT|ПОТ)[^0-9]*([0-9.,]+)").find(fullScanText)
             if (potMatch != null) {
                 val numStr = potMatch.groupValues[2].replace(",", "")

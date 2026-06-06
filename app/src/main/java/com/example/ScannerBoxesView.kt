@@ -109,6 +109,7 @@ class ScannerBoxesView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         if (isHidden) return
+        if (!PokerHudSharedState.showScannerBoxes.value) return
         super.onDraw(canvas)
 
         try {
