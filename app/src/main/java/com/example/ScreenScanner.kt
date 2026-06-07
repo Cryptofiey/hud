@@ -364,11 +364,19 @@ class ScreenScanner(
                         
                         if (box.top > cleanBitmap!!.height * 0.82f) {
                             val textUpper = element.text.uppercase()
-                            if (textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || 
-                                textUpper.contains("X/F") || textUpper.contains("ПАС")) {
+                            
+                            // Skip pre-action checkboxes and unwanted buttons
+                            if (textUpper.contains("X/F") || textUpper.contains("X / F") || 
+                                textUpper.contains("X/C") || textUpper.contains("X / C") ||
+                                textUpper.contains("ANY") || textUpper.contains("ЛЮБЫЕ") || 
+                                textUpper.contains("ЛЮБОЙ") || textUpper.contains("PLAY NEXT")) {
+                                continue
+                            }
+                            
+                            if (textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) {
                                 heroActionOptions.add("Fold")
                             } 
-                            if (textUpper.contains("CHECK") || textUpper.contains("ЧЕК") || textUpper.contains("X/C")) {
+                            if (textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) {
                                 heroActionOptions.add("Check")
                             } 
                             if (textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) {
@@ -411,6 +419,14 @@ class ScreenScanner(
                             // Prevent tiny non-button text from being recognized:
                             // Even short action buttons like "BET" or "Fold" are larger than 5% of screen width.
                             if (box.width() < cleanBitmap!!.width * 0.05f) continue
+                            
+                            // Skip pre-action checkboxes and unwanted buttons
+                            if (txt.contains("X/F") || txt.contains("X / F") || 
+                                txt.contains("X/C") || txt.contains("X / C") ||
+                                txt.contains("ANY") || txt.contains("ЛЮБЫЕ") || 
+                                txt.contains("ЛЮБОЙ") || txt.contains("PLAY NEXT")) {
+                                continue
+                            }
                             
                             if (txt.contains("FOLD") || txt.contains("ФОЛД") ||
                                 txt.contains("CHECK") || txt.contains("ЧЕК") ||
@@ -520,7 +536,6 @@ class ScreenScanner(
                 if (cards.isEmpty()) return resultList
                 
                 // Group detections by their X center
-                val clusterThreshold = regionRect.width() / 12f
                 val sorted = cards.sortedBy { it.second.centerX() }
                 val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
                 
@@ -530,6 +545,11 @@ class ScreenScanner(
                     } else {
                         val lastCluster = clusters.last()
                         val lastCx = lastCluster.map { it.second.centerX() }.average()
+                        val avgWidth = lastCluster.map { it.second.width() }.average().toFloat()
+                        
+                        // Use a tighter threshold dependent on region height and element width
+                        val clusterThreshold = maxOf(avgWidth * 1.2f, regionRect.height() * 0.15f, 15f)
+                        
                         if (elem.second.centerX() - lastCx < clusterThreshold) {
                             lastCluster.add(elem)
                         } else {
@@ -548,8 +568,13 @@ class ScreenScanner(
                     Card(finalRank, finalSuit)
                 }
                 
-                for (i in 0 until minOf(maxCards, finalCards.size)) {
-                    resultList[i] = finalCards[i]
+                // Deduplicate consecutive identical cards (e.g. if big rank and small rank were detected separately)
+                val deduplicated = finalCards.filterIndexed { index, card -> 
+                    index == 0 || card != finalCards[index - 1] 
+                }
+                
+                for (i in 0 until minOf(maxCards, deduplicated.size)) {
+                    resultList[i] = deduplicated[i]
                 }
                 
                 return resultList
