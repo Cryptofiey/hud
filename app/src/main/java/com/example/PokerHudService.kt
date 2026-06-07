@@ -482,7 +482,7 @@ class PokerHudService : Service() {
                 AndroidColor.parseColor("#FFD500F9"), // Neon Purple Outline
                 dpToPx(28f).toFloat() // Reduced Cutout radius for player avatar to avoid overflow
             )
-            val shadowParams = FrameLayout.LayoutParams((resources.displayMetrics.widthPixels * 75 / 100), WindowManager.LayoutParams.WRAP_CONTENT)
+            val shadowParams = FrameLayout.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT)
             layoutParams = shadowParams
         }
         expandedLayout = expanded
@@ -509,11 +509,11 @@ class PokerHudService : Service() {
 
         val btnSwitchToVert = TextView(this).apply {
             text = "🔁"
-            textSize = 11f
+            textSize = 9f
             setTextColor(AndroidColor.WHITE)
-            layoutParams = LinearLayout.LayoutParams(dpToPx(20f), dpToPx(20f)).apply {
+            layoutParams = LinearLayout.LayoutParams(dpToPx(16f), dpToPx(16f)).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                setMargins(0, 0, dpToPx(6f), 0)
+                setMargins(0, 0, dpToPx(4f), 0)
             }
             setOnClickListener {
                 val isVert = PokerHudSharedState.isControllerHudVertical.value
@@ -533,12 +533,12 @@ class PokerHudService : Service() {
 
         val readProfileBtn = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "ПРОФИЛЬ"
-            textSize = 8f
+            textSize = 7f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF1976D2"), 4f)
-            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(24f)).apply {
-                setMargins(0, 0, dpToPx(3f), 0)
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(20f)).apply {
+                setMargins(0, 0, dpToPx(2f), 0)
             }
             setOnClickListener {
                 if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
@@ -572,11 +572,11 @@ class PokerHudService : Service() {
 
         val btnFrames = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "РАМКИ"
-            textSize = 8f
+            textSize = 7f
             setTextColor(AndroidColor.WHITE)
-            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(24f)).apply {
-                setMargins(0, 0, dpToPx(3f), 0)
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(20f)).apply {
+                setMargins(0, 0, dpToPx(2f), 0)
             }
             setOnClickListener {
                 PokerHudSharedState.showScannerBoxes.value = !PokerHudSharedState.showScannerBoxes.value
@@ -592,12 +592,12 @@ class PokerHudService : Service() {
 
         val btnMinimize = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "СКРЫТЬ"
-            textSize = 8f
+            textSize = 7f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF37474F"), 4f)
-            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(24f)).apply {
-                setMargins(0, 0, dpToPx(3f), 0)
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(20f)).apply {
+                setMargins(0, 0, dpToPx(2f), 0)
             }
             setOnClickListener {
                 PokerHudSharedState.isControllerHudMinimized.value = true
@@ -606,11 +606,11 @@ class PokerHudService : Service() {
 
         val btnExit = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "ВЫХОД"
-            textSize = 8f
+            textSize = 7f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF1E88E5"), 4f)
-            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(24f)).apply {
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dpToPx(20f)).apply {
                 setMargins(0, 0, dpToPx(1f), 0)
             }
             setOnClickListener {
@@ -671,12 +671,12 @@ class PokerHudService : Service() {
         fun createToggleButton(icon: String, flow: StateFlow<Boolean>): TextView {
             val tv = TextView(this).apply {
                 text = icon
-                textSize = 8.5f
+                textSize = 8.0f
                 gravity = Gravity.CENTER
                 setTextColor(AndroidColor.WHITE)
                 background = createBackgroundDrawable(if (flow.value) AndroidColor.parseColor("#FFD500F9") else AndroidColor.parseColor("#FF37474F"), 6f)
                 setPadding(0, dpToPx(3f), 0, dpToPx(3f))
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                layoutParams = LinearLayout.LayoutParams(0, dpToPx(22f), 1f).apply {
                     setMargins(dpToPx(1f), 0, dpToPx(1f), 0)
                 }
                 setOnClickListener {
@@ -901,14 +901,14 @@ class PokerHudService : Service() {
                 emojiContainer.visibility = View.VISIBLE
             } else {
                 // Horizontal state
-                params.width = resources.displayMetrics.widthPixels * 75 / 100
+                params.width = WindowManager.LayoutParams.WRAP_CONTENT
                 params.height = WindowManager.LayoutParams.WRAP_CONTENT
                 if (params.x < 0) {
                     params.x = dpToPx(2f)
                 }
                 
                 expanded.layoutParams = (expanded.layoutParams as FrameLayout.LayoutParams).apply {
-                    width = resources.displayMetrics.widthPixels * 75 / 100
+                    width = FrameLayout.LayoutParams.WRAP_CONTENT
                     height = FrameLayout.LayoutParams.WRAP_CONTENT
                 }
                 

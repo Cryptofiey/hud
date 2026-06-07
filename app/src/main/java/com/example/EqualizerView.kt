@@ -122,10 +122,14 @@ class EqualizerView(context: Context) : View(context) {
             for (i in 0 until segmentCount) {
                 val segLeft = i * (segWidth + segGap)
                 val segRight = segLeft + segWidth
-                val segRect = RectF(segLeft, top + 1f, segRight, bottom - 1f)
+                
+                val halfHeight = (height - 3f) / 2f
+                val segRectTop = RectF(segLeft, top + 1f, segRight, top + 1f + halfHeight)
+                val segRectBottom = RectF(segLeft, top + 1f + halfHeight + 1f, segRight, bottom - 1f)
                 
                 fillPaint.color = segments[i]
-                canvas.drawRoundRect(segRect, 1.5f, 1.5f, fillPaint)
+                canvas.drawRoundRect(segRectTop, 1.5f, 1.5f, fillPaint)
+                canvas.drawRoundRect(segRectBottom, 1.5f, 1.5f, fillPaint)
             }
         }
         
@@ -173,10 +177,14 @@ class EqualizerView(context: Context) : View(context) {
             for (i in 0 until segmentCount) {
                 val segLeft = left + i * (segWidth + segGap)
                 val segRight = segLeft + segWidth
-                val segRect = RectF(segLeft, 1f, segRight, height - 1f)
+                
+                val halfHeight = (height - 3f) / 2f
+                val segRectTop = RectF(segLeft, 1f, segRight, 1f + halfHeight)
+                val segRectBottom = RectF(segLeft, 1f + halfHeight + 1f, segRight, height - 1f)
                 
                 fillPaint.color = segments[i]
-                canvas.drawRoundRect(segRect, 1.5f, 1.5f, fillPaint)
+                canvas.drawRoundRect(segRectTop, 1.5f, 1.5f, fillPaint)
+                canvas.drawRoundRect(segRectBottom, 1.5f, 1.5f, fillPaint)
             }
         }
         
