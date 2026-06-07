@@ -13,6 +13,25 @@ class AutoPlayerService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         Log.d("AutoPlayer", "AutoPlayer Accessibility Service Connected")
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            try {
+                accessibilityButtonController.registerAccessibilityButtonCallback(
+                    object : android.accessibilityservice.AccessibilityButtonController.AccessibilityButtonCallback() {
+                        override fun onClicked(controller: android.accessibilityservice.AccessibilityButtonController?) {
+                            val current = RobotPlayer.isRobotModeEnabled.value
+                            RobotPlayer.isRobotModeEnabled.value = !current
+                            val statusText = if (!current) "AutoBot L5 ENABLED" else "AutoBot L5 DISABLED"
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                android.widget.Toast.makeText(this@AutoPlayerService, statusText, android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                            BotLogSharedState.appendLogBot("[BOT][L5] $statusText by Accessibility Button")
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e("AutoPlayer", "Error registering accessibility button", e)
+            }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
