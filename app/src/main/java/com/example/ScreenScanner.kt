@@ -763,6 +763,10 @@ class ScreenScanner(
             }
 
             var profileBoxesToHighlight: List<ScannedBox>? = null
+            if (PokerHudSharedState.triggerProfileScan.value) {
+                requestProfileScan = true
+                PokerHudSharedState.triggerProfileScan.value = false
+            }
             if (requestProfileScan) {
                 val scannedProfile = ProfileScanner.scan(result, cleanBitmap!!, hudRects)
                 if (scannedProfile != null && scannedProfile.nickname != "Unknown_Profile") {

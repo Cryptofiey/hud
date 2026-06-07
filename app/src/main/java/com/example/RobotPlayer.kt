@@ -30,6 +30,7 @@ object RobotPlayer {
                 
                 // If there are no action buttons detected, it's not our turn
                 if (availableActionButtons.isEmpty()) {
+                    handleProfileScanning(uiState)
                     return@collectLatest
                 }
 
@@ -153,5 +154,67 @@ object RobotPlayer {
         val thinkTime = if (action == "RAISE" || action == "БЕТ") Random.nextLong(1000, 2500) else 0L
         
         return maxOf(500L, base + variation + thinkTime)
+    }
+
+    private var isProfileScanningActive = false
+    private val scannedPositions = mutableSetOf<String>()
+
+    private fun handleProfileScanning(uiState: PokerUiState) {
+        if (isProfileScanningActive) return
+        val opponents = uiState.opponents
+        if (opponents.isEmpty()) return
+
+        // Pick an opponent whose bounding box we haven't scanned recently.
+        val unscannedOpponent = opponents.firstOrNull { opp ->
+            val box = opp.boundingBox
+            if (box == null) false else {
+                val key = "${box.left / 10}_${box.top / 10}"
+                !scannedPositions.contains(key)
+            }
+        }
+
+        if (unscannedOpponent != null) {
+            val box = unscannedOpponent.boundingBox!!
+            val key = "${box.left / 10}_${box.top / 10}"
+            
+            isProfileScanningActive = true
+            CoroutineScope(Dispatchers.Default).launch {
+                try {
+                    scannedPositions.add(key)
+                    if (scannedPositions.size > 20) scannedPositions.clear() // Prevent memory bloat
+                    
+                    // 1. Click on opponent avatar to open profile
+                    BotLogSharedState.appendLogBot("[BOT][L5] Clicking avatar to open profile of player ${unscannedOpponent.nickname}")
+                    executeClickOnRect(box)
+                    
+                    // 2. Wait for profile dialog to animate and open (around 1000ms is safe)
+                    delay(1200)
+                    
+                    // 3. Trigger scan bypassing HUD buttons
+                    PokerHudSharedState.triggerProfileScan.value = true 
+                    BotLogSharedState.appendLogBot("[BOT][L5] Triggered profile screen scan directly")
+                    
+                    // wait for scan to process
+                    delay(1200)
+                    
+                    // 4. Close the profile. We can click near the top of the screen
+                    val displayMetrics = AutoPlayerService.instance?.resources?.displayMetrics
+                    val screenW = displayMetrics?.widthPixels ?: 1000
+                    val screenH = displayMetrics?.heightPixels ?: 2000
+                    
+                    val closeX = screenW * 0.5f
+                    val closeY = screenH * 0.1f // Top area clicks outside of bounds, closes popups
+                    
+                    BotLogSharedState.appendLogBot("[BOT][L5] Closing profile by clicking outside: $closeX, $closeY")
+                    AutoPlayerService.instance?.dispatchClick(closeX, closeY, 150)
+                    
+                    delay(1000) // Cooldown before next
+                } catch (e: Exception) {
+                    Log.e("RobotPlayer", "Error during profile scan", e)
+                } finally {
+                    isProfileScanningActive = false
+                }
+            }
+        }
     }
 }

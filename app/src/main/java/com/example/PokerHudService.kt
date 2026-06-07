@@ -70,6 +70,7 @@ object PokerHudSharedState {
 
     // Scanner tuning
     val showScannerBoxes = MutableStateFlow(false)
+    val triggerProfileScan = MutableStateFlow(false)
     val scannerOffsetX = MutableStateFlow(0f)
     val scannerOffsetY = MutableStateFlow(0f)
     
@@ -2793,13 +2794,10 @@ class PokerHudService : Service() {
             try { windowManager?.removeView(it) } catch(e: Exception){} 
         }
         floatingScannerOverlay = null
-<<<<<<< HEAD
         try {
             stopService(Intent(this, BotLogWidgetService::class.java))
             BotLogSharedState.isBotLogWidgetRunning.value = false
         } catch (e: Exception) {}
-=======
->>>>>>> origin/main
         ScannerConfig.activeProjection?.stop()
         ScannerConfig.activeProjection = null
         ScannerConfig.pendingProjectionData = null
