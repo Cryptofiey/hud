@@ -59,7 +59,8 @@ object RobotPlayer {
                 // It accounts for multi-action streets where action might return to us after > 8 seconds.
                 val commCardsSize = uiState.board.filterNotNull().size
                 val heroStr = (uiState.heroCard1?.toString() ?: "") + (uiState.heroCard2?.toString() ?: "")
-                val signature = "${heroStr}_${commCardsSize}_${canonicalAction}"
+                val optionsSignature = uiState.heroActionOptions.sorted().joinToString(",")
+                val signature = "${heroStr}_${commCardsSize}_${canonicalAction}_${optionsSignature}"
                 val now = System.currentTimeMillis()
                 
                 if (lastActedAction == signature && (now - lastActionTime < 8000L)) {

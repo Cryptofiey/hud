@@ -546,9 +546,11 @@ class ScreenScanner(
                         val lastCluster = clusters.last()
                         val lastCx = lastCluster.map { it.second.centerX() }.average()
                         val avgWidth = lastCluster.map { it.second.width() }.average().toFloat()
+                        val avgHeight = lastCluster.map { it.second.height() }.average().toFloat()
                         
-                        // Use a tighter threshold dependent on region height and element width
-                        val clusterThreshold = maxOf(avgWidth * 1.2f, regionRect.height() * 0.15f, 15f)
+                        // Use a tighter threshold to group same-card detections 
+                        // while keeping strictly separate cards separated
+                        val clusterThreshold = maxOf(avgWidth * 0.8f, avgHeight * 0.4f, 10f)
                         
                         if (elem.second.centerX() - lastCx < clusterThreshold) {
                             lastCluster.add(elem)
@@ -885,7 +887,7 @@ class ScreenScanner(
             // Check for 10 first
             if (i + 1 < raw.length) {
                 val sub = raw.substring(i, i + 2)
-                if (sub == "10" || sub == "I0" || sub == "1O" || sub == "IQ" || sub == "1Q" || sub == "L0" || sub == "LO" || sub == "T0" || sub == "TO") {
+                if (sub == "10" || sub == "I0" || sub == "1O" || sub == "IO" || sub == "IQ" || sub == "1Q" || sub == "L0" || sub == "LO" || sub == "T0" || sub == "TO") {
                     found.add(Rank.TEN)
                     i += 2
                     matched = true
