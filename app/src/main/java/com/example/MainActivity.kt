@@ -628,7 +628,14 @@ fun SettingsLayout(
                             if (start) {
                                 LocalLogServer.start()
                                 BotLogSharedState.isLogServerRunning.value = true
-                                Toast.makeText(context, "Dashboard available at http://$localIpAddress:8080", Toast.LENGTH_LONG).show()
+                                val url = "http://$localIpAddress:8080"
+                                Toast.makeText(context, "Dashboard available at $url", Toast.LENGTH_LONG).show()
+                                try {
+                                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                    context.startActivity(browserIntent)
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Failed to open browser", e)
+                                }
                             } else {
                                 LocalLogServer.stop()
                                 BotLogSharedState.isLogServerRunning.value = false
