@@ -16,8 +16,11 @@ object LocalLogServer {
     private var isRunning = false
     private const val PORT = 8080
 
-    fun start() {
+    private var context: android.content.Context? = null
+
+    fun start(ctx: android.content.Context) {
         if (isRunning) return
+        this.context = ctx.applicationContext
         isRunning = true
         thread(start = true, name = "LocalLogServerThread") {
             try {
@@ -61,6 +64,8 @@ object LocalLogServer {
                             serveHtml(output)
                         } else if (path == "/logs") {
                             serveJson(output)
+                        } else if (path == "/export") {
+                            serveExport(output)
                         } else {
                             serveNotFound(output)
                         }
@@ -133,6 +138,12 @@ object LocalLogServer {
                     <pre id="botBox" style="height: 150px; color: #a7f3d0;">Loading...</pre>
                 </div>
 
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="/export" style="background:#3b82f6; color:#fff; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold; border:none; cursor:pointer;">
+                        📥 Download ZIP (Logs & Screenshots)
+                    </a>
+                </div>
+
                 <script>
                     let lastData = {};
                     
@@ -192,6 +203,25 @@ object LocalLogServer {
                 html
         output.write(response.toByteArray())
         output.flush()
+    }
+
+    private fun serveExport(output: OutputStream) {
+        val ctx = context ?: return serveNotFound(output)
+        kotlinx.coroutines.runBlocking {
+            val file = DebugLogManager.createExportZip(ctx)
+            if (file != null && file.exists()) {
+                val responseHeaders = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: application/zip\r\n" +
+                        "Content-Disposition: attachment; filename=\"poker_bot_debug.zip\"\r\n" +
+                        "Content-Length: ${file.length()}\r\n" +
+                        "Connection: close\r\n\r\n"
+                output.write(responseHeaders.toByteArray())
+                file.inputStream().use { it.copyTo(output) }
+                output.flush()
+            } else {
+                serveNotFound(output)
+            }
+        }
     }
 
     private fun serveJson(output: OutputStream) {

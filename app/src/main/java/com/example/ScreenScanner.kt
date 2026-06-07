@@ -433,6 +433,11 @@ class ScreenScanner(
             
             // Pass action buttons to RobotPlayer
             RobotPlayer.availableActionButtons = actionButtonsMap
+            
+            // Periodically save screenshot if bot has actions available
+            if (actionButtonsMap.isNotEmpty()) {
+                DebugLogManager.savePeriodicScreenshot(cleanBitmap!!, context)
+            }
 
             commElements.sortBy { it.boundingBox?.left ?: 0 }
             holeElements.sortBy { it.boundingBox?.left ?: 0 }

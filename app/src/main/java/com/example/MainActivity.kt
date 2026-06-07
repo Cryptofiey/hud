@@ -626,7 +626,7 @@ fun SettingsLayout(
                         checked = isLogServerRunning,
                         onCheckedChange = { start ->
                             if (start) {
-                                LocalLogServer.start()
+                                LocalLogServer.start(context)
                                 BotLogSharedState.isLogServerRunning.value = true
                                 val url = "http://$localIpAddress:8080"
                                 Toast.makeText(context, "Dashboard available at $url", Toast.LENGTH_LONG).show()
