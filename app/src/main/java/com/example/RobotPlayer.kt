@@ -18,13 +18,13 @@ object RobotPlayer {
     // Keep track of last action to avoid spamming the same action multiple times per turn
     private var lastActedBoardCards = 0
     private var lastActedAction = ""
+    private var lastActionTime = 0L
     
     init {
         CoroutineScope(Dispatchers.Default).launch {
             PokerHudSharedState.uiState.collectLatest { uiState ->
                 if (!isRobotModeEnabled.value) return@collectLatest
                 if (AutoPlayerService.instance == null) {
-                    Log.d("RobotPlayer", "AutoPlayerService not running!")
                     return@collectLatest
                 }
                 
@@ -55,14 +55,15 @@ object RobotPlayer {
 
                 if (canonicalAction.isEmpty()) return@collectLatest
                 
-                // If the board hasn't changed and we already did this action, don't spam.
-                // Wait, if we act, the action buttons will disappear in the next frame.
-                // But just in case, we add a check.
+                // If the board hasn't changed and we already did this action within the last 8 seconds, don't spam.
+                // It accounts for multi-action streets where action might return to us after > 8 seconds.
                 val commCardsSize = uiState.board.filterNotNull().size
                 val heroStr = (uiState.heroCard1?.toString() ?: "") + (uiState.heroCard2?.toString() ?: "")
                 val signature = "${heroStr}_${commCardsSize}_${canonicalAction}"
-                if (lastActedAction == signature) {
-                    // Already acted for this phase
+                val now = System.currentTimeMillis()
+                
+                if (lastActedAction == signature && (now - lastActionTime < 8000L)) {
+                    // Already acted for this phase recently
                     return@collectLatest
                 }
 
@@ -73,6 +74,7 @@ object RobotPlayer {
                 // Execute after humanizer delay
                 lastActedAction = signature
                 lastActedBoardCards = commCardsSize
+                lastActionTime = now
                 
                 Log.d("RobotPlayer", "Executing AI Action: $canonicalAction on rectangle $targetRect (sig: $signature)")
                 
