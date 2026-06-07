@@ -21,15 +21,15 @@ await $`rm -rf downloaded_logs logs.zip`
 try {
     // Скачивание через curl с обработкой больших файлов
     await $`curl -L -c /tmp/cookies.txt -s "https://drive.google.com/uc?export=download&id=${fileId}" > /dev/null`
-    let output = await $`curl -sL -b /tmp/cookies.txt "https://drive.google.com/uc?export=download&id=${fileId}" | grep -oP 'confirm=\\K[^&]+' || echo ""`
+        let output = await $`curl -sL -b /tmp/cookies.txt "https://drive.google.com/uc?export=download&id=${fileId}" | grep -oP 'confirm=\\K[^&]+' || echo ""`
     let confirm = output.stdout.trim()
     let dlUrl = confirm ? `https://drive.google.com/uc?export=download&confirm=${confirm}&id=${fileId}` : `https://drive.google.com/uc?export=download&id=${fileId}`
 
-    await $`curl -L -b /tmp/cookies.txt -o logs.zip "${dlUrl}"`
+    await $`curl -L -b /tmp/cookies.txt -o logs.zip ${dlUrl}`
     await $`rm -f /tmp/cookies.txt`
 
     console.log('Unzipping logs.zip ...');
-    await $`npx -y decompress-cli logs.zip downloaded_logs`
+    await $`unzip logs.zip -d downloaded_logs`
     console.log('✅ Logs downloaded and unzipped to downloaded_logs/ directory.');
 } catch (e) {
     console.log('Error downloading or unzipping logs. Try downloading directly or checking the link.');
