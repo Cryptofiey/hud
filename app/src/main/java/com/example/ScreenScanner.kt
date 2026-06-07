@@ -549,8 +549,10 @@ class ScreenScanner(
                         val avgHeight = lastCluster.map { it.second.height() }.average().toFloat()
                         
                         // Use a tighter threshold to group same-card detections 
-                        // while keeping strictly separate cards separated
-                        val clusterThreshold = maxOf(avgWidth * 0.8f, avgHeight * 0.4f, 10f)
+                        // while keeping strictly separate cards separated.
+                        // By ensuring at least regionRect.width() * 0.12f, we guarantee that 
+                        // misaligned slices of the same card cluster together.
+                        val clusterThreshold = maxOf(avgWidth * 1.0f, avgHeight * 0.5f, regionRect.width() * 0.12f, 15f)
                         
                         if (elem.second.centerX() - lastCx < clusterThreshold) {
                             lastCluster.add(elem)
@@ -867,18 +869,12 @@ class ScreenScanner(
         // Keep only letters, digits, and suit symbols to form a dense string
         val raw = preProcessed.replace(Regex("[^A-Z0-9\u2660\u2663\u2665\u2666]"), "")
             
-        if (raw.length > 8) return emptyList() // Too long to be just 1-2 cards
+        if (raw.length > 20) return emptyList() // Too long, likely noise
         if (raw.isEmpty()) return emptyList()
         
         // Block obvious chip stacks or bets
         val noSymbols = text.uppercase(java.util.Locale.US).replace(Regex("[^A-Z0-9 ]"), "")
         if (noSymbols.matches(Regex(".*\\d{3,}.*"))) return emptyList() // 100, 500 etc.
-        // Ignore obvious standalone numbers/stacks
-        val digits = raw.count { it.isDigit() }
-        val hasTen = Regex("10|I0|1O|IO|L0|LO|IQ|1Q|T0|TO").containsMatchIn(raw)
-        
-        if (digits > 4) return emptyList()
-        if (digits > 2 && !hasTen) return emptyList() // E.g., "125", "500", "250" 
 
         var i = 0
         while (i < raw.length) {
@@ -946,10 +942,11 @@ class ScreenScanner(
         
         var rC = 0; var gC = 0; var bC = 0; var blkC = 0
         
-        // Scan just around the rank and look down below it where the suit symbol is located
+        // Scan just around the rank and look down below it where the suit symbol is located.
+        // Shrink slightly horizontally to avoid bleeding into adjacent cards if they are tightly clustered.
         val adjustX = (rankBox.width() * 0.1).toInt()
-        val left = maxOf(0, rankBox.left - adjustX)
-        val right = minOf(w - 1, rankBox.right + adjustX)
+        val left = maxOf(0, rankBox.left + adjustX) // Changed from - to + to shrink into center
+        val right = minOf(w - 1, rankBox.right - adjustX)
         val top = maxOf(0, rankBox.top + (rankBox.height() * 0.35).toInt())
         val bottom = minOf(h - 1, rankBox.bottom + (rankBox.height() * 1.5).toInt())
         
@@ -969,10 +966,12 @@ class ScreenScanner(
                 val min = minOf(r, g, b)
                 val saturation = if (max == 0) 0 else (max - min) * 255 / max
                 
+                // We loosen the purple/orange ignoring slightly to ensure we capture actual card colors correctly,
+                // but keep it enough to avoid table background. The table is purple.
                 val isPurple = (r > g + 30 && b > g + 30 && r > 40 && b > 40)
                 val isOrange = (r > g + 20 && g > b + 20 && r > 80 && r - b > 50)
                 
-                if (saturation > 45 && max > 35 && !isPurple && !isOrange) {
+                if (saturation > 40 && max > 35 && !isPurple && !isOrange) {
                     if (r == max && r - g > 20 && r - b > 20) {
                         // Additional check to ensure Orange isn't counted as Red Hearts
                         if (g < max * 0.75f) rC++
@@ -986,7 +985,11 @@ class ScreenScanner(
         }
         
         val totalChroma = rC + gC + bC
-        if (totalChroma >= 5) {
+        val dominantChroma = maxOf(rC, gC, bC)
+        
+        // Only classify as a colored suit (Red/Green/Blue) if its dominant color is a strong signal, 
+        // significantly higher than blkC or an absolute large amount.
+        if (totalChroma >= 5 && dominantChroma > blkC * 0.4f) {
             if (rC > gC && rC > bC) return Suit.HEARTS
             if (gC > rC && gC > bC) return Suit.CLUBS
             if (bC > rC && bC > gC) return Suit.DIAMONDS
