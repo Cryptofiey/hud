@@ -11,9 +11,6 @@ object RobotPlayer {
     
     val isRobotModeEnabled = MutableStateFlow(false)
     
-    private var job: Job? = null
-    private val scope = CoroutineScope(Dispatchers.Default)
-    
     // Map of Action Name (e.g. "FOLD", "CALL", "CHECK", "BET", "RAISE") to its screen Rect
     var availableActionButtons = emptyMap<String, Rect>()
     var autoPlayDelayMs = 1500L
@@ -22,9 +19,8 @@ object RobotPlayer {
     private var lastActedBoardCards = 0
     private var lastActedAction = ""
     
-    fun start() {
-        if (job?.isActive == true) return
-        job = scope.launch {
+    init {
+        CoroutineScope(Dispatchers.Default).launch {
             PokerHudSharedState.uiState.collectLatest { uiState ->
                 if (!isRobotModeEnabled.value) return@collectLatest
                 if (AutoPlayerService.instance == null) {
@@ -80,7 +76,7 @@ object RobotPlayer {
                 
                 Log.d("RobotPlayer", "Executing AI Action: $canonicalAction on rectangle $targetRect (sig: $signature)")
                 
-                scope.launch {
+                CoroutineScope(Dispatchers.Default).launch {
                     delay(calculateHumanDelay(canonicalAction))
                     executeClickOnRect(targetRect)
                 }
@@ -88,9 +84,14 @@ object RobotPlayer {
         }
     }
     
+    fun start() {
+        // Kept for backward compatibility if called elsewhere, but no longer needed since it starts automatically in init.
+        isRobotModeEnabled.value = true
+    }
+    
     fun stop() {
-        job?.cancel()
-        job = null
+        // Kept for backward compatibility if called elsewhere
+        isRobotModeEnabled.value = false
     }
 
     private fun findButtonRect(canonicalAction: String): Rect? {

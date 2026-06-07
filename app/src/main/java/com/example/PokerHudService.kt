@@ -482,7 +482,7 @@ class PokerHudService : Service() {
                 AndroidColor.parseColor("#FFD500F9"), // Neon Purple Outline
                 dpToPx(28f).toFloat() // Reduced Cutout radius for player avatar to avoid overflow
             )
-            val shadowParams = FrameLayout.LayoutParams(dpToPx(270f), WindowManager.LayoutParams.WRAP_CONTENT)
+            val shadowParams = FrameLayout.LayoutParams(dpToPx(200f), WindowManager.LayoutParams.WRAP_CONTENT)
             layoutParams = shadowParams
         }
         expandedLayout = expanded
@@ -910,7 +910,7 @@ class PokerHudService : Service() {
                 }
                 
                 expanded.layoutParams = (expanded.layoutParams as FrameLayout.LayoutParams).apply {
-                    width = dpToPx(270f)
+                    width = dpToPx(200f)
                     height = FrameLayout.LayoutParams.WRAP_CONTENT
                 }
                 
