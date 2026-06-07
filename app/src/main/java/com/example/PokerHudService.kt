@@ -2793,10 +2793,13 @@ class PokerHudService : Service() {
             try { windowManager?.removeView(it) } catch(e: Exception){} 
         }
         floatingScannerOverlay = null
+<<<<<<< HEAD
         try {
             stopService(Intent(this, BotLogWidgetService::class.java))
             BotLogSharedState.isBotLogWidgetRunning.value = false
         } catch (e: Exception) {}
+=======
+>>>>>>> origin/main
         ScannerConfig.activeProjection?.stop()
         ScannerConfig.activeProjection = null
         ScannerConfig.pendingProjectionData = null
