@@ -59,8 +59,8 @@ object RobotPlayer {
                 // It accounts for multi-action streets where action might return to us after > 8 seconds.
                 val commCardsSize = uiState.board.filterNotNull().size
                 val heroStr = (uiState.heroCard1?.toString() ?: "") + (uiState.heroCard2?.toString() ?: "")
-                val optionsSignature = uiState.heroActionOptions.sorted().joinToString(",")
-                val signature = "${heroStr}_${commCardsSize}_${canonicalAction}_${optionsSignature}"
+                val exactOptions = availableActionButtons.keys.sorted().joinToString(",")
+                val signature = "${heroStr}_${commCardsSize}_${canonicalAction}_${exactOptions}"
                 val now = System.currentTimeMillis()
                 
                 if (lastActedAction == signature && (now - lastActionTime < 8000L)) {
@@ -107,8 +107,9 @@ object RobotPlayer {
                 "FOLD" -> upperKey.contains("FOLD") || upperKey.contains("ФОЛД")
                 "CHECK" -> upperKey.contains("CHECK") || upperKey.contains("ЧЕК")
                 "CALL" -> upperKey.contains("CALL") || upperKey.contains("КОЛЛ")
-                "BET" -> upperKey.contains("BET") || upperKey.contains("БЕТ")
-                "RAISE" -> upperKey.contains("RAISE") || upperKey.contains("РЕЙЗ")
+                "BET", "RAISE" -> upperKey.contains("BET") || upperKey.contains("БЕТ") || 
+                                  upperKey.contains("RAISE") || upperKey.contains("РЕЙЗ") || 
+                                  upperKey.contains("CONFIRM") || upperKey.contains("ПОДТВЕРДИТЬ")
                 "ALL-IN" -> upperKey.contains("ALL-IN") || upperKey.contains("ОЛЛ-ИН") || upperKey.contains("ALL") || upperKey.contains("ОЛЛ")
                 else -> false
             }

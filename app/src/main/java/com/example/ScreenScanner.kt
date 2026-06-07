@@ -362,34 +362,6 @@ class ScreenScanner(
                         }
                         if (insideHud) continue
                         
-                        if (box.top > cleanBitmap!!.height * 0.82f) {
-                            val textUpper = element.text.uppercase()
-                            
-                            // Skip pre-action checkboxes and unwanted buttons
-                            if (textUpper.contains("X/F") || textUpper.contains("X / F") || 
-                                textUpper.contains("X/C") || textUpper.contains("X / C") ||
-                                textUpper.contains("ANY") || textUpper.contains("ЛЮБЫЕ") || 
-                                textUpper.contains("ЛЮБОЙ") || textUpper.contains("PLAY NEXT")) {
-                                continue
-                            }
-                            
-                            if (textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) {
-                                heroActionOptions.add("Fold")
-                            } 
-                            if (textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) {
-                                heroActionOptions.add("Check")
-                            } 
-                            if (textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) {
-                                heroActionOptions.add("Call")
-                            } 
-                            if (textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || textUpper.contains("BET") || textUpper.contains("БЕТ")) {
-                                heroActionOptions.add("Raise")
-                            } 
-                            if (textUpper.contains("ALL-IN") || textUpper.contains("ALL IN") || textUpper.contains("ОЛЛ-ИН")) {
-                                heroActionOptions.add("All-in")
-                            }
-                        }
-
                         val cx = box.centerX()
                         val cy = box.centerY()
                         
@@ -413,30 +385,46 @@ class ScreenScanner(
                             holeElements.add(element)
                         }
                         
-                        if (box.top > bottomZoneTop) {
-                            val txt = element.text.uppercase()
+                        // Action buttons logic
+                        if (box.top > cleanBitmap!!.height * 0.80f) {
+                            val textUpper = element.text.uppercase()
                             
                             // Prevent tiny non-button text from being recognized:
-                            // Even short action buttons like "BET" or "Fold" are larger than 5% of screen width.
+                            // Even short action buttons like "BET" or "Fold" are large.
+                            // Pre-action checkboxes have small font sizes. 
                             if (box.width() < cleanBitmap!!.width * 0.05f) continue
+                            if (box.height() < cleanBitmap!!.height * 0.018f) continue // Ignore tiny texts
                             
                             // Skip pre-action checkboxes and unwanted buttons
-                            if (txt.contains("X/F") || txt.contains("X / F") || 
-                                txt.contains("X/C") || txt.contains("X / C") ||
-                                txt.contains("ANY") || txt.contains("ЛЮБЫЕ") || 
-                                txt.contains("ЛЮБОЙ") || txt.contains("PLAY NEXT")) {
+                            if (textUpper.contains("X/F") || textUpper.contains("X / F") || 
+                                textUpper.contains("X/C") || textUpper.contains("X / C") ||
+                                textUpper.contains("ANY") || textUpper.contains("ЛЮБЫЕ") || 
+                                textUpper.contains("ЛЮБОЙ") || textUpper.contains("PLAY NEXT")) {
                                 continue
                             }
                             
-                            if (txt.contains("FOLD") || txt.contains("ФОЛД") ||
-                                txt.contains("CHECK") || txt.contains("ЧЕК") ||
-                                txt.contains("CALL") || txt.contains("КОЛЛ") ||
-                                txt.contains("BET") || txt.contains("БЕТ") ||
-                                txt.contains("RAISE") || txt.contains("РЕЙЗ") ||
-                                txt.contains("ALL-IN") || txt.contains("ОЛЛ-ИН") ||
-                                txt.contains("ALL") || txt.contains("ОЛЛ") || 
-                                txt.contains("STRADDLE") || txt.contains("СТРАДДЛ")) {
-                                actionButtonsMap[txt] = box
+                            if (textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) {
+                                heroActionOptions.add("Fold")
+                                actionButtonsMap[textUpper] = box
+                            } 
+                            if (textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) {
+                                heroActionOptions.add("Check")
+                                actionButtonsMap[textUpper] = box
+                            } 
+                            if (textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) {
+                                heroActionOptions.add("Call")
+                                actionButtonsMap[textUpper] = box
+                            } 
+                            if (textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || textUpper.contains("BET") || textUpper.contains("БЕТ") || textUpper.contains("CONFIRM") || textUpper.contains("ПОДТВЕРДИТЬ")) {
+                                heroActionOptions.add("Raise") // Mapping Confirm to Raise internally
+                                actionButtonsMap[textUpper] = box
+                            } 
+                            if (textUpper.contains("ALL-IN") || textUpper.contains("ALL IN") || textUpper.contains("ОЛЛ-ИН") || textUpper.contains("ALL") || textUpper.contains("ОЛЛ")) {
+                                heroActionOptions.add("All-in")
+                                actionButtonsMap[textUpper] = box
+                            }
+                            if (textUpper.contains("STRADDLE") || textUpper.contains("СТРАДДЛ")) {
+                                actionButtonsMap[textUpper] = box
                             }
                         }
                     }
