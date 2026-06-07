@@ -524,6 +524,7 @@ fun SettingsLayout(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     val isHudOverlayRunning by PokerHudSharedState.isHudOverlayRunning.collectAsStateWithLifecycle()
+                    val isBotLogWidgetRunning by BotLogSharedState.isBotLogWidgetRunning.collectAsStateWithLifecycle()
                     
                     SettingsToggleCard(
                         title = "HUD Overlay",
@@ -558,6 +559,43 @@ fun SettingsLayout(
                             }
                         },
                         onMoreInfo = { onMoreInfoClicked("HUD Overlay controls and permissions") }
+                    )
+
+                    SettingsToggleCard(
+                        title = "Bot Log Widget",
+                        description = "Activate or Stop the floating log tracker for bot L/M levels.",
+                        checked = isBotLogWidgetRunning,
+                        onCheckedChange = { start -> 
+                            val activity = context.findActivity() as? MainActivity
+                            if (start) {
+                                val ok = activity?.checkAndRequestOverlayPermission(context) ?: true
+                                if (ok) {
+                                    try {
+                                        val serviceIntent = Intent(context, BotLogWidgetService::class.java)
+                                        ContextCompat.startForegroundService(context, serviceIntent)
+                                        BotLogSharedState.isBotLogWidgetRunning.value = true
+                                        Toast.makeText(context, "Bot Log Widget Started", Toast.LENGTH_SHORT).show()
+                                    } catch (e: Exception) {
+                                        Log.e("MainActivity", "Failed to start BotLogWidgetService: ${e.message}", e)
+                                        Toast.makeText(context, "Error starting widget: ${e.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Please grant Overlay Permissions first!", Toast.LENGTH_LONG).show()
+                                }
+                            } else {
+                                try {
+                                    val stopIntent = Intent(context, BotLogWidgetService::class.java).apply {
+                                        action = "STOP"
+                                    }
+                                    context.startService(stopIntent)
+                                    BotLogSharedState.isBotLogWidgetRunning.value = false
+                                    Toast.makeText(context, "Bot Log Widget Stopped", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Failed to stop BotLogWidgetService: ${e.message}", e)
+                                }
+                            }
+                        },
+                        onMoreInfo = { onMoreInfoClicked("Bot Log Widget") }
                     )
 
                     // Option Card 1: Winning Probabilities

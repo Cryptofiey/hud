@@ -39,6 +39,17 @@
                 android:value="Overlay tool for displaying statistical computations and logs on request" />
         </service>
 
+        <service
+            android:name=".BotLogWidgetService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            tools:ignore="ForegroundServicePermission">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Overlay tool for displaying statistical computations and bot logs" />
+        </service>
+
         <receiver
             android:name=".PokerHudReceiver"
             android:enabled="true"
