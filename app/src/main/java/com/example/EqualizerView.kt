@@ -110,27 +110,29 @@ class EqualizerView(context: Context) : View(context) {
 
     private fun drawL3BlockVertical(canvas: Canvas, top: Float, width: Float, height: Float, segments: List<Int>) {
         val bottom = top + height
-        // Background
-        val bgRect = RectF(0f, top, width, bottom)
-        canvas.drawRoundRect(bgRect, 3f, 3f, bgPaint)
-
         val segmentCount = segments.size
         if (segmentCount > 0) {
-            val segGap = 1.5f
+            val segGap = 4f
             val segWidth = (width - segGap * (segmentCount - 1)) / segmentCount
             
             for (i in 0 until segmentCount) {
                 val segLeft = i * (segWidth + segGap)
                 val segRight = segLeft + segWidth
+                val dominoBgRect = RectF(segLeft, top, segRight, bottom)
+                canvas.drawRoundRect(dominoBgRect, 3f, 3f, bgPaint)
                 
-                val halfHeight = (height - 3f) / 2f
-                val segRectTop = RectF(segLeft, top + 1f, segRight, top + 1f + halfHeight)
-                val segRectBottom = RectF(segLeft, top + 1f + halfHeight + 1f, segRight, bottom - 1f)
+                val gapY = 2f
+                val halfHeight = (height - 2f - gapY) / 2f
+                val segRectTop = RectF(segLeft + 1f, top + 1f, segRight - 1f, top + 1f + halfHeight)
+                val segRectBottom = RectF(segLeft + 1f, top + 1f + halfHeight + gapY, segRight - 1f, bottom - 1f)
                 
                 fillPaint.color = segments[i]
-                canvas.drawRoundRect(segRectTop, 1.5f, 1.5f, fillPaint)
-                canvas.drawRoundRect(segRectBottom, 1.5f, 1.5f, fillPaint)
+                canvas.drawRoundRect(segRectTop, 2f, 2f, fillPaint)
+                canvas.drawRoundRect(segRectBottom, 2f, 2f, fillPaint)
             }
+        } else {
+            val bgRect = RectF(0f, top, width, bottom)
+            canvas.drawRoundRect(bgRect, 3f, 3f, bgPaint)
         }
         
         val label = "L3"
@@ -165,27 +167,29 @@ class EqualizerView(context: Context) : View(context) {
 
     private fun drawL3Block(canvas: Canvas, left: Float, width: Float, height: Float, segments: List<Int>) {
         val right = left + width
-        // Background
-        val bgRect = RectF(left, 0f, right, height)
-        canvas.drawRoundRect(bgRect, 3f, 3f, bgPaint)
-
         val segmentCount = segments.size
         if (segmentCount > 0) {
-            val segGap = 1.5f
+            val segGap = 4f
             val segWidth = (width - segGap * (segmentCount - 1)) / segmentCount
             
             for (i in 0 until segmentCount) {
                 val segLeft = left + i * (segWidth + segGap)
                 val segRight = segLeft + segWidth
+                val dominoBgRect = RectF(segLeft, 0f, segRight, height)
+                canvas.drawRoundRect(dominoBgRect, 3f, 3f, bgPaint)
                 
-                val halfHeight = (height - 3f) / 2f
-                val segRectTop = RectF(segLeft, 1f, segRight, 1f + halfHeight)
-                val segRectBottom = RectF(segLeft, 1f + halfHeight + 1f, segRight, height - 1f)
+                val gapY = 2f
+                val halfHeight = (height - 2f - gapY) / 2f
+                val segRectTop = RectF(segLeft + 1f, 1f, segRight - 1f, 1f + halfHeight)
+                val segRectBottom = RectF(segLeft + 1f, 1f + halfHeight + gapY, segRight - 1f, height - 1f)
                 
                 fillPaint.color = segments[i]
-                canvas.drawRoundRect(segRectTop, 1.5f, 1.5f, fillPaint)
-                canvas.drawRoundRect(segRectBottom, 1.5f, 1.5f, fillPaint)
+                canvas.drawRoundRect(segRectTop, 2f, 2f, fillPaint)
+                canvas.drawRoundRect(segRectBottom, 2f, 2f, fillPaint)
             }
+        } else {
+            val bgRect = RectF(left, 0f, right, height)
+            canvas.drawRoundRect(bgRect, 3f, 3f, bgPaint)
         }
         
         val label = "L3"
