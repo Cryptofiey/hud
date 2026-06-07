@@ -2,6 +2,8 @@ package com.example
 
 import android.app.Activity
 import android.util.Log
+import java.net.NetworkInterface
+import java.net.Inet4Address
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.ContextWrapper
@@ -596,6 +598,44 @@ fun SettingsLayout(
                             }
                         },
                         onMoreInfo = { onMoreInfoClicked("Bot Log Widget") }
+                    )
+
+                    // Add Local Web Server Toggle
+                    var localIpAddress by remember { mutableStateOf("127.0.0.1") }
+                    LaunchedEffect(Unit) {
+                        try {
+                            val interfaces = NetworkInterface.getNetworkInterfaces()
+                            while (interfaces.hasMoreElements()) {
+                                val intf = interfaces.nextElement()
+                                val addrs = intf.inetAddresses
+                                while (addrs.hasMoreElements()) {
+                                    val addr = addrs.nextElement()
+                                    if (!addr.isLoopbackAddress && addr is Inet4Address) {
+                                        localIpAddress = addr.hostAddress ?: "127.0.0.1"
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error getting IP", e)
+                        }
+                    }
+                    val isLogServerRunning by BotLogSharedState.isLogServerRunning.collectAsStateWithLifecycle()
+                    SettingsToggleCard(
+                        title = "Remote Bot Dashboard (Web)",
+                        description = if (isLogServerRunning) "Dashboard active at: http://$localIpAddress:8080" else "Start a local web server to view bot logs on another device (PC) without blocking the phone screen.",
+                        checked = isLogServerRunning,
+                        onCheckedChange = { start ->
+                            if (start) {
+                                LocalLogServer.start()
+                                BotLogSharedState.isLogServerRunning.value = true
+                                Toast.makeText(context, "Dashboard available at http://$localIpAddress:8080", Toast.LENGTH_LONG).show()
+                            } else {
+                                LocalLogServer.stop()
+                                BotLogSharedState.isLogServerRunning.value = false
+                                Toast.makeText(context, "Dashboard server stopped.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onMoreInfo = { onMoreInfoClicked("Start this to view the bot's L1-L5 logs on your PC. Phone and PC must be on the same Wi-Fi. This avoids overlaying the log widget on your poker table and solves all blocking issues!") }
                     )
 
                     // Option Card 1: Winning Probabilities
