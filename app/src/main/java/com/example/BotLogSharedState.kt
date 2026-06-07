@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 object BotLogSharedState {
     val isBotLogWidgetRunning = MutableStateFlow(false)
+    val widgetRect = MutableStateFlow<android.graphics.Rect?>(null)
     
     // Log content for different slots
     val logL1 = MutableStateFlow("")

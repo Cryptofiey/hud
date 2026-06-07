@@ -146,7 +146,7 @@ class BotLogWidgetService : Service() {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_SECURE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -385,6 +385,12 @@ class BotLogWidgetService : Service() {
                 }
                 try {
                     windowManager?.updateViewLayout(parentFrame, params)
+                    val w = if (params.width > 0) params.width else dpToPx(100f) // approximate for wrap_content
+                    val h = if (params.height > 0) params.height else dpToPx(40f)
+                    BotLogSharedState.widgetRect.value = android.graphics.Rect(
+                        params.x, params.y,
+                        params.x + w, params.y + h
+                    )
                 } catch(e: Exception) {}
             }
         }
@@ -454,6 +460,10 @@ class BotLogWidgetService : Service() {
         try {
             windowManager?.addView(parentFrame, params)
             isOverlayShowing = true
+            BotLogSharedState.widgetRect.value = android.graphics.Rect(
+                params.x, params.y,
+                params.x + params.width, params.y + params.height
+            )
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -479,6 +489,10 @@ class BotLogWidgetService : Service() {
                     params.y = initialY + (event.rawY - initialTouchY).toInt()
                     try {
                         windowManager?.updateViewLayout(view, params)
+                        BotLogSharedState.widgetRect.value = android.graphics.Rect(
+                            params.x, params.y,
+                            params.x + params.width, params.y + params.height
+                        )
                     } catch (e: Exception) {
                     }
                     true
@@ -495,6 +509,7 @@ class BotLogWidgetService : Service() {
             } catch (e: Exception) {
             }
             isOverlayShowing = false
+            BotLogSharedState.widgetRect.value = null
         }
     }
     
