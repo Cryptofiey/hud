@@ -40,8 +40,6 @@ class BotLogWidgetService : Service() {
     
     enum class ViewMode { SPLIT_LM, L4_ONLY, BOT_ONLY }
     private val currentViewMode = MutableStateFlow(ViewMode.SPLIT_LM)
-    
-    private val isMinimized = MutableStateFlow(false)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -304,9 +302,39 @@ class BotLogWidgetService : Service() {
             }
         }
 
-        val minBtn = createBtn(staticText = "↙️").apply {
-            setOnClickListener {
-                isMinimized.value = true
+        val resizeBtn = createBtn(staticText = "⤡").apply {
+            var initialWidth = 0
+            var initialHeight = 0
+            var initialTouchX = 0f
+            var initialTouchY = 0f
+            
+            setOnTouchListener { _, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        initialWidth = params.width
+                        initialHeight = params.height
+                        initialTouchX = event.rawX
+                        initialTouchY = event.rawY
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = (event.rawX - initialTouchX).toInt()
+                        val dy = (event.rawY - initialTouchY).toInt()
+                        
+                        params.width = (initialWidth + dx).coerceAtLeast(dpToPx(160f))
+                        params.height = (initialHeight + dy).coerceAtLeast(dpToPx(160f))
+                        
+                        try {
+                            windowManager?.updateViewLayout(parentFrame, params)
+                            BotLogSharedState.widgetRect.value = android.graphics.Rect(
+                                params.x, params.y,
+                                params.x + params.width, params.y + params.height
+                            )
+                        } catch (e: Exception) {}
+                        true
+                    }
+                    else -> false
+                }
             }
         }
 
@@ -314,27 +342,11 @@ class BotLogWidgetService : Service() {
         buttonsRow.addView(mBtn)
         buttonsRow.addView(l4Btn)
         buttonsRow.addView(botBtn)
-        buttonsRow.addView(minBtn)
+        buttonsRow.addView(resizeBtn)
 
         rootLayout.addView(buttonsRow)
 
-        // --- MINIMIZED VIEW ---
-        val minimizedView = TextView(this).apply {
-            text = "🪵 Bot Logs"
-            textSize = 14f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setPadding(dpToPx(8f), dpToPx(8f), dpToPx(8f), dpToPx(8f))
-            background = createBackgroundDrawable(Color.parseColor("#EE121A24"), 8f, dpToPx(1f), Color.parseColor("#FFD500F9"))
-            visibility = View.GONE
-            setOnClickListener {
-                isMinimized.value = false
-            }
-        }
-
         parentFrame.addView(rootLayout)
-        parentFrame.addView(minimizedView)
 
         setupDragListener(parentFrame, params)
 
@@ -370,31 +382,6 @@ class BotLogWidgetService : Service() {
             }
         }
         
-        serviceScope.launch {
-            isMinimized.collect { mini ->
-                if (mini) {
-                    rootLayout.visibility = View.GONE
-                    minimizedView.visibility = View.VISIBLE
-                    params.width = WindowManager.LayoutParams.WRAP_CONTENT
-                    params.height = WindowManager.LayoutParams.WRAP_CONTENT
-                } else {
-                    rootLayout.visibility = View.VISIBLE
-                    minimizedView.visibility = View.GONE
-                    params.width = dpToPx(240f)
-                    params.height = dpToPx(300f)
-                }
-                try {
-                    windowManager?.updateViewLayout(parentFrame, params)
-                    val w = if (params.width > 0) params.width else dpToPx(100f) // approximate for wrap_content
-                    val h = if (params.height > 0) params.height else dpToPx(40f)
-                    BotLogSharedState.widgetRect.value = android.graphics.Rect(
-                        params.x, params.y,
-                        params.x + w, params.y + h
-                    )
-                } catch(e: Exception) {}
-            }
-        }
-
         // Data bindings
         serviceScope.launch {
             kotlinx.coroutines.flow.combine(BotLogSharedState.logL1, BotLogSharedState.logL2, BotLogSharedState.logL3, currentLIndex) { l1, l2, l3, idx ->
