@@ -410,6 +410,7 @@ fun SettingsLayout(
     onPlayClicked: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -847,6 +848,81 @@ fun SettingsLayout(
                                 fontSize = 9.sp,
                                 lineHeight = 11.sp
                             )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Option Card: Accessibility Service for Instant Debug Capturing
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF0F0F0F))
+                            .border(BorderStroke(1.2.dp, Color(0xFFE57373)), RoundedCornerShape(10.dp))
+                            .padding(14.dp)
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "🐞 Instant Debug Capture",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
+                                
+                                val isDebugConnected = DebugCaptureService.instance != null
+                                
+                                if (!isDebugConnected) {
+                                    Button(
+                                        onClick = {
+                                            context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE57373)),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(24.dp)
+                                    ) {
+                                        Text("ENABLE SHORTCUT", fontSize = 9.sp, color = Color.White)
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = {},
+                                        enabled = false,
+                                        colors = ButtonDefaults.buttonColors(
+                                            disabledContainerColor = Color(0x334CAF50),
+                                            disabledContentColor = Color(0xFF4CAF50)
+                                        ),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(24.dp)
+                                    ) {
+                                        Text("SHORTCUT ACTIVE", fontSize = 9.sp)
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Creates a second native system shortcut button on screen. Tapping it captures play logs and screenshots instantly, bundling them into your device's Downloads/PokerBotDebug folder automatically.",
+                                color = Color(0xFFEEEEEE),
+                                fontSize = 9.sp,
+                                lineHeight = 11.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        DebugLogManager.triggerDiagnosticCapture(context)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F)),
+                                modifier = Modifier.fillMaxWidth().height(28.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text("ТЕСТ СНИМКА (CAPTURE SNAPSHOT TEST)", fontSize = 9.sp, color = Color.White)
+                            }
                         }
                     }
 

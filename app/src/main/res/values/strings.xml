@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Poker Equity HUD</string>
     <string name="accessibility_description">Enables the Poker HUD Automated clicker/swiper script agent to perform safe screen actions.</string>
+    <string name="debug_capture_description">Enables the instantly triggered debug packet snapshot tool to bundle logs and screens on demand.</string>
 </resources>

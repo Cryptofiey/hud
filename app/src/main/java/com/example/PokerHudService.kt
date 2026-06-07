@@ -1,6 +1,7 @@
 package com.example
 
 import android.animation.ValueAnimator
+import android.graphics.Bitmap
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -132,6 +133,15 @@ object PokerHudSharedState {
 
 class PokerHudService : Service() {
 
+    companion object {
+        var instance: PokerHudService? = null
+            private set
+    }
+
+    fun getLatestScannerBitmap(): Bitmap? {
+        return screenScanner?.getLatestBitmapCopy()
+    }
+
     private var windowManager: WindowManager? = null
     private var floatingOverlayView: FrameLayout? = null
     private var isOverlayShowing = false
@@ -191,6 +201,7 @@ class PokerHudService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         PokerHudSharedState.isHudOverlayRunning.value = true
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
     }
@@ -700,9 +711,27 @@ class PokerHudService : Service() {
         val holeCheckBox = createToggleButton("Карты", PokerHudSharedState.showHoleBox)
         val probsCheckBox = createToggleButton("Статы", PokerHudSharedState.showProbsBox)
         
+        val debugSnapBtn = TextView(this).apply {
+            text = "🐞 ДЕБАГ"
+            textSize = 6.5f
+            gravity = Gravity.CENTER
+            setTextColor(AndroidColor.WHITE)
+            background = createBackgroundDrawable(AndroidColor.parseColor("#FFE57373"), 6f) // Modern Soft Neon Red
+            setPadding(0, dpToPx(2f), 0, dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(0, dpToPx(18f), 1f).apply {
+                setMargins(dpToPx(1f), 0, dpToPx(1f), 0)
+            }
+            setOnClickListener {
+                serviceScope.launch {
+                    DebugLogManager.triggerDiagnosticCapture(this@PokerHudService)
+                }
+            }
+        }
+        
         toggles1.addView(commCheckBox)
         toggles1.addView(holeCheckBox)
         toggles1.addView(probsCheckBox)
+        toggles1.addView(debugSnapBtn)
         expanded.addView(toggles1)
 
         parentFrame.addView(expanded)
@@ -2787,6 +2816,7 @@ class PokerHudService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        instance = null
         PokerHudSharedState.isHudOverlayRunning.value = false
         screenScanner?.stop()
         stopFloatingOverlay()

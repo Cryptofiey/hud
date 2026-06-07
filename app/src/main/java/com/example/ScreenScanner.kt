@@ -246,7 +246,20 @@ class ScreenScanner(
         return result
     }
 
+    private val bitmapLock = Any()
     private var cachedCleanBitmap: Bitmap? = null
+
+    fun getLatestBitmapCopy(): Bitmap? {
+        synchronized(bitmapLock) {
+            val bmp = cachedCleanBitmap ?: return null
+            if (bmp.isRecycled) return null
+            return try {
+                bmp.copy(bmp.config ?: Bitmap.Config.ARGB_8888, false)
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
 
     private suspend fun processLatestImage(): Boolean {
         var image: Image? = null
@@ -262,29 +275,32 @@ class ScreenScanner(
             val pixelStride = planes[0].pixelStride
             val rowStride = planes[0].rowStride
 
-            if (cachedCleanBitmap == null || cachedCleanBitmap!!.width != width || cachedCleanBitmap!!.height != height) {
-                cachedCleanBitmap?.recycle()
-                cachedCleanBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            }
-            val cleanBitmap = cachedCleanBitmap!!
+            val cleanBitmap: Bitmap
+            synchronized(bitmapLock) {
+                if (cachedCleanBitmap == null || cachedCleanBitmap!!.width != width || cachedCleanBitmap!!.height != height) {
+                    cachedCleanBitmap?.recycle()
+                    cachedCleanBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                }
+                cleanBitmap = cachedCleanBitmap!!
 
-            buffer.position(0)
-            if (pixelStride == 4 && rowStride == width * 4) {
-                cleanBitmap.copyPixelsFromBuffer(buffer)
-            } else {
-                val rowPixels = IntArray(width)
-                for (row in 0 until height) {
-                    buffer.position(row * rowStride)
-                    val rowBuffer = buffer.asIntBuffer()
-                    rowBuffer.get(rowPixels, 0, width)
-                    for (i in 0 until width) {
-                        val p = rowPixels[i]
-                        val r = (p and 0xFF) shl 16
-                        val b = (p and 0xFF0000) shr 16
-                        val ag = p and 0xFF00FF00.toInt()
-                        rowPixels[i] = ag or r or b
+                buffer.position(0)
+                if (pixelStride == 4 && rowStride == width * 4) {
+                    cleanBitmap.copyPixelsFromBuffer(buffer)
+                } else {
+                    val rowPixels = IntArray(width)
+                    for (row in 0 until height) {
+                        buffer.position(row * rowStride)
+                        val rowBuffer = buffer.asIntBuffer()
+                        rowBuffer.get(rowPixels, 0, width)
+                        for (i in 0 until width) {
+                            val p = rowPixels[i]
+                            val r = (p and 0xFF) shl 16
+                            val b = (p and 0xFF0000) shr 16
+                            val ag = p and 0xFF00FF00.toInt()
+                            rowPixels[i] = ag or r or b
+                        }
+                        cleanBitmap.setPixels(rowPixels, 0, width, 0, row, width, 1)
                     }
-                    cleanBitmap.setPixels(rowPixels, 0, width, 0, row, width, 1)
                 }
             }
             // Must clear limit and position changes
