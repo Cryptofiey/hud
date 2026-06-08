@@ -478,7 +478,7 @@ class PokerHudService : Service() {
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            gravity = Gravity.TOP or Gravity.LEFT
             x = dpToPx(2f)
             y = dpToPx(120f)
         }
@@ -1776,7 +1776,7 @@ class PokerHudService : Service() {
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            gravity = Gravity.TOP or Gravity.LEFT
             x = (screenWidth - dpToPx(280f)) / 2
             y = (screenHeight * 0.42f).toInt()
         }
@@ -1922,7 +1922,7 @@ class PokerHudService : Service() {
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            gravity = Gravity.TOP or Gravity.LEFT
             x = (screenWidth - dpToPx(85f)) / 2
             y = (screenHeight * 0.75f).toInt()
         }
@@ -2064,7 +2064,7 @@ class PokerHudService : Service() {
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            gravity = Gravity.TOP or Gravity.LEFT
             x = dpToPx(300f)
             y = dpToPx(50f)
         }
