@@ -1544,7 +1544,7 @@ class PokerHudService : Service() {
         return android.graphics.Rect(pos[0], pos[1], pos[0] + w, pos[1] + h)
     }
 
-    private fun setupDragListener(view: View, params: WindowManager.LayoutParams) {
+    private fun setupDragListener(view: View, params: WindowManager.LayoutParams, canMinimize: Boolean = false) {
         var initialX = 0
         var initialY = 0
         var initialTouchX = 0f
@@ -1566,7 +1566,7 @@ class PokerHudService : Service() {
                     val deltaX = (event.rawX - initialTouchX).toInt()
                     val deltaY = (event.rawY - initialTouchY).toInt()
                     
-                    val isMinimized = PokerHudSharedState.isProbsHudMinimized.value
+                    val isMinimized = canMinimize && PokerHudSharedState.isProbsHudMinimized.value
                     if (isMinimized) {
                         params.x = -dpToPx(38f)
                         params.y = initialY + deltaY
@@ -1586,7 +1586,7 @@ class PokerHudService : Service() {
                     val duration = System.currentTimeMillis() - clickStartTime
                     val distanceX = Math.abs(event.rawX - initialTouchX)
                     val distanceY = Math.abs(event.rawY - initialTouchY)
-                    if (duration < 250 && distanceX < 12 && distanceY < 12) {
+                    if (canMinimize && duration < 250 && distanceX < 12 && distanceY < 12) {
                         val isMinimized = PokerHudSharedState.isProbsHudMinimized.value
                         if (isMinimized) {
                             PokerHudSharedState.isProbsHudMinimized.value = false
@@ -2387,7 +2387,7 @@ class PokerHudService : Service() {
         frame.addView(content)
         frame.addView(miniHandleView)
         
-        setupDragListener(frame, params)
+        setupDragListener(frame, params, canMinimize = true)
         
         fun applyHudLayoutState() {
             val isVertical = PokerHudSharedState.isProbsHudVertical.value
