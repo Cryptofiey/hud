@@ -364,6 +364,7 @@ class ScreenScanner(
             }
             
             val heroActionOptions = mutableSetOf<String>()
+            var hasPreactions = false
 
             for (block in result.textBlocks) {
                 for (line in block.lines) {
@@ -490,7 +491,7 @@ class ScreenScanner(
                         }
                         
                         // Action buttons logic
-                        if (box.top > cleanBitmap!!.height * 0.70f) {
+                        if (box.top > bottomZoneTop) {
                             val textUpper = element.text.uppercase()
                             
                             // Prevent tiny non-button text from being recognized:
@@ -499,11 +500,12 @@ class ScreenScanner(
                             if (box.width() < cleanBitmap!!.width * 0.01f) continue
                             if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
                             
-                            // Skip pre-action checkboxes and unwanted buttons
+                            // Check if this is a pre-action button
                             if (textUpper.contains("X/F") || textUpper.contains("X / F") || 
                                 textUpper.contains("X/C") || textUpper.contains("X / C") ||
                                 textUpper.contains("ANY") || textUpper.contains("ЛЮБЫЕ") || 
                                 textUpper.contains("ЛЮБОЙ") || textUpper.contains("PLAY NEXT")) {
+                                hasPreactions = true
                                 continue
                             }
                             
@@ -543,6 +545,11 @@ class ScreenScanner(
                         }
                     }
                 }
+            }
+            
+            if (hasPreactions) {
+                actionButtonsMap.clear()
+                heroActionOptions.clear()
             }
             
             // Pass action buttons to RobotPlayer
