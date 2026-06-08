@@ -5,4 +5,5 @@
     android:accessibilityFlags="flagDefault|flagRequestAccessibilityButton"
     android:canPerformGestures="false"
     android:notificationTimeout="100"
+    android:animatedImageDrawable="@drawable/ic_accessibility_camera"
     android:description="@string/debug_capture_description" />
