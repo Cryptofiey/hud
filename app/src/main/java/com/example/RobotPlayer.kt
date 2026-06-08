@@ -168,35 +168,63 @@ object RobotPlayer {
         return null
     }
 
+    private val gaussianGenerator = java.util.Random()
+
     private fun executeClickOnRect(rect: Rect) {
         val autoPlayer = AutoPlayerService.instance ?: return
         
-        // Randomize point inside the button rectangle (staying mostly central)
-        val insetX = rect.width() * 0.15f
-        val insetY = rect.height() * 0.15f
-        val startX = rect.left + insetX
-        val endX = rect.right - insetX
-        val startY = rect.top + insetY
-        val endY = rect.bottom - insetY
+        // Calculate the central coordinates
+        val centerX = rect.centerX().toFloat()
+        val centerY = rect.centerY().toFloat()
+        
+        // Standard deviation scaled to 10% of width and height to form a dense central cluster
+        val stdDevX = rect.width() * 0.10f
+        val stdDevY = rect.height() * 0.10f
+        
+        // Generate coordinates using Gaussian (Normal) distribution around the center
+        val rawX = centerX + (gaussianGenerator.nextGaussian() * stdDevX).toFloat()
+        val rawY = centerY + (gaussianGenerator.nextGaussian() * stdDevY).toFloat()
+        
+        // Strictly clamp within safe coordinates inside the button boundaries (minimum 4px margin)
+        val x = rawX.coerceIn(rect.left.toFloat() + 4f, rect.right.toFloat() - 4f)
+        val y = rawY.coerceIn(rect.top.toFloat() + 4f, rect.bottom.toFloat() - 4f)
 
-        val x = startX + Random.nextFloat() * (endX - startX)
-        val y = startY + Random.nextFloat() * (endY - startY)
-
-        val clickDuration = Random.nextLong(100, 250) // longer tap which passes touchslop
+        // Longer tap (120ms to 240ms) with slight randomness to pass touchslop and emulate human pressure time
+        val clickDuration = Random.nextLong(120, 240) 
         
         autoPlayer.dispatchClick(x, y, clickDuration)
     }
 
     private fun calculateHumanDelay(action: String): Long {
-        // Base delay
         val base = autoPlayDelayMs
-        // Variation
-        val variation = Random.nextLong(-300, 800)
         
-        // Add artificial thinking time for harder decisions like raises
-        val thinkTime = if (action == "RAISE" || action == "БЕТ") Random.nextLong(1000, 2500) else 0L
-        
-        return maxOf(500L, base + variation + thinkTime)
+        // Model distinct action delay profiles mimicking biological human reaction times and pondering
+        return when (action.uppercase(java.util.Locale.US)) {
+            "FOLD" -> {
+                // Folds are generally fast decisions or quick reactions
+                val variation = Random.nextLong(400, 1500)
+                maxOf(400L, base - 500L + variation)
+            }
+            "CHECK" -> {
+                // Checks can be fast or involve brief pause
+                val variation = Random.nextLong(600, 1800)
+                maxOf(500L, base - 300L + variation)
+            }
+            "CALL" -> {
+                // Calls require more assessment of pot odds and board texture
+                val variation = Random.nextLong(1000, 2800)
+                maxOf(1000L, base + variation)
+            }
+            "BET", "RAISE", "ALL-IN" -> {
+                // Big/active bets involve sizing calculation and psychological stress
+                val variation = Random.nextLong(2000, 4800)
+                maxOf(1800L, base + 800L + variation)
+            }
+            else -> {
+                val variation = Random.nextLong(800, 2000)
+                maxOf(600L, base + variation)
+            }
+        }
     }
 
     private var isProfileScanningActive = false
