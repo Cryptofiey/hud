@@ -530,6 +530,16 @@ class ScreenScanner(
                             if (textUpper.contains("STRADDLE") || textUpper.contains("СТРАДДЛ")) {
                                 actionButtonsMap[textUpper] = box
                             }
+                            
+                            // Add common bet sizing buttons
+                            val noSpaceText = textUpper.replace(" ", "")
+                            if (noSpaceText == "1/2" || noSpaceText == "1/3" || noSpaceText == "2/3" || noSpaceText == "3/4" || 
+                                noSpaceText == "1/2POT" || noSpaceText == "2/3POT" || noSpaceText == "3/4POT" ||
+                                textUpper.contains("POT") || textUpper.contains("ПОТ") || textUpper.contains("MAX") || textUpper.contains("МАКС") ||
+                                textUpper.contains("MIN") || textUpper.contains("МИН") || textUpper.contains("X") || textUpper.contains("%") ||
+                                noSpaceText == "+" || noSpaceText == "-") {
+                                actionButtonsMap[textUpper] = box
+                            }
                         }
                     }
                 }
