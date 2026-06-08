@@ -1,23 +1,70 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <!-- Camera Body -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M9,2L7.17,4H4c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V6c0,-1.1 -0.9,-2 -2,-2h-3.17L15,2H9z" />
-    <!-- Camera Outer Lens Circle -->
-    <path
-        android:fillColor="#FFD500F9"
-        android:pathData="M12,12m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
-    <!-- Camera Lens Inner -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M12,12m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
-    <!-- Camera Flash Spot -->
-    <path
-        android:fillColor="#FFFF1744"
-        android:pathData="M18,7m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0" />
-</vector>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+
+    <!-- Base Vector Drawable -->
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24">
+            
+            <!-- Camera Body -->
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M9,2L7.17,4H4c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V6c0,-1.1 -0.9,-2 -2,-2h-3.17L15,2H9z" />
+            
+            <!-- Camera Outer Lens Circle (Magenta/Purple) -->
+            <path
+                android:fillColor="#FFD500F9"
+                android:pathData="M12,12m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+            
+            <!-- Camera Lens Inner -->
+            <path
+                android:fillColor="#FFFFFFFF"
+                android:pathData="M12,12m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+            
+            <!-- Camera Flash Spot (Red base) -->
+            <path
+                android:fillColor="#FFFF1744"
+                android:pathData="M18,7m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0" />
+
+            <!-- Flash Burst Flare (Invisible/hidden by default, animates opacity to flash) -->
+            <group android:name="flash_flare_group">
+                <!-- Large White Burst Circle around X=18, Y=7 -->
+                <path
+                    android:fillColor="#FFFFFFFF"
+                    android:pathData="M18,7m-3.5,0a3.5,3.5 0,1 1,7 0a3.5,3.5 0,1 1,-7 0" />
+                <!-- Extra shiny yellow/white aura -->
+                <path
+                    android:fillColor="#FFFFE0b0"
+                    android:pathData="M18,7m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+            </group>
+
+        </vector>
+    </aapt:attr>
+
+    <!-- Target for Strobe Flash Animation -->
+    <target android:name="flash_flare_group">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="alpha"
+                android:duration="4000"
+                android:repeatCount="infinite"
+                android:valueType="floatType">
+                <keyframe android:fraction="0" android:value="0.0" />
+                <keyframe android:fraction="0.03" android:value="1.0" />
+                <keyframe android:fraction="0.06" android:value="0.0" />
+                <keyframe android:fraction="0.10" android:value="0.0" />
+                <keyframe android:fraction="0.13" android:value="1.0" />
+                <keyframe android:fraction="0.16" android:value="0.0" />
+                <keyframe android:fraction="0.20" android:value="0.0" />
+                <keyframe android:fraction="0.23" android:value="1.0" />
+                <keyframe android:fraction="0.26" android:value="0.0" />
+                <keyframe android:fraction="1.0" android:value="0.0" />
+            </objectAnimator>
+        </aapt:attr>
+    </target>
+
+</animated-vector>
