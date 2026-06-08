@@ -394,55 +394,55 @@ class ScreenScanner(
                         
                         when {
                             // Register
-                            normalized.contains("REGISTER") || normalized.contains("REGISTR") || 
-                            normalized.contains("РЕГИСТР") || normalized.contains("УЧАСТВ") || 
-                            normalized.contains("ЗАРЕГ") || normalized.contains("ЗАПИС") -> {
+                            normalized == "REGISTER" || normalized.contains("РЕГИСТР") || 
+                            normalized.contains("УЧАСТВ") || normalized.contains("ЗАРЕГ") || 
+                            normalized.contains("ЗАПИС") -> {
                                 isTransitionButton = true
                                 transitionKey = "REGISTER"
                             }
                             // Buy In
-                            normalized.contains("BUYIN") || normalized.contains("BUIIN") || 
-                            normalized.contains("BUY1N") || normalized.contains("REBUY") || 
-                            normalized.contains("ADDON") || normalized.contains("БАЙИН") || 
-                            normalized.contains("БЙИН") || normalized.contains("КУПИТЬБ") || 
-                            normalized.contains("РЕБАЙ") || normalized.contains("АДДОН") -> {
+                            normalized == "BUYIN" || normalized == "BUIIN" || 
+                            normalized == "BUY1N" || normalized == "REBUY" || 
+                            normalized == "ADDON" || normalized.contains("БАЙИН") || 
+                            normalized.contains("БЙИН") || normalized.contains("КУПИТЬ") || 
+                            normalized.contains("РЕБАЙ") || normalized.contains("АДДОН") ||
+                            (normalized.contains("BUYIN") && lineBox.height() > 20) -> {
                                 isTransitionButton = true
                                 transitionKey = "BUY_IN"
                             }
                             // Play
-                            normalized.contains("PLAYNOW") || normalized.contains("ИГРАТЬС") || 
-                            normalized == "PLAY" || normalized == "ИГРАТЬ" || 
-                            normalized == "НАЧАТЬ" || normalized == "START" -> {
+                            normalized == "PLAYNOW" || normalized == "PLAY" || 
+                            normalized == "START" || normalized == "ИГРАТЬ" || 
+                            normalized == "НАЧАТЬ" || normalized.contains("ИГРАТЬС") -> {
                                 isTransitionButton = true
                                 transitionKey = "PLAY"
                             }
                             // Take seat
-                            normalized.contains("TAKESEAT") || normalized.contains("SITDOWN") || 
-                            normalized.contains("GOTOTABLE") || normalized.contains("ЗАНЯТЬМ") || 
+                            normalized == "TAKESEAT" || normalized == "SITDOWN" || 
+                            normalized == "GOTOTABLE" || normalized.contains("ЗАНЯТЬМ") || 
                             normalized.contains("ЗАСТОЛ") || normalized.contains("КСТОЛУ") || 
                             normalized.contains("ПЕРЕЙТИК") -> {
                                 isTransitionButton = true
                                 transitionKey = "TAKE_SEAT"
                             }
                             // Join
-                            (normalized.contains("JOIN") && !normalized.contains("SIMILAR")) || 
-                            normalized.contains("ENTER") || 
-                            normalized.contains("ПРИСОЕД") || normalized.contains("ВОЙТИ") || 
-                            normalized.contains("ВХОД") -> {
+                            normalized == "JOIN" || normalized == "ENTER" || 
+                            normalized == "ВОЙТИ" || normalized == "ВХОД" || 
+                            normalized.contains("ПРИСОЕД") -> {
                                 isTransitionButton = true
                                 transitionKey = "JOIN"
                             }
                             // OK / Agree / Yes / Close
                             rawText == "OK" || rawText == "YES" || rawText == "ДА" || 
-                            normalized.contains("AGREE") || normalized.contains("СОГЛАС") || 
-                            normalized.contains("ПРИНЯТ") || normalized.contains("PROCEED") || 
-                            normalized.contains("CONTINUE") || normalized.contains("CLOSE") || 
+                            normalized == "AGREE" || normalized == "PROCEED" || 
+                            normalized == "CONTINUE" || normalized == "CLOSE" || 
+                            normalized.contains("СОГЛАС") || normalized.contains("ПРИНЯТ") || 
                             normalized.contains("ЗАКРЫТ") || normalized.contains("ХОРОШО") -> {
                                 isTransitionButton = true
                                 transitionKey = "OK"
                             }
                             // Confirm
-                            normalized.contains("CONFIRM") || normalized.contains("SUBMIT") || 
+                            normalized == "CONFIRM" || normalized == "SUBMIT" || 
                             normalized.contains("ПОДТВЕРД") -> {
                                 isTransitionButton = true
                                 transitionKey = "CONFIRM"
