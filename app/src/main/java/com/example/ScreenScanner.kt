@@ -489,7 +489,7 @@ class ScreenScanner(
                         }
                         
                         // Action buttons logic
-                        if (box.top > cleanBitmap!!.height * 0.72f) {
+                        if (box.top > cleanBitmap!!.height * 0.82f) {
                             val textUpper = element.text.uppercase()
                             
                             // Prevent tiny non-button text from being recognized:

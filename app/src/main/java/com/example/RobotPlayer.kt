@@ -160,6 +160,7 @@ object RobotPlayer {
             if (match) return rect
 
             // Synonyms
+            if (canonicalAction == "FOLD" && (upperKey.contains("CHECK") || upperKey.contains("ЧЕК"))) return rect
             if ((canonicalAction == "CALL" || canonicalAction == "CHECK") && 
                 (upperKey.contains("CALL") || upperKey.contains("CHECK") || upperKey.contains("КОЛЛ") || upperKey.contains("ЧЕК"))) return rect
             if ((canonicalAction == "BET" || canonicalAction == "RAISE") && 
