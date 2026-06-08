@@ -404,7 +404,8 @@ class ScreenScanner(
                             // Buy In
                             normalized == "BUYIN" || normalized == "BUIIN" || 
                             normalized == "BUY1N" || normalized == "REBUY" || 
-                            normalized == "ADDON" || normalized.contains("БАЙИН") || 
+                            normalized == "ADDON" || normalized == "TOPUP" ||
+                            normalized.contains("БАЙИН") || normalized.contains("ПОПОЛНИТЬ") ||
                             normalized.contains("БЙИН") || normalized.contains("КУПИТЬ") || 
                             normalized.contains("РЕБАЙ") || normalized.contains("АДДОН") ||
                             (normalized.contains("BUYIN") && lineBox.height() > 20) -> {
