@@ -30,7 +30,9 @@ object RobotPlayer {
                 
                 // If there are no action buttons detected, it's not our turn
                 if (availableActionButtons.isEmpty()) {
-                    handleProfileScanning(uiState)
+                    if (PokerHudSharedState.isAutoProfileScanningEnabled.value) {
+                        handleProfileScanning(uiState)
+                    }
                     return@collectLatest
                 }
 
@@ -158,57 +160,85 @@ object RobotPlayer {
 
     private var isProfileScanningActive = false
     private val scannedPositions = mutableSetOf<String>()
+    private val scannedNicknames = mutableSetOf<String>()
+    private var lastProfileScanTime = 0L
+    private val PROFILE_SCAN_COOLDOWN_MS = 25000L // 25 seconds cooldown between scans
 
     private fun handleProfileScanning(uiState: PokerUiState) {
         if (isProfileScanningActive) return
+        
+        val now = System.currentTimeMillis()
+        if (now - lastProfileScanTime < PROFILE_SCAN_COOLDOWN_MS) return
+
         val opponents = uiState.opponents
         if (opponents.isEmpty()) return
 
-        // Pick an opponent whose bounding box we haven't scanned recently.
+        // Pick an opponent whose bounding box or nickname we haven't scanned recently.
         val unscannedOpponent = opponents.firstOrNull { opp ->
             val box = opp.boundingBox
+            val name = opp.nickname
             if (box == null) false else {
-                val key = "${box.left / 10}_${box.top / 10}"
-                !scannedPositions.contains(key)
+                val spatialKey = "${box.left / 50}_${box.top / 50}"
+                val hasScannedName = name.isNotEmpty() && name != "Unknown" && scannedNicknames.contains(name)
+                val hasScannedPosition = scannedPositions.contains(spatialKey)
+                !hasScannedName && !hasScannedPosition
             }
         }
 
         if (unscannedOpponent != null) {
             val box = unscannedOpponent.boundingBox!!
-            val key = "${box.left / 10}_${box.top / 10}"
+            val name = unscannedOpponent.nickname
+            val spatialKey = "${box.left / 50}_${box.top / 50}"
             
             isProfileScanningActive = true
+            lastProfileScanTime = now
+            
             CoroutineScope(Dispatchers.Default).launch {
                 try {
-                    scannedPositions.add(key)
-                    if (scannedPositions.size > 20) scannedPositions.clear() // Prevent memory bloat
+                    if (name.isNotEmpty() && name != "Unknown") {
+                        scannedNicknames.add(name)
+                    }
+                    scannedPositions.add(spatialKey)
+                    
+                    if (scannedNicknames.size > 40) scannedNicknames.clear() // Prevent memory leaks
+                    if (scannedPositions.size > 40) scannedPositions.clear()
                     
                     // 1. Click on opponent avatar to open profile
-                    BotLogSharedState.appendLogBot("[BOT][L5] Clicking avatar to open profile of player ${unscannedOpponent.nickname}")
+                    BotLogSharedState.appendLogBot("[BOT][L5] Opening profile of player: ${unscannedOpponent.nickname}")
                     executeClickOnRect(box)
                     
-                    // 2. Wait for profile dialog to animate and open (around 1000ms is safe)
+                    // 2. Wait for profile dialog to animate and open (around 1200ms is safe)
                     delay(1200)
                     
                     // 3. Trigger scan bypassing HUD buttons
                     PokerHudSharedState.triggerProfileScan.value = true 
-                    BotLogSharedState.appendLogBot("[BOT][L5] Triggered profile screen scan directly")
+                    BotLogSharedState.appendLogBot("[BOT][L5] Scanning profile stats...")
                     
                     // wait for scan to process
-                    delay(1200)
+                    delay(1300)
                     
-                    // 4. Close the profile. We can click near the top of the screen
-                    val displayMetrics = AutoPlayerService.instance?.resources?.displayMetrics
-                    val screenW = displayMetrics?.widthPixels ?: 1000
-                    val screenH = displayMetrics?.heightPixels ?: 2000
+                    // 4. Close the profile. First try the robust global BACK action
+                    BotLogSharedState.appendLogBot("[BOT][L5] Closing profile dialog via SYSTEM BACK action")
+                    val serviceInstance = AutoPlayerService.instance
+                    val backSuccess = serviceInstance?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK) ?: false
                     
-                    val closeX = screenW * 0.5f
-                    val closeY = screenH * 0.1f // Top area clicks outside of bounds, closes popups
+                    delay(600) // wait for animation
                     
-                    BotLogSharedState.appendLogBot("[BOT][L5] Closing profile by clicking outside: $closeX, $closeY")
-                    AutoPlayerService.instance?.dispatchClick(closeX, closeY, 150)
+                    // Fallback to coordinates click if back button wasn't handled or service was disconnected
+                    if (!backSuccess && serviceInstance != null) {
+                        val displayMetrics = serviceInstance.resources?.displayMetrics
+                        val screenW = displayMetrics?.widthPixels ?: 1000
+                        val screenH = displayMetrics?.heightPixels ?: 2000
+                        
+                        // Click in a peripheral safe margin outside standard modal bounds (e.g., top-left corner)
+                        val closeX = screenW * 0.05f
+                        val closeY = screenH * 0.05f
+                        
+                        BotLogSharedState.appendLogBot("[BOT][L5] Fallback: Closing profile by clicking margin: $closeX, $closeY")
+                        serviceInstance.dispatchClick(closeX, closeY, 150)
+                    }
                     
-                    delay(1000) // Cooldown before next
+                    delay(1000) // Cooldown before next loop invocation
                 } catch (e: Exception) {
                     Log.e("RobotPlayer", "Error during profile scan", e)
                 } finally {

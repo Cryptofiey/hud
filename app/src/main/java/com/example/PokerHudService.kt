@@ -72,6 +72,7 @@ object PokerHudSharedState {
     // Scanner tuning
     val showScannerBoxes = MutableStateFlow(false)
     val triggerProfileScan = MutableStateFlow(false)
+    val isAutoProfileScanningEnabled = MutableStateFlow(false)
     val scannerOffsetX = MutableStateFlow(0f)
     val scannerOffsetY = MutableStateFlow(0f)
     

@@ -848,6 +848,46 @@ fun SettingsLayout(
                                 fontSize = 9.sp,
                                 lineHeight = 11.sp
                             )
+                            
+                            val isAutoPlayerConnected = AutoPlayerService.instance != null
+                            val isRobotModeEnabled by RobotPlayer.isRobotModeEnabled.collectAsState()
+                            
+                            if (isAutoPlayerConnected && isRobotModeEnabled) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                androidx.compose.material3.HorizontalDivider(color = Color(0x33FFFFFF), thickness = 1.dp)
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "🔍 Auto-Scan Opponent Profiles",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
+                                        Text(
+                                            text = "Automatically click on other players' avatars during downtime to collect VPIP/PFR statistics for deeper L2 calculations.",
+                                            color = Color(0xFFB0BEC5),
+                                            fontSize = 9.sp,
+                                            lineHeight = 11.sp
+                                        )
+                                    }
+                                    val isAutoScanEnabled by PokerHudSharedState.isAutoProfileScanningEnabled.collectAsState()
+                                    Switch(
+                                        checked = isAutoScanEnabled,
+                                        onCheckedChange = { 
+                                            PokerHudSharedState.isAutoProfileScanningEnabled.value = it
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color(0xFFFFB300),
+                                            checkedTrackColor = Color(0x88FFB300)
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
 
