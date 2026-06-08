@@ -39,9 +39,15 @@ object RobotPlayer {
                 // Priority scan of transition keys
                 val priorityKeys = listOf("OK", "CONFIRM", "BUY_IN", "TAKE_SEAT", "PLAY", "JOIN", "REGISTER")
                 val now = System.currentTimeMillis()
+                val uiState = PokerHudSharedState.uiState.value
+                val hasTableElements = uiState.heroCard1 != null || uiState.heroCard2 != null || uiState.board.any { it != null } || uiState.opponents.count { it.nickname != "Unknown" && !it.nickname.startsWith("Opponent") } > 0
                 
                 for (key in priorityKeys) {
                     val rect = currentLobbyButtons[key] ?: continue
+                    
+                    if (hasTableElements && (key == "REGISTER" || key == "PLAY" || key == "JOIN")) {
+                        continue // Prevent accidentally joining another table while already at a table
+                    }
                     
                     // Throttling: avoid clicking the exact same transition state faster than once per 5 seconds
                     val lastClicked = lastClickedTimeMap[key] ?: 0L

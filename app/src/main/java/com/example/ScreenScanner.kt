@@ -490,14 +490,14 @@ class ScreenScanner(
                         }
                         
                         // Action buttons logic
-                        if (box.top > cleanBitmap!!.height * 0.82f) {
+                        if (box.top > cleanBitmap!!.height * 0.70f) {
                             val textUpper = element.text.uppercase()
                             
                             // Prevent tiny non-button text from being recognized:
                             // Even short action buttons like "BET" or "Fold" are large.
                             // Pre-action checkboxes have small font sizes. 
-                            if (box.width() < cleanBitmap!!.width * 0.05f) continue
-                            if (box.height() < cleanBitmap!!.height * 0.018f) continue // Ignore tiny texts
+                            if (box.width() < cleanBitmap!!.width * 0.01f) continue
+                            if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
                             
                             // Skip pre-action checkboxes and unwanted buttons
                             if (textUpper.contains("X/F") || textUpper.contains("X / F") || 
