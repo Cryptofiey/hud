@@ -425,7 +425,8 @@ class ScreenScanner(
                                 transitionKey = "TAKE_SEAT"
                             }
                             // Join
-                            normalized.contains("JOIN") || normalized.contains("ENTER") || 
+                            (normalized.contains("JOIN") && !normalized.contains("SIMILAR")) || 
+                            normalized.contains("ENTER") || 
                             normalized.contains("ПРИСОЕД") || normalized.contains("ВОЙТИ") || 
                             normalized.contains("ВХОД") -> {
                                 isTransitionButton = true

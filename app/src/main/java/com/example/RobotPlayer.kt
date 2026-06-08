@@ -300,9 +300,9 @@ object RobotPlayer {
                         val screenW = displayMetrics?.widthPixels ?: 1000
                         val screenH = displayMetrics?.heightPixels ?: 2000
                         
-                        // Click in a peripheral safe margin outside standard modal bounds (e.g., top-left corner)
-                        val closeX = screenW * 0.05f
-                        val closeY = screenH * 0.05f
+                        // Click in a peripheral safe margin outside standard modal bounds (middle-right edge)
+                        val closeX = screenW * 0.95f
+                        val closeY = screenH * 0.40f
                         
                         BotLogSharedState.appendLogBot("[BOT][L5] Fallback: Closing profile by clicking margin: $closeX, $closeY")
                         serviceInstance.dispatchClick(closeX, closeY, 150)
