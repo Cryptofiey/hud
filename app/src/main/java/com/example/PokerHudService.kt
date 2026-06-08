@@ -712,7 +712,7 @@ class PokerHudService : Service() {
         val probsCheckBox = createToggleButton("Статы", PokerHudSharedState.showProbsBox)
         
         val debugSnapBtn = TextView(this).apply {
-            text = "🐞 ДЕБАГ"
+            text = "📷 ДЕБАГ"
             textSize = 6.5f
             gravity = Gravity.CENTER
             setTextColor(AndroidColor.WHITE)

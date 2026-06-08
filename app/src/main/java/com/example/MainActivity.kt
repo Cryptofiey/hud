@@ -565,7 +565,7 @@ fun SettingsLayout(
                     )
 
                     SettingsToggleCard(
-                        title = "Bot Log Widget",
+                        title = "🤖 Bot Log Widget",
                         description = "Activate or Stop the floating log tracker for bot L/M levels.",
                         checked = isBotLogWidgetRunning,
                         onCheckedChange = { start -> 
@@ -622,7 +622,7 @@ fun SettingsLayout(
                     }
                     val isLogServerRunning by BotLogSharedState.isLogServerRunning.collectAsStateWithLifecycle()
                     SettingsToggleCard(
-                        title = "Remote Bot Dashboard (Web)",
+                        title = "🤖 Remote Bot Dashboard (Web)",
                         description = if (isLogServerRunning) "Dashboard active at: http://$localIpAddress:8080" else "Start a local web server to view bot logs on another device (PC) without blocking the phone screen.",
                         checked = isLogServerRunning,
                         onCheckedChange = { start ->
@@ -869,7 +869,7 @@ fun SettingsLayout(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "🐞 Instant Debug Capture",
+                                    text = "📷 Instant Debug Capture",
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 11.sp
