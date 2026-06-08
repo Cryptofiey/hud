@@ -368,37 +368,81 @@ class ScreenScanner(
             for (block in result.textBlocks) {
                 for (line in block.lines) {
                     val lineBox = line.boundingBox
-                    if (lineBox != null && lineBox.width() >= cleanBitmap!!.width * 0.05f && lineBox.height() >= cleanBitmap!!.height * 0.015f) {
-                        val textUpper = line.text.uppercase()
+                    if (lineBox != null && lineBox.width() >= 10 && lineBox.height() >= 10) {
+                        // Normalize letters & strip whitespace, hyphens etc. for robust matching under OCR errors
+                        val rawText = line.text.uppercase(java.util.Locale.US)
+                        val normalized = rawText
+                            .replace(" ", "")
+                            .replace("-", "")
+                            .replace("_", "")
+                            .replace("А", "A") // Cyrillic to Latin mapping
+                            .replace("В", "B")
+                            .replace("Е", "E")
+                            .replace("К", "K")
+                            .replace("М", "M")
+                            .replace("Н", "H")
+                            .replace("О", "O")
+                            .replace("Р", "P")
+                            .replace("С", "C")
+                            .replace("Т", "T")
+                            .replace("Х", "X")
+                            .replace("У", "Y")
+                            .replace("И", "I")
+
                         var isTransitionButton = false
                         var transitionKey = ""
                         
                         when {
-                            textUpper.contains("REGISTER") || textUpper.contains("РЕГИСТР") || textUpper.contains("УЧАСТВОВАТЬ") -> {
+                            // Register
+                            normalized.contains("REGISTER") || normalized.contains("REGISTR") || 
+                            normalized.contains("РЕГИСТР") || normalized.contains("УЧАСТВ") || 
+                            normalized.contains("ЗАРЕГ") || normalized.contains("ЗАПИС") -> {
                                 isTransitionButton = true
                                 transitionKey = "REGISTER"
                             }
-                            textUpper.contains("BUY-IN") || textUpper.contains("BUY IN") || textUpper.contains("БАЙ-ИН") || textUpper.contains("БАЙ ИН") || textUpper.contains("КУПИТЬ БАЙ") -> {
+                            // Buy In
+                            normalized.contains("BUYIN") || normalized.contains("BUIIN") || 
+                            normalized.contains("BUY1N") || normalized.contains("REBUY") || 
+                            normalized.contains("ADDON") || normalized.contains("БАЙИН") || 
+                            normalized.contains("БЙИН") || normalized.contains("КУПИТЬБ") || 
+                            normalized.contains("РЕБАЙ") || normalized.contains("АДДОН") -> {
                                 isTransitionButton = true
                                 transitionKey = "BUY_IN"
                             }
-                            textUpper.contains("PLAY NOW") || textUpper.contains("ИГРАТЬ СЕЙЧАС") || textUpper == "PLAY" || textUpper == "ИГРАТЬ" -> {
+                            // Play
+                            normalized.contains("PLAYNOW") || normalized.contains("ИГРАТЬС") || 
+                            normalized == "PLAY" || normalized == "ИГРАТЬ" || 
+                            normalized == "НАЧАТЬ" || normalized == "START" -> {
                                 isTransitionButton = true
                                 transitionKey = "PLAY"
                             }
-                            textUpper.contains("TAKE SEAT") || textUpper.contains("ЗАНЯТЬ МЕСТО") || textUpper.contains("GO TO TABLE") || textUpper.contains("К СТОЛУ") || textUpper.contains("ПЕРЕЙТИ К СТОЛУ") -> {
+                            // Take seat
+                            normalized.contains("TAKESEAT") || normalized.contains("SITDOWN") || 
+                            normalized.contains("GOTOTABLE") || normalized.contains("ЗАНЯТЬМ") || 
+                            normalized.contains("ЗАСТОЛ") || normalized.contains("КСТОЛУ") || 
+                            normalized.contains("ПЕРЕЙТИК") -> {
                                 isTransitionButton = true
                                 transitionKey = "TAKE_SEAT"
                             }
-                            textUpper.contains("JOIN") || textUpper.contains("ПРИСОЕДИНИТЬ") || textUpper.contains("ВХОД В ИГРУ") || textUpper == "ВХОД" -> {
+                            // Join
+                            normalized.contains("JOIN") || normalized.contains("ENTER") || 
+                            normalized.contains("ПРИСОЕД") || normalized.contains("ВОЙТИ") || 
+                            normalized.contains("ВХОД") -> {
                                 isTransitionButton = true
                                 transitionKey = "JOIN"
                             }
-                            textUpper == "OK" || textUpper == "YES" || textUpper == "ДА" || textUpper.contains("AGREE") || textUpper.contains("СОГЛАСЕН") -> {
+                            // OK / Agree / Yes / Close
+                            rawText == "OK" || rawText == "YES" || rawText == "ДА" || 
+                            normalized.contains("AGREE") || normalized.contains("СОГЛАС") || 
+                            normalized.contains("ПРИНЯТ") || normalized.contains("PROCEED") || 
+                            normalized.contains("CONTINUE") || normalized.contains("CLOSE") || 
+                            normalized.contains("ЗАКРЫТ") || normalized.contains("ХОРОШО") -> {
                                 isTransitionButton = true
                                 transitionKey = "OK"
                             }
-                            textUpper.contains("CONFIRM") || textUpper.contains("ПОДТВЕРДИТЬ") -> {
+                            // Confirm
+                            normalized.contains("CONFIRM") || normalized.contains("SUBMIT") || 
+                            normalized.contains("ПОДТВЕРД") -> {
                                 isTransitionButton = true
                                 transitionKey = "CONFIRM"
                             }

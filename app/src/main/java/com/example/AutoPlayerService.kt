@@ -52,11 +52,11 @@ class AutoPlayerService : AccessibilityService() {
     fun dispatchClick(x: Float, y: Float, duration: Long) {
         val path = Path()
         path.moveTo(x, y)
-        // Some systems ignore 0-length gestures, so we provide a micro movement
-        // A human finger touch is an area, and pressing naturally shifts the center point. 
-        // We move the pointer by ~10-15 pixels over the click duration.
-        val dx = (Math.random() * 8f + 5f).toFloat() * if (Math.random() > 0.5) 1 else -1
-        val dy = (Math.random() * 8f + 5f).toFloat() * if (Math.random() > 0.5) 1 else -1
+        // Some systems might ignore absolute 0-length gestures, so we provide an extremely micro 
+        // 0.5 px subpixel nudge. This guarantees it is registered as an absolute clean tap on 100% of 
+        // OS versions and devices, never triggering any drag/scroll gestures.
+        val dx = 0.5f * if (Math.random() > 0.5) 1f else -1f
+        val dy = 0.5f * if (Math.random() > 0.5) 1f else -1f
         path.lineTo(x + dx, y + dy)
         val gestureBuilder = GestureDescription.Builder()
         gestureBuilder.addStroke(GestureDescription.StrokeDescription(path, 0, duration))

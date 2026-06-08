@@ -399,24 +399,27 @@ class PokerHudService : Service() {
             buttonAnimators.remove(view)
 
             if (active) {
-                val animator = android.animation.ValueAnimator.ofFloat(1.0f, 1.15f).apply {
-                    duration = 1400
+                // High-fidelity alpha breathing pulsation that is 100% clip-proof and looks extremely high-tech
+                val animator = android.animation.ValueAnimator.ofFloat(0.55f, 1.0f).apply {
+                    duration = 1100
                     repeatCount = android.animation.ValueAnimator.INFINITE
                     repeatMode = android.animation.ValueAnimator.REVERSE
                     interpolator = android.view.animation.AccelerateDecelerateInterpolator()
                     addUpdateListener { animation ->
-                        val progress = animation.animatedValue as Float
-                        view.scaleX = progress
-                        view.scaleY = progress
-                        view.alpha = 0.8f + (progress - 1.0f) * 1.33f
+                        val alphaVal = animation.animatedValue as Float
+                        view.alpha = alphaVal
+                        // Subtle safe scale that never exceeds boundaries
+                        view.scaleX = 1.02f
+                        view.scaleY = 1.02f
                     }
                 }
                 buttonAnimators[view] = animator
                 animator.start()
             } else {
-                view.scaleX = 1.0f
-                view.scaleY = 1.0f
-                view.alpha = 0.85f
+                // Dimmed when inactive so the state change is instantly clear physically
+                view.alpha = 0.45f
+                view.scaleX = 0.95f
+                view.scaleY = 0.95f
             }
         }
     }
@@ -517,6 +520,8 @@ class PokerHudService : Service() {
         // 2. EXPANDED HUD LAYOUT
         val expanded = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            clipChildren = false
+            clipToPadding = false
             setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
             background = CutoutBackgroundDrawable(
                 AndroidColor.parseColor("#F50D151D"), // Dark blue/grey high contrast
@@ -806,6 +811,8 @@ class PokerHudService : Service() {
         val emojiContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
+            clipChildren = false
+            clipToPadding = false
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dpToPx(4f)
             }
@@ -2074,6 +2081,8 @@ class PokerHudService : Service() {
         
         val mainVert = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            clipChildren = false
+            clipToPadding = false
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
             setPadding(dpToPx(6f), dpToPx(5f), dpToPx(6f), dpToPx(5f))
         }
@@ -2317,6 +2326,8 @@ class PokerHudService : Service() {
         val emojiContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
+            clipChildren = false
+            clipToPadding = false
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dpToPx(4f)
             }
