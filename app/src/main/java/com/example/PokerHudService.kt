@@ -391,6 +391,36 @@ class PokerHudService : Service() {
         }
     }
 
+    private val buttonAnimators = java.util.WeakHashMap<android.view.View, android.animation.ValueAnimator>()
+
+    private fun animateButtonPulse(view: android.view.View, active: Boolean) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            buttonAnimators[view]?.cancel()
+            buttonAnimators.remove(view)
+
+            if (active) {
+                val animator = android.animation.ValueAnimator.ofFloat(1.0f, 1.15f).apply {
+                    duration = 1400
+                    repeatCount = android.animation.ValueAnimator.INFINITE
+                    repeatMode = android.animation.ValueAnimator.REVERSE
+                    interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+                    addUpdateListener { animation ->
+                        val progress = animation.animatedValue as Float
+                        view.scaleX = progress
+                        view.scaleY = progress
+                        view.alpha = 0.8f + (progress - 1.0f) * 1.33f
+                    }
+                }
+                buttonAnimators[view] = animator
+                animator.start()
+            } else {
+                view.scaleX = 1.0f
+                view.scaleY = 1.0f
+                view.alpha = 0.85f
+            }
+        }
+    }
+
     private fun formatCardColoredText(card: Card?): String {
         if (card == null) return "?"
         val suitChar = when (card.suit) {
@@ -800,6 +830,7 @@ class PokerHudService : Service() {
             serviceScope.launch {
                 flow.collect { active ->
                     btn.background = createDynamicGlow(active, strokeColorHex)
+                    animateButtonPulse(btn, active)
                 }
             }
             return btn
@@ -2310,6 +2341,7 @@ class PokerHudService : Service() {
             serviceScope.launch {
                 flow.collect { active ->
                     btn.background = createDynamicGlow(active, strokeColorHex)
+                    animateButtonPulse(btn, active)
                 }
             }
             return btn
@@ -2349,13 +2381,16 @@ class PokerHudService : Service() {
         fun applyHudLayoutState() {
             val isVertical = PokerHudSharedState.isProbsHudVertical.value
             val isMinimized = PokerHudSharedState.isProbsHudMinimized.value
+            val isRobotActive = RobotPlayer.isRobotModeEnabled.value
  
             if (isMinimized) {
                 params.width = dpToPx(55f)
                 params.height = dpToPx(55f)
                 params.x = -dpToPx(38f) // SNAP to left edge, half-hidden!
                 
-                frame.background = createBackgroundDrawable(AndroidColor.parseColor("#CC111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FF4CAF50"))
+                if (!isRobotActive) {
+                    frame.background = createBackgroundDrawable(AndroidColor.parseColor("#CC111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FF4CAF50"))
+                }
                 
                 content.visibility = View.GONE
                 mainVert.visibility = View.GONE
@@ -2367,7 +2402,9 @@ class PokerHudService : Service() {
                     params.x = dpToPx(10f)
                 }
                 
-                frame.background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FF4CAF50"))
+                if (!isRobotActive) {
+                    frame.background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FF4CAF50"))
+                }
                 
                 content.visibility = View.VISIBLE
                 mainVert.visibility = View.VISIBLE
@@ -2396,12 +2433,14 @@ class PokerHudService : Service() {
                     params.x = dpToPx(100f)
                 }
                 
-                frame.background = createBackgroundDrawable(
-                    AndroidColor.parseColor("#E6111C24"), 
-                    8f, 
-                    dpToPx(1.5f), 
-                    AndroidColor.parseColor("#FF4CAF50")
-                )
+                if (!isRobotActive) {
+                    frame.background = createBackgroundDrawable(
+                        AndroidColor.parseColor("#E6111C24"), 
+                        8f, 
+                        dpToPx(1.5f), 
+                        AndroidColor.parseColor("#FF4CAF50")
+                    )
+                }
                 
                 content.visibility = View.VISIBLE
                 mainVert.visibility = View.VISIBLE
@@ -2439,6 +2478,12 @@ class PokerHudService : Service() {
                 Triple(isVertical, isMinimized, showAdv)
             }.collect {
                 applyHudLayoutState()
+            }
+        }
+
+        serviceScope.launch {
+            RobotPlayer.isRobotModeEnabled.collect { isRobotActive ->
+                updateFrameBorderAnimation(isRobotActive, frame)
             }
         }
 
@@ -2833,5 +2878,71 @@ class PokerHudService : Service() {
         ScannerConfig.activeProjection = null
         ScannerConfig.pendingProjectionData = null
         ScannerConfig.isProjectionGranted.value = false
+    }
+
+    private var frameBorderAnimator: android.animation.ValueAnimator? = null
+
+    private fun updateFrameBorderAnimation(isRobotActive: Boolean, frame: FrameLayout) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            frameBorderAnimator?.cancel()
+            frameBorderAnimator = null
+
+            if (isRobotActive) {
+                val startColor = AndroidColor.parseColor("#FF4CAF50") 
+                val endColor = AndroidColor.parseColor("#FF00E676") 
+                
+                frameBorderAnimator = android.animation.ValueAnimator.ofFloat(0.0f, 1.0f).apply {
+                    duration = 1800
+                    repeatCount = android.animation.ValueAnimator.INFINITE
+                    repeatMode = android.animation.ValueAnimator.REVERSE
+                    interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+                    addUpdateListener { animator ->
+                        val fraction = animator.animatedValue as Float
+                        val animatedWidth = dpToPx(1.5f + fraction * 2.0f)
+                        val animatedColor = interpolateColor(startColor, endColor, fraction)
+                        
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            try {
+                                frame.background = createBackgroundDrawable(
+                                    AndroidColor.parseColor("#E6111C24"),
+                                    8f,
+                                    animatedWidth,
+                                    animatedColor
+                                )
+                            } catch (ignored: Exception) {}
+                        }
+                    }
+                    start()
+                }
+            } else {
+                try {
+                    frame.background = createBackgroundDrawable(
+                        AndroidColor.parseColor("#E6111C24"),
+                        8f,
+                        dpToPx(1.5f),
+                        AndroidColor.parseColor("#FF4CAF50")
+                    )
+                } catch (ignored: Exception) {}
+            }
+        }
+    }
+
+    private fun interpolateColor(startColor: Int, endColor: Int, fraction: Float): Int {
+        val startAlpha = android.graphics.Color.alpha(startColor)
+        val startRed = android.graphics.Color.red(startColor)
+        val startGreen = android.graphics.Color.green(startColor)
+        val startBlue = android.graphics.Color.blue(startColor)
+
+        val endAlpha = android.graphics.Color.alpha(endColor)
+        val endRed = android.graphics.Color.red(endColor)
+        val endGreen = android.graphics.Color.green(endColor)
+        val endBlue = android.graphics.Color.blue(endColor)
+
+        return android.graphics.Color.argb(
+            (startAlpha + fraction * (endAlpha - startAlpha)).toInt(),
+            (startRed + fraction * (endRed - startRed)).toInt(),
+            (startGreen + fraction * (endGreen - startGreen)).toInt(),
+            (startBlue + fraction * (endBlue - startBlue)).toInt()
+        )
     }
 }
