@@ -13,6 +13,7 @@ object RobotPlayer {
     
     // Map of Action Name (e.g. "FOLD", "CALL", "CHECK", "BET", "RAISE") to its screen Rect
     var availableActionButtons = emptyMap<String, Rect>()
+    var lobbyTransitionButtons = emptyMap<String, Rect>()
     var autoPlayDelayMs = 1500L
     
     // Keep track of last action to avoid spamming the same action multiple times per turn
@@ -21,6 +22,46 @@ object RobotPlayer {
     private var lastActionTime = 0L
     
     init {
+        // Background loop for Lobby / Table Buy-in Transition clicks
+        CoroutineScope(Dispatchers.Default).launch {
+            val lastClickedTimeMap = mutableMapOf<String, Long>()
+            while (isActive) {
+                delay(800) // check every 800ms
+                if (!isRobotModeEnabled.value) continue
+                if (AutoPlayerService.instance == null) continue
+                
+                // If we have active game table action buttons, we shouldn't click random lobby buttons!
+                if (availableActionButtons.isNotEmpty()) continue
+                
+                val currentLobbyButtons = lobbyTransitionButtons
+                if (currentLobbyButtons.isEmpty()) continue
+                
+                // Priority scan of transition keys
+                val priorityKeys = listOf("OK", "CONFIRM", "BUY_IN", "TAKE_SEAT", "PLAY", "JOIN", "REGISTER")
+                val now = System.currentTimeMillis()
+                
+                for (key in priorityKeys) {
+                    val rect = currentLobbyButtons[key] ?: continue
+                    
+                    // Throttling: avoid clicking the exact same transition state faster than once per 5 seconds
+                    val lastClicked = lastClickedTimeMap[key] ?: 0L
+                    if (now - lastClicked < 5000L) {
+                        continue // wait for screen transition or server processing
+                    }
+                    
+                    Log.d("RobotPlayer", "[LOBBY] Found transition button: $key inside $rect. Executing transition click.")
+                    BotLogSharedState.appendLogBot("[BOT][L5] Transition/Lobby action: click on '$key' to navigate to game table")
+                    
+                    // Human delay before transition action
+                    delay(Random.nextLong(200, 700))
+                    executeClickOnRect(rect)
+                    
+                    lastClickedTimeMap[key] = System.currentTimeMillis()
+                    break // perform only 1 action per tick to avoid fast multi-click errors
+                }
+            }
+        }
+
         CoroutineScope(Dispatchers.Default).launch {
             PokerHudSharedState.uiState.collectLatest { uiState ->
                 if (!isRobotModeEnabled.value) return@collectLatest

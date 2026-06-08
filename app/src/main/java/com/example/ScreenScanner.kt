@@ -330,6 +330,7 @@ class ScreenScanner(
             val commElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
             val holeElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
             val actionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
+            val transitionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
 
             // We look for action buttons in the bottom 20% of the screen
             val bottomZoneTop = cleanBitmap!!.height * 0.80
@@ -366,6 +367,48 @@ class ScreenScanner(
 
             for (block in result.textBlocks) {
                 for (line in block.lines) {
+                    val lineBox = line.boundingBox
+                    if (lineBox != null && lineBox.width() >= cleanBitmap!!.width * 0.05f && lineBox.height() >= cleanBitmap!!.height * 0.015f) {
+                        val textUpper = line.text.uppercase()
+                        var isTransitionButton = false
+                        var transitionKey = ""
+                        
+                        when {
+                            textUpper.contains("REGISTER") || textUpper.contains("РЕГИСТР") || textUpper.contains("УЧАСТВОВАТЬ") -> {
+                                isTransitionButton = true
+                                transitionKey = "REGISTER"
+                            }
+                            textUpper.contains("BUY-IN") || textUpper.contains("BUY IN") || textUpper.contains("БАЙ-ИН") || textUpper.contains("БАЙ ИН") || textUpper.contains("КУПИТЬ БАЙ") -> {
+                                isTransitionButton = true
+                                transitionKey = "BUY_IN"
+                            }
+                            textUpper.contains("PLAY NOW") || textUpper.contains("ИГРАТЬ СЕЙЧАС") || textUpper == "PLAY" || textUpper == "ИГРАТЬ" -> {
+                                isTransitionButton = true
+                                transitionKey = "PLAY"
+                            }
+                            textUpper.contains("TAKE SEAT") || textUpper.contains("ЗАНЯТЬ МЕСТО") || textUpper.contains("GO TO TABLE") || textUpper.contains("К СТОЛУ") || textUpper.contains("ПЕРЕЙТИ К СТОЛУ") -> {
+                                isTransitionButton = true
+                                transitionKey = "TAKE_SEAT"
+                            }
+                            textUpper.contains("JOIN") || textUpper.contains("ПРИСОЕДИНИТЬ") || textUpper.contains("ВХОД В ИГРУ") || textUpper == "ВХОД" -> {
+                                isTransitionButton = true
+                                transitionKey = "JOIN"
+                            }
+                            textUpper == "OK" || textUpper == "YES" || textUpper == "ДА" || textUpper.contains("AGREE") || textUpper.contains("СОГЛАСЕН") -> {
+                                isTransitionButton = true
+                                transitionKey = "OK"
+                            }
+                            textUpper.contains("CONFIRM") || textUpper.contains("ПОДТВЕРДИТЬ") -> {
+                                isTransitionButton = true
+                                transitionKey = "CONFIRM"
+                            }
+                        }
+                        
+                        if (isTransitionButton) {
+                            transitionButtonsMap[transitionKey] = lineBox
+                        }
+                    }
+
                     for (element in line.elements) {
                         val box = element.boundingBox ?: continue
                         
@@ -402,7 +445,7 @@ class ScreenScanner(
                         }
                         
                         // Action buttons logic
-                        if (box.top > cleanBitmap!!.height * 0.80f) {
+                        if (box.top > cleanBitmap!!.height * 0.72f) {
                             val textUpper = element.text.uppercase()
                             
                             // Prevent tiny non-button text from being recognized:
@@ -449,9 +492,10 @@ class ScreenScanner(
             
             // Pass action buttons to RobotPlayer
             RobotPlayer.availableActionButtons = actionButtonsMap
+            RobotPlayer.lobbyTransitionButtons = transitionButtonsMap
             
             // Periodically save screenshot if bot has actions available
-            if (actionButtonsMap.isNotEmpty()) {
+            if (actionButtonsMap.isNotEmpty() || transitionButtonsMap.isNotEmpty()) {
                 DebugLogManager.savePeriodicScreenshot(cleanBitmap!!, context)
             }
 
