@@ -553,10 +553,6 @@ class ScreenScanner(
                 heroActionOptions.clear()
             }
             
-            // Pass action buttons to RobotPlayer
-            RobotPlayer.availableActionButtons = actionButtonsMap
-            RobotPlayer.lobbyTransitionButtons = transitionButtonsMap
-            
             // Periodically save screenshot if bot has actions available
             if (actionButtonsMap.isNotEmpty() || transitionButtonsMap.isNotEmpty()) {
                 DebugLogManager.savePeriodicScreenshot(cleanBitmap!!, context)
@@ -985,6 +981,9 @@ class ScreenScanner(
                 RobotPlayer.lobbyTransitionButtons = emptyMap()
                 scanStatus.value = "Агент-Сторож: Мы в CoinPoker, но страница неизвестна. Ждем..."
                 // Still update cards if there's any stray data just in case, or ignore.
+            } else {
+                RobotPlayer.availableActionButtons = actionButtonsMap
+                RobotPlayer.lobbyTransitionButtons = transitionButtonsMap
             }
 
             PokerHudSharedState.externalActions.tryEmit(
