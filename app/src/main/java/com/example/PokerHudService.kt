@@ -60,8 +60,15 @@ sealed class ExternalAction {
     data class ControlHud(val command: String) : ExternalAction()
 }
 
+enum class AppScreenState {
+    APP_UNKNOWN,
+    COINPOKER_KNOWN,
+    COINPOKER_UNKNOWN
+}
+
 object PokerHudSharedState {
     val isHudOverlayRunning = MutableStateFlow(false)
+    val appScreenContext = MutableStateFlow(AppScreenState.APP_UNKNOWN)
     val uiState = MutableStateFlow<PokerUiState>(PokerUiState())
     val triggerPreset = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val externalActions = MutableSharedFlow<ExternalAction>(

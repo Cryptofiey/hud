@@ -943,6 +943,50 @@ class ScreenScanner(
                 null
             }
 
+            val trustedCoinPokerMarker = fullScanText.contains("COINPOKER") || fullScanText.contains("COIN POKER") || 
+                fullScanText.contains("NLH") || fullScanText.contains("PLO") || isPasswordScreen || 
+                fullScanText.contains("ПОТ") || fullScanText.contains("ALL-IN") || fullScanText.contains("ОЛЛ-ИН")
+
+            val hasTableElements = finalH1 != null || finalH2 != null || finalBoard.any { it != null } || finalOpponents.isNotEmpty() || scannedPotSize != null || actionButtonsMap.isNotEmpty()
+            
+            // We only consider lobby transitions valid if we see a trusted marker anywhere on screen, 
+            // OR if we already see table elements (so we know we are in the app).
+            val validLobby = transitionButtonsMap.isNotEmpty() && (trustedCoinPokerMarker || hasTableElements)
+
+            val currentContext = if (hasTableElements || validLobby || trustedCoinPokerMarker) {
+                if (hasTableElements || validLobby) {
+                    AppScreenState.COINPOKER_KNOWN
+                } else {
+                    AppScreenState.COINPOKER_UNKNOWN
+                }
+            } else {
+                AppScreenState.APP_UNKNOWN
+            }
+            
+            PokerHudSharedState.appScreenContext.value = currentContext
+            
+            if (currentContext == AppScreenState.APP_UNKNOWN) {
+                RobotPlayer.availableActionButtons = emptyMap()
+                RobotPlayer.lobbyTransitionButtons = emptyMap()
+                PokerHudSharedState.externalActions.tryEmit(
+                    ExternalAction.UpdateCards(
+                        hero1 = null, hero2 = null, board = emptyList(), opponents = emptyList(),
+                        profileBoxes = null, updateProfileBoxes = false, rawScannerBoxes = null,
+                        potSize = null, heroActionOptions = emptyList(), heroTurn = false,
+                        heroStack = null, heroBet = null, tablePosition = null,
+                        smallBlind = null, bigBlind = null, tournamentStage = null
+                    )
+                )
+                scanStatus.value = "Агент-Сторож: Приложение не распознано. Автокликер приостановлен."
+                image?.close()
+                return true
+            } else if (currentContext == AppScreenState.COINPOKER_UNKNOWN) {
+                RobotPlayer.availableActionButtons = emptyMap()
+                RobotPlayer.lobbyTransitionButtons = emptyMap()
+                scanStatus.value = "Агент-Сторож: Мы в CoinPoker, но страница неизвестна. Ждем..."
+                // Still update cards if there's any stray data just in case, or ignore.
+            }
+
             PokerHudSharedState.externalActions.tryEmit(
                 ExternalAction.UpdateCards(
                     hero1 = finalH1, 
