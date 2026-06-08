@@ -332,8 +332,8 @@ class ScreenScanner(
             val actionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
             val transitionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
 
-            // We look for action buttons in the bottom 20% of the screen
-            val bottomZoneTop = cleanBitmap!!.height * 0.80
+            // We look for action buttons in the bottom 30% of the screen
+            val bottomZoneTop = cleanBitmap!!.height * 0.70
 
             var scannedPotSize: Float? = null
             
@@ -404,7 +404,7 @@ class ScreenScanner(
                             // Buy In
                             normalized == "BUYIN" || normalized == "BUIIN" || 
                             normalized == "BUY1N" || normalized == "REBUY" || 
-                            normalized == "ADDON" || normalized == "TOPUP" ||
+                            normalized == "ADDON" || normalized.contains("TOPUP") ||
                             normalized.contains("БАЙИН") || normalized.contains("ПОПОЛНИТЬ") ||
                             normalized.contains("БЙИН") || normalized.contains("КУПИТЬ") || 
                             normalized.contains("РЕБАЙ") || normalized.contains("АДДОН") ||
@@ -504,8 +504,8 @@ class ScreenScanner(
                             // Check if this is a pre-action button
                             if (textUpper.contains("X/F") || textUpper.contains("X / F") || 
                                 textUpper.contains("X/C") || textUpper.contains("X / C") ||
-                                textUpper.contains("ANY") || textUpper.contains("ЛЮБЫЕ") || 
-                                textUpper.contains("ЛЮБОЙ") || textUpper.contains("PLAY NEXT")) {
+                                textUpper.contains("CALL ANY") || textUpper.contains("КОЛЛ ЛЮБЫЕ") || 
+                                textUpper.contains("CHECK/FOLD") || textUpper.contains("PLAY NEXT")) {
                                 hasPreactions = true
                                 continue
                             }
