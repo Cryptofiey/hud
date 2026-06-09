@@ -414,9 +414,10 @@ class ScreenScanner(
                             .replace("У", "Y")
                             .replace("И", "I")
 
-                        if (lineBox.top > cleanBitmap!!.height * 0.70) {
+                        if (lineBox.top > cleanBitmap!!.height * 0.55) {
                             if (lineNormalized.contains("X/F") || lineNormalized.contains("X/C") ||
                                 lineNormalized.contains("CALLANY") || lineNormalized.contains("КОЛЛЛЮБЫЕ") ||
+                                (lineNormalized.contains("CALL") && (lineNormalized.contains("ANY") || lineNormalized.contains("ANV"))) ||
                                 lineNormalized.contains("CHECK/FOLD") || lineNormalized.contains("PLAYNEXT") ||
                                 lineNormalized.contains("FOLD/ANY") || lineNormalized.contains("CALL3.") || 
                                 lineNormalized.contains("CALL2.") || lineNormalized.contains("ЧЕК/ФОЛД") ||
@@ -429,6 +430,9 @@ class ScreenScanner(
 
                     for (element in line.elements) {
                         val box = element.boundingBox ?: continue
+                        
+                        // Ignore tiny text for action/transition buttons to prevent clicking on player avatars/names
+                        if (box.height() < cleanBitmap!!.height * 0.015f) continue
                         
                         var insideHud = false
                         for (hudRect in hudRects) {
@@ -731,9 +735,7 @@ class ScreenScanner(
                         
                         // Use a tighter threshold to group same-card detections 
                         // while keeping strictly separate cards separated.
-                        // By ensuring at least regionRect.width() * 0.12f, we guarantee that 
-                        // misaligned slices of the same card cluster together.
-                        val clusterThreshold = maxOf(avgWidth * 1.0f, avgHeight * 0.5f, regionRect.width() * 0.12f, 15f)
+                        val clusterThreshold = maxOf(avgWidth * 0.4f, regionRect.width() * 0.08f, 15f)
                         
                         if (elem.second.centerX() - lastCx < clusterThreshold) {
                             lastCluster.add(elem)
