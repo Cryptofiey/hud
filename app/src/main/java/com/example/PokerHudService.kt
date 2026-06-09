@@ -62,7 +62,10 @@ sealed class ExternalAction {
 
 enum class AppScreenState {
     APP_UNKNOWN,
-    COINPOKER_KNOWN,
+    COINPOKER_TABLE,
+    COINPOKER_LOBBY,
+    COINPOKER_PROFILE,
+    COINPOKER_KNOWN, // Kept for backwards compatibility if needed
     COINPOKER_UNKNOWN
 }
 

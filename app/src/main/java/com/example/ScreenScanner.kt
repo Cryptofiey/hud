@@ -501,11 +501,15 @@ class ScreenScanner(
                             if (box.width() < cleanBitmap!!.width * 0.01f) continue
                             if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
                             
-                            // Check if this is a pre-action button
+                            // Check if this is a pre-action button (not our turn)
                             if (textUpper.contains("X/F") || textUpper.contains("X / F") || 
                                 textUpper.contains("X/C") || textUpper.contains("X / C") ||
                                 textUpper.contains("CALL ANY") || textUpper.contains("КОЛЛ ЛЮБЫЕ") || 
-                                textUpper.contains("CHECK/FOLD") || textUpper.contains("PLAY NEXT")) {
+                                textUpper.contains("CALLANY") || textUpper.contains("КОЛЛЛЮБЫЕ") || 
+                                textUpper.contains("CHECK/FOLD") || textUpper.contains("CHECK / FOLD") || 
+                                textUpper.contains("PLAY NEXT") || textUpper.contains("FOLD/ANY") ||
+                                textUpper.contains("CALL 3.") || textUpper.contains("CALL 2.") ||
+                                (textUpper.contains("PLAY") && textUpper.contains("NEXT"))) {
                                 hasPreactions = true
                                 continue
                             }
@@ -942,16 +946,22 @@ class ScreenScanner(
             val trustedCoinPokerMarker = fullScanText.contains("COINPOKER") || fullScanText.contains("COIN POKER") || 
                 fullScanText.contains("NLH") || fullScanText.contains("PLO") || isPasswordScreen || 
                 fullScanText.contains("ПОТ") || fullScanText.contains("ALL-IN") || fullScanText.contains("ОЛЛ-ИН")
-
-            val hasTableElements = finalH1 != null || finalH2 != null || finalBoard.any { it != null } || finalOpponents.isNotEmpty() || scannedPotSize != null || actionButtonsMap.isNotEmpty()
+                
+            val isProfileScreen = fullScanText.contains("VPIP") || fullScanText.contains("PFR") || fullScanText.contains("WTSD") || fullScanText.contains("WSD") || fullScanText.contains("C-BET")
+            
+            val hasTableElements = finalH1 != null || finalH2 != null || finalBoard.any { it != null } || finalOpponents.isNotEmpty() || scannedPotSize != null || (actionButtonsMap.isNotEmpty() && !isProfileScreen)
             
             // We only consider lobby transitions valid if we see a trusted marker anywhere on screen, 
             // OR if we already see table elements (so we know we are in the app).
-            val validLobby = transitionButtonsMap.isNotEmpty() && (trustedCoinPokerMarker || hasTableElements)
+            val validLobby = transitionButtonsMap.isNotEmpty() && (trustedCoinPokerMarker || hasTableElements) && !isProfileScreen
 
-            val currentContext = if (hasTableElements || validLobby || trustedCoinPokerMarker) {
-                if (hasTableElements || validLobby) {
-                    AppScreenState.COINPOKER_KNOWN
+            val currentContext = if (isProfileScreen) {
+                AppScreenState.COINPOKER_PROFILE
+            } else if (hasTableElements) {
+                AppScreenState.COINPOKER_TABLE
+            } else if (validLobby || trustedCoinPokerMarker) {
+                if (validLobby || isPasswordScreen) {
+                    AppScreenState.COINPOKER_LOBBY
                 } else {
                     AppScreenState.COINPOKER_UNKNOWN
                 }
@@ -979,8 +989,12 @@ class ScreenScanner(
             } else if (currentContext == AppScreenState.COINPOKER_UNKNOWN) {
                 RobotPlayer.availableActionButtons = emptyMap()
                 RobotPlayer.lobbyTransitionButtons = emptyMap()
-                scanStatus.value = "Агент-Сторож: Мы в CoinPoker, но страница неизвестна. Ждем..."
+                scanStatus.value = "Агент-Сторож: Мы в CoinPoker, но неизвестная страница. Ждем..."
                 // Still update cards if there's any stray data just in case, or ignore.
+            } else if (currentContext == AppScreenState.COINPOKER_PROFILE) {
+                RobotPlayer.availableActionButtons = emptyMap()
+                RobotPlayer.lobbyTransitionButtons = emptyMap()
+                scanStatus.value = "Агент-Сторож: Открыт профиль игрока. Автокликер приостановлен."
             } else {
                 RobotPlayer.availableActionButtons = actionButtonsMap
                 RobotPlayer.lobbyTransitionButtons = transitionButtonsMap

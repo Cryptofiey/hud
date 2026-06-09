@@ -77,7 +77,7 @@ object RobotPlayer {
                 
                 // If there are no action buttons detected, it's not our turn
                 if (availableActionButtons.isEmpty()) {
-                    if (PokerHudSharedState.isAutoProfileScanningEnabled.value) {
+                    if (PokerHudSharedState.isAutoProfileScanningEnabled.value && PokerHudSharedState.appScreenContext.value == AppScreenState.COINPOKER_TABLE) {
                         handleProfileScanning(uiState)
                     }
                     return@collectLatest
