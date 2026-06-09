@@ -37,6 +37,30 @@ class ScreenScanner(
     private var mediaProjection: MediaProjection? = null
     private var imageReader: ImageReader? = null
     private var virtualDisplay: android.hardware.display.VirtualDisplay? = null
+    private fun isColorfulButton(bitmap: android.graphics.Bitmap, box: android.graphics.Rect): Boolean {
+        // Sample points to find a non-white, saturated background color
+        val pts = listOf(
+            Pair(box.left + box.width()/10, box.top + box.height()/10),
+            Pair(box.right - box.width()/10, box.top + box.height()/10),
+            Pair(box.left + box.width()/10, box.bottom - box.height()/10),
+            Pair(box.right - box.width()/10, box.bottom - box.height()/10),
+            Pair(box.centerX(), box.top + 2)
+        )
+        for (pt in pts) {
+            val x = pt.first.coerceIn(0, bitmap.width - 1)
+            val y = pt.second.coerceIn(0, bitmap.height - 1)
+            val color = bitmap.getPixel(x, y)
+            val hsv = FloatArray(3)
+            android.graphics.Color.colorToHSV(color, hsv)
+            // If saturation > 0.4 and value > 0.4 it's a solid bright color (Action button)
+            // Pre-action grey buttons have saturation < 0.2
+            if (hsv[1] > 0.35f && hsv[2] > 0.35f) {
+                return true
+            }
+        }
+        return false
+    }
+
     companion object {
         val recognizer by lazy {
             TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
@@ -390,6 +414,17 @@ class ScreenScanner(
                             .replace("У", "Y")
                             .replace("И", "I")
 
+                        if (lineBox.top > cleanBitmap!!.height * 0.70) {
+                            if (normalized.contains("X/F") || normalized.contains("X/C") ||
+                                normalized.contains("CALLANY") || normalized.contains("КОЛЛЛЮБЫЕ") ||
+                                normalized.contains("CHECK/FOLD") || normalized.contains("PLAYNEXT") ||
+                                normalized.contains("FOLD/ANY") || normalized.contains("CALL3.") || 
+                                normalized.contains("CALL2.") || normalized.contains("ЧЕК/ФОЛД") ||
+                                (normalized.contains("PLAY") && normalized.contains("NEXT"))) {
+                                hasPreactions = true
+                            }
+                        }
+
                         var isTransitionButton = false
                         var transitionKey = ""
                         
@@ -491,63 +526,73 @@ class ScreenScanner(
                             holeElements.add(element)
                         }
                         
-                        // Action buttons logic
-                        if (box.top > bottomZoneTop) {
-                            val textUpper = element.text.uppercase()
-                            
-                            // Prevent tiny non-button text from being recognized:
-                            // Even short action buttons like "BET" or "Fold" are large.
-                            // Pre-action checkboxes have small font sizes. 
-                            if (box.width() < cleanBitmap!!.width * 0.01f) continue
-                            if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
-                            
-                            // Check if this is a pre-action button (not our turn)
-                            if (textUpper.contains("X/F") || textUpper.contains("X / F") || 
-                                textUpper.contains("X/C") || textUpper.contains("X / C") ||
-                                textUpper.contains("CALL ANY") || textUpper.contains("КОЛЛ ЛЮБЫЕ") || 
-                                textUpper.contains("CALLANY") || textUpper.contains("КОЛЛЛЮБЫЕ") || 
-                                textUpper.contains("CHECK/FOLD") || textUpper.contains("CHECK / FOLD") || 
-                                textUpper.contains("PLAY NEXT") || textUpper.contains("FOLD/ANY") ||
-                                textUpper.contains("CALL 3.") || textUpper.contains("CALL 2.") ||
-                                (textUpper.contains("PLAY") && textUpper.contains("NEXT"))) {
-                                hasPreactions = true
-                                continue
+                            // Action buttons logic
+                            if (box.top > bottomZoneTop) {
+                                val textUpper = element.text.uppercase()
+                                
+                                // Prevent tiny non-button text from being recognized:
+                                if (box.width() < cleanBitmap!!.width * 0.01f) continue
+                                if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
+                                
+                                val isBright = isColorfulButton(cleanBitmap!!, box)
+                                
+                                // Primary actions (Must be bright colorful buttons!)
+                                if (textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) {
+                                    if (isBright) {
+                                        heroActionOptions.add("Fold")
+                                        actionButtonsMap[textUpper] = box
+                                    } else {
+                                        hasPreactions = true
+                                    }
+                                } 
+                                else if (textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) {
+                                    if (isBright) {
+                                        heroActionOptions.add("Check")
+                                        actionButtonsMap[textUpper] = box
+                                    } else {
+                                        hasPreactions = true
+                                    }
+                                } 
+                                else if (textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) {
+                                    if (isBright) {
+                                        heroActionOptions.add("Call")
+                                        actionButtonsMap[textUpper] = box
+                                    } else {
+                                        hasPreactions = true
+                                    }
+                                } 
+                                else if (textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || 
+                                         textUpper.contains("BET") || textUpper.contains("БЕТ") || 
+                                         textUpper.contains("CONFIRM") || textUpper.contains("ПОДТВЕРДИТЬ")) {
+                                    if (isBright) {
+                                        heroActionOptions.add("Raise") // Mapping Confirm to Raise internally
+                                        actionButtonsMap[textUpper] = box
+                                    } else {
+                                        hasPreactions = true
+                                    }
+                                } 
+                                else if (textUpper.contains("ALL-IN") || textUpper.contains("ALL IN") || 
+                                         textUpper.contains("ОЛЛ-ИН") || textUpper.contains("ALL") || 
+                                         textUpper.contains("ОЛЛ")) {
+                                    if (isBright) {
+                                        heroActionOptions.add("All-in")
+                                        actionButtonsMap[textUpper] = box
+                                    }
+                                }
+                                else if (textUpper.contains("STRADDLE") || textUpper.contains("СТРАДДЛ")) {
+                                    if (isBright) actionButtonsMap[textUpper] = box
+                                }
+                                
+                                // Add common bet sizing multipliers. These are usually grey, so we ignore color.
+                                val noSpaceText = textUpper.replace(" ", "")
+                                if (noSpaceText == "1/2" || noSpaceText == "1/3" || noSpaceText == "2/3" || noSpaceText == "3/4" || 
+                                    noSpaceText == "1/2POT" || noSpaceText == "2/3POT" || noSpaceText == "3/4POT" ||
+                                    textUpper.contains("POT") || textUpper.contains("ПОТ") || textUpper.contains("MAX") || textUpper.contains("МАКС") ||
+                                    textUpper.contains("MIN") || textUpper.contains("МИН") || textUpper.matches(Regex(".*\\d+X.*")) || textUpper.contains("%") ||
+                                    noSpaceText == "+" || noSpaceText == "-") {
+                                    actionButtonsMap[textUpper] = box
+                                }
                             }
-                            
-                            if (textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) {
-                                heroActionOptions.add("Fold")
-                                actionButtonsMap[textUpper] = box
-                            } 
-                            if (textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) {
-                                heroActionOptions.add("Check")
-                                actionButtonsMap[textUpper] = box
-                            } 
-                            if (textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) {
-                                heroActionOptions.add("Call")
-                                actionButtonsMap[textUpper] = box
-                            } 
-                            if (textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || textUpper.contains("BET") || textUpper.contains("БЕТ") || textUpper.contains("CONFIRM") || textUpper.contains("ПОДТВЕРДИТЬ")) {
-                                heroActionOptions.add("Raise") // Mapping Confirm to Raise internally
-                                actionButtonsMap[textUpper] = box
-                            } 
-                            if (textUpper.contains("ALL-IN") || textUpper.contains("ALL IN") || textUpper.contains("ОЛЛ-ИН") || textUpper.contains("ALL") || textUpper.contains("ОЛЛ")) {
-                                heroActionOptions.add("All-in")
-                                actionButtonsMap[textUpper] = box
-                            }
-                            if (textUpper.contains("STRADDLE") || textUpper.contains("СТРАДДЛ")) {
-                                actionButtonsMap[textUpper] = box
-                            }
-                            
-                            // Add common bet sizing buttons
-                            val noSpaceText = textUpper.replace(" ", "")
-                            if (noSpaceText == "1/2" || noSpaceText == "1/3" || noSpaceText == "2/3" || noSpaceText == "3/4" || 
-                                noSpaceText == "1/2POT" || noSpaceText == "2/3POT" || noSpaceText == "3/4POT" ||
-                                textUpper.contains("POT") || textUpper.contains("ПОТ") || textUpper.contains("MAX") || textUpper.contains("МАКС") ||
-                                textUpper.contains("MIN") || textUpper.contains("МИН") || textUpper.contains("X") || textUpper.contains("%") ||
-                                noSpaceText == "+" || noSpaceText == "-") {
-                                actionButtonsMap[textUpper] = box
-                            }
-                        }
                     }
                 }
             }

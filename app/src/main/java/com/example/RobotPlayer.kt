@@ -335,27 +335,23 @@ object RobotPlayer {
                     // wait for scan to process
                     delay(1300)
                     
-                    // 4. Close the profile. First try the robust global BACK action
-                    BotLogSharedState.appendLogBot("[BOT][L5] Closing profile dialog via SYSTEM BACK action")
+                    // 4. Close the profile. NEVER use SYSTEM BACK on CoinPoker as it can trigger "Leave Table" dialog!
+                    BotLogSharedState.appendLogBot("[BOT][L5] Closing profile dialog via outside-click")
                     val serviceInstance = AutoPlayerService.instance
-                    val backSuccess = serviceInstance?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK) ?: false
                     
-                    delay(600) // wait for animation
-                    
-                    // Fallback to coordinates click if back button wasn't handled or service was disconnected
-                    if (!backSuccess && serviceInstance != null) {
+                    if (serviceInstance != null) {
                         val displayMetrics = serviceInstance.resources?.displayMetrics
-                        val screenW = displayMetrics?.widthPixels ?: 1000
-                        val screenH = displayMetrics?.heightPixels ?: 2000
+                        val screenW = displayMetrics?.widthPixels ?: 1080
+                        val screenH = displayMetrics?.heightPixels ?: 2400
                         
-                        // Click in a peripheral safe margin outside standard modal bounds (middle-right edge)
-                        val closeX = screenW * 0.95f
-                        val closeY = screenH * 0.40f
+                        // Click in a peripheral safe margin outside standard modal bounds (top-right safe area or exactly top center)
+                        val closeX = screenW / 2f
+                        val closeY = (screenH * 0.05).toFloat() // Top 5% of the screen (typically empty table felt)
                         
-                        BotLogSharedState.appendLogBot("[BOT][L5] Fallback: Closing profile by clicking margin: $closeX, $closeY")
+                        BotLogSharedState.appendLogBot("[BOT][L5] Closing profile safely at: $closeX, $closeY")
                         serviceInstance.dispatchClick(closeX, closeY, 150)
                     }
-                    
+
                     delay(1000) // Cooldown before next loop invocation
                 } catch (e: Exception) {
                     Log.e("RobotPlayer", "Error during profile scan", e)
