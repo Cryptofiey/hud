@@ -37,7 +37,7 @@ object RobotPlayer {
                 if (currentLobbyButtons.isEmpty()) continue
                 
                 // Priority scan of transition keys
-                val priorityKeys = listOf("OK", "CONFIRM", "BUY_IN", "TAKE_SEAT", "PLAY", "JOIN", "REGISTER")
+                val priorityKeys = listOf("OK", "CONFIRM", "BUY_IN", "TAKE_SEAT", "JOIN_BACK", "PLAY", "JOIN", "REGISTER")
                 val now = System.currentTimeMillis()
                 val uiState = PokerHudSharedState.uiState.value
                 val hasTableElements = uiState.heroCard1 != null || uiState.heroCard2 != null || uiState.board.any { it != null } || uiState.opponents.count { it.nickname != "Unknown" && !it.nickname.startsWith("Opponent") } > 0

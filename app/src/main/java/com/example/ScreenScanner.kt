@@ -499,6 +499,12 @@ class ScreenScanner(
                                 isTransitionButton = true
                                 transitionKey = "TAKE_SEAT"
                             }
+                            // Join Back
+                            normalized == "JOINBACK" || normalized.contains("ВЕРНУТЬСЯ") || 
+                            normalized.contains("ПРОДОЛЖИТЬИГРУ") -> {
+                                isTransitionButton = true
+                                transitionKey = "JOIN_BACK"
+                            }
                             // Join
                             normalized == "JOIN" || normalized == "ENTER" || 
                             normalized == "ВОЙТИ" || normalized == "ВХОД" || 
