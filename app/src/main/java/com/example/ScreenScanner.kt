@@ -373,7 +373,7 @@ class ScreenScanner(
             }
             
             val elapsedSinceLastPass = System.currentTimeMillis() - lastPasswordScreenTime
-            val triggerHide = isPasswordScreen || (elapsedSinceLastPass < 15000 && result.textBlocks.isEmpty())
+            val triggerHide = isPasswordScreen
             
             if (triggerHide) {
                 PokerHudSharedState.triggerPasswordHiding()
