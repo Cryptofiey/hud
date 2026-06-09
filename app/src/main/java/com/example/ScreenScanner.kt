@@ -356,8 +356,8 @@ class ScreenScanner(
             val actionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
             val transitionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
 
-            // We look for action buttons in the bottom 30% of the screen
-            val bottomZoneTop = cleanBitmap!!.height * 0.70
+            // We look for action buttons in the bottom 18% of the screen (to exclude opponent status tags near the hero)
+            val bottomZoneTop = cleanBitmap!!.height * 0.82
 
             var scannedPotSize: Float? = null
             
@@ -395,8 +395,8 @@ class ScreenScanner(
                     val lineBox = line.boundingBox
                     if (lineBox != null && lineBox.width() >= 10 && lineBox.height() >= 10) {
                         // Normalize letters & strip whitespace, hyphens etc. for robust matching under OCR errors
-                        val rawText = line.text.uppercase(java.util.Locale.US)
-                        val normalized = rawText
+                        val lineTextUpper = line.text.uppercase(java.util.Locale.US)
+                        val lineNormalized = lineTextUpper
                             .replace(" ", "")
                             .replace("-", "")
                             .replace("_", "")
@@ -415,15 +415,48 @@ class ScreenScanner(
                             .replace("И", "I")
 
                         if (lineBox.top > cleanBitmap!!.height * 0.70) {
-                            if (normalized.contains("X/F") || normalized.contains("X/C") ||
-                                normalized.contains("CALLANY") || normalized.contains("КОЛЛЛЮБЫЕ") ||
-                                normalized.contains("CHECK/FOLD") || normalized.contains("PLAYNEXT") ||
-                                normalized.contains("FOLD/ANY") || normalized.contains("CALL3.") || 
-                                normalized.contains("CALL2.") || normalized.contains("ЧЕК/ФОЛД") ||
-                                (normalized.contains("PLAY") && normalized.contains("NEXT"))) {
+                            if (lineNormalized.contains("X/F") || lineNormalized.contains("X/C") ||
+                                lineNormalized.contains("CALLANY") || lineNormalized.contains("КОЛЛЛЮБЫЕ") ||
+                                lineNormalized.contains("CHECK/FOLD") || lineNormalized.contains("PLAYNEXT") ||
+                                lineNormalized.contains("FOLD/ANY") || lineNormalized.contains("CALL3.") || 
+                                lineNormalized.contains("CALL2.") || lineNormalized.contains("ЧЕК/ФОЛД") ||
+                                (lineNormalized.contains("PLAY") && lineNormalized.contains("NEXT"))) {
                                 hasPreactions = true
                             }
                         }
+
+                    }
+
+                    for (element in line.elements) {
+                        val box = element.boundingBox ?: continue
+                        
+                        var insideHud = false
+                        for (hudRect in hudRects) {
+                            if (android.graphics.Rect.intersects(hudRect, box)) {
+                                insideHud = true
+                                break
+                            }
+                        }
+                        if (insideHud) continue
+                        
+                        val rawText = element.text.uppercase(java.util.Locale.US)
+                        val normalized = rawText
+                            .replace(" ", "")
+                            .replace("-", "")
+                            .replace("_", "")
+                            .replace("А", "A") // Cyrillic to Latin mapping
+                            .replace("В", "B")
+                            .replace("Е", "E")
+                            .replace("К", "K")
+                            .replace("М", "M")
+                            .replace("Н", "H")
+                            .replace("О", "O")
+                            .replace("Р", "P")
+                            .replace("С", "C")
+                            .replace("Т", "T")
+                            .replace("Х", "X")
+                            .replace("У", "Y")
+                            .replace("И", "I")
 
                         var isTransitionButton = false
                         var transitionKey = ""
@@ -443,7 +476,7 @@ class ScreenScanner(
                             normalized.contains("БАЙИН") || normalized.contains("ПОПОЛНИТЬ") ||
                             normalized.contains("БЙИН") || normalized.contains("КУПИТЬ") || 
                             normalized.contains("РЕБАЙ") || normalized.contains("АДДОН") ||
-                            (normalized.contains("BUYIN") && lineBox.height() > 20) -> {
+                            (normalized.contains("BUYIN") && box.height() > 20) -> {
                                 isTransitionButton = true
                                 transitionKey = "BUY_IN"
                             }
@@ -487,21 +520,8 @@ class ScreenScanner(
                         }
                         
                         if (isTransitionButton) {
-                            transitionButtonsMap[transitionKey] = lineBox
+                            transitionButtonsMap[transitionKey] = box
                         }
-                    }
-
-                    for (element in line.elements) {
-                        val box = element.boundingBox ?: continue
-                        
-                        var insideHud = false
-                        for (hudRect in hudRects) {
-                            if (android.graphics.Rect.intersects(hudRect, box)) {
-                                insideHud = true
-                                break
-                            }
-                        }
-                        if (insideHud) continue
                         
                         val cx = box.centerX()
                         val cy = box.centerY()
@@ -537,7 +557,7 @@ class ScreenScanner(
                                 val isBright = isColorfulButton(cleanBitmap!!, box)
                                 
                                 // Primary actions (Must be bright colorful buttons!)
-                                if (textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) {
+                                if ((textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) && !textUpper.contains("ANY")) {
                                     if (isBright) {
                                         heroActionOptions.add("Fold")
                                         actionButtonsMap[textUpper] = box
@@ -545,7 +565,7 @@ class ScreenScanner(
                                         hasPreactions = true
                                     }
                                 } 
-                                else if (textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) {
+                                else if ((textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) && !textUpper.contains("FOLD") && !textUpper.contains("ФОЛД")) {
                                     if (isBright) {
                                         heroActionOptions.add("Check")
                                         actionButtonsMap[textUpper] = box
@@ -553,7 +573,7 @@ class ScreenScanner(
                                         hasPreactions = true
                                     }
                                 } 
-                                else if (textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) {
+                                else if ((textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) && !textUpper.contains("ANY") && !textUpper.contains("ЛЮБ")) {
                                     if (isBright) {
                                         heroActionOptions.add("Call")
                                         actionButtonsMap[textUpper] = box
