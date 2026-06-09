@@ -54,7 +54,7 @@ class ScreenScanner(
             android.graphics.Color.colorToHSV(color, hsv)
             // If saturation > 0.4 and value > 0.4 it's a solid bright color (Action button)
             // Pre-action grey buttons have saturation < 0.2
-            if (hsv[1] > 0.35f && hsv[2] > 0.35f) {
+            if (hsv[1] > 0.25f && hsv[2] > 0.25f) {
                 return true
             }
         }
@@ -356,8 +356,8 @@ class ScreenScanner(
             val actionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
             val transitionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
 
-            // We look for action buttons in the bottom 18% of the screen (to exclude opponent status tags near the hero)
-            val bottomZoneTop = cleanBitmap!!.height * 0.82
+            // We look for action buttons in the bottom 25% of the screen (to exclude opponent status tags near the hero)
+            val bottomZoneTop = cleanBitmap!!.height * 0.75
 
             var scannedPotSize: Float? = null
             
@@ -1055,7 +1055,7 @@ class ScreenScanner(
             
             if (currentContext == AppScreenState.APP_UNKNOWN) {
                 emptyOpponentsFrames++
-                if (emptyOpponentsFrames < 5) {
+                if (emptyOpponentsFrames < 15) {
                     // Temporary glitch, return and keep previous state
                     image?.close()
                     return true
