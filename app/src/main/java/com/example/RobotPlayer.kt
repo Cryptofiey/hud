@@ -256,12 +256,18 @@ object RobotPlayer {
         val rawY = centerY + (gaussianGenerator.nextGaussian() * stdDevY).toFloat()
         
         // Strictly clamp within safe coordinates inside the button boundaries (minimum 4px margin)
-        val x = rawX.coerceIn(rect.left.toFloat() + 4f, rect.right.toFloat() - 4f)
-        val y = rawY.coerceIn(rect.top.toFloat() + 4f, rect.bottom.toFloat() - 4f)
+        val safeMinX = rect.left.toFloat() + 4f
+        val safeMaxX = rect.right.toFloat() - 4f
+        val safeMinY = rect.top.toFloat() + 4f
+        val safeMaxY = rect.bottom.toFloat() - 4f
+        
+        val x = rawX.coerceIn(minOf(safeMinX, safeMaxX), maxOf(safeMinX, safeMaxX))
+        val y = rawY.coerceIn(minOf(safeMinY, safeMaxY), maxOf(safeMinY, safeMaxY))
 
         // Longer tap (120ms to 240ms) with slight randomness to pass touchslop and emulate human pressure time
         val clickDuration = Random.nextLong(120, 240) 
         
+        BotLogSharedState.appendLogBot("[BOT][L5] DispatchClick: action x=${x.toInt()}, y=${y.toInt()}, w=${rect.width()}, h=${rect.height()}")
         autoPlayer.dispatchClick(x, y, clickDuration)
     }
 
