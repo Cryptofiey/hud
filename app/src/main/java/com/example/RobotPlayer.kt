@@ -113,7 +113,7 @@ object RobotPlayer {
                 val signature = "${heroStr}_${commCardsSize}_${canonicalAction}_${exactOptions}"
                 val now = System.currentTimeMillis()
                 
-                if (lastActedAction == signature && (now - lastActionTime < 8000L)) {
+                if (lastActedAction == signature && (now - lastActionTime < 4000L)) {
                     // Already acted for this phase recently
                     return@collectLatest
                 }
@@ -134,7 +134,6 @@ object RobotPlayer {
                     
                     var iterations = 0
                     while (isActive && iterations < 5) {
-                        if (availableActionButtons.isEmpty()) break
                         val currentRecText = PokerHudSharedState.uiState.value.let { it.advancedRecommendation ?: it.recommendation }?.action?.uppercase() ?: ""
                         val stillMatching = when (canonicalAction) {
                             "FOLD" -> currentRecText.contains("FOLD") || currentRecText.contains("ФОЛД")
@@ -145,7 +144,25 @@ object RobotPlayer {
                             "ALL-IN" -> currentRecText.contains("ALL-IN") || currentRecText.contains("ОЛЛ-ИН")
                             else -> false
                         }
-                        if (!stillMatching) break
+                        // If recommendation changed, and we STILL see action buttons, it means the turn is active
+                        // but the situation/recommendation changed. We must abort the old action.
+                        if (!stillMatching && availableActionButtons.isNotEmpty()) {
+                            break
+                        }
+                        
+                        // If we already clicked at least once (iterations > 0) and the buttons disappeared,
+                        // it highly likely means the click was successful and the turn passed.
+                        if (availableActionButtons.isEmpty() && iterations > 0) {
+                            break
+                        }
+                        
+                        // If it's a complex action or first iteration, and buttons are temporarily empty,
+                        // wait for them to reappear (might be a briefly dropped OCR frame).
+                        if (availableActionButtons.isEmpty()) {
+                            delay(800)
+                            iterations++
+                            continue
+                        }
                         
                         executeClickOnRect(targetRect)
                         
@@ -191,7 +208,7 @@ object RobotPlayer {
                             executeClickOnRect(confirmRect)
                         }
                         
-                        delay(3500)
+                        delay(2500)
                         iterations++
                     }
                 }
@@ -278,27 +295,27 @@ object RobotPlayer {
         return when (action.uppercase(java.util.Locale.US)) {
             "FOLD" -> {
                 // Folds are generally fast decisions or quick reactions
-                val variation = Random.nextLong(400, 1500)
-                maxOf(400L, base - 500L + variation)
+                val variation = Random.nextLong(200, 800)
+                maxOf(300L, base - 800L + variation)
             }
             "CHECK" -> {
                 // Checks can be fast or involve brief pause
-                val variation = Random.nextLong(600, 1800)
-                maxOf(500L, base - 300L + variation)
+                val variation = Random.nextLong(300, 1000)
+                maxOf(400L, base - 600L + variation)
             }
             "CALL" -> {
                 // Calls require more assessment of pot odds and board texture
-                val variation = Random.nextLong(1000, 2800)
-                maxOf(1000L, base + variation)
+                val variation = Random.nextLong(500, 1500)
+                maxOf(600L, base - 300L + variation)
             }
             "BET", "RAISE", "ALL-IN" -> {
                 // Big/active bets involve sizing calculation and psychological stress
-                val variation = Random.nextLong(2000, 4800)
-                maxOf(1800L, base + 800L + variation)
+                val variation = Random.nextLong(1000, 2500)
+                maxOf(1000L, base + variation)
             }
             else -> {
-                val variation = Random.nextLong(800, 2000)
-                maxOf(600L, base + variation)
+                val variation = Random.nextLong(400, 1200)
+                maxOf(500L, base - 500L + variation)
             }
         }
     }

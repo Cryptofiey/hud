@@ -38,32 +38,40 @@ class ScreenScanner(
     private var imageReader: ImageReader? = null
     private var virtualDisplay: android.hardware.display.VirtualDisplay? = null
     private fun isColorfulButton(bitmap: android.graphics.Bitmap, box: android.graphics.Rect): Boolean {
-        // Sample points to find a non-white, saturated background color.
-        // We include points outside the text box since the button is usually larger than the text.
-        val pts = listOf(
-            Pair(box.left + box.width()/10, box.top + box.height()/10),
-            Pair(box.right - box.width()/10, box.top + box.height()/10),
-            Pair(box.left + box.width()/10, box.bottom - box.height()/10),
-            Pair(box.right - box.width()/10, box.bottom - box.height()/10),
-            Pair(box.centerX(), box.top + 2),
-            Pair(box.centerX(), box.top - box.height()/2), // Above
-            Pair(box.centerX(), box.bottom + box.height()/2), // Below
-            Pair(box.left - box.width()/4, box.centerY()), // Left
-            Pair(box.right + box.width()/4, box.centerY()) // Right
+        // Expand the search area slightly to ensure we check the background, not just the white text
+        val bounds = android.graphics.Rect(
+            (box.left - box.width() / 4).coerceAtLeast(0),
+            (box.top - box.height() / 4).coerceAtLeast(0),
+            (box.right + box.width() / 4).coerceAtMost(bitmap.width - 1),
+            (box.bottom + box.height() / 4).coerceAtMost(bitmap.height - 1)
         )
-        for (pt in pts) {
-            val x = pt.first.coerceIn(0, bitmap.width - 1)
-            val y = pt.second.coerceIn(0, bitmap.height - 1)
-            val color = bitmap.getPixel(x, y)
-            val hsv = FloatArray(3)
-            android.graphics.Color.colorToHSV(color, hsv)
-            // If saturation > 0.25 and value > 0.25 it's a solid bright color (Action button)
-            // Pre-action grey buttons have saturation < 0.2
-            if (hsv[1] > 0.25f && hsv[2] > 0.25f) {
-                return true
+        
+        var brightPixelsCount = 0
+        var totalSamples = 0
+        
+        // Sample a grid across the expanded area
+        val xStep = (bounds.width() / 6).coerceAtLeast(1)
+        val yStep = (bounds.height() / 6).coerceAtLeast(1)
+        
+        for (x in bounds.left..bounds.right step xStep) {
+            for (y in bounds.top..bounds.bottom step yStep) {
+                val color = bitmap.getPixel(x, y)
+                val hsv = FloatArray(3)
+                android.graphics.Color.colorToHSV(color, hsv)
+                val saturation = hsv[1]
+                val value = hsv[2]
+                
+                // Solid bright color (e.g. green, orange, red) vs dark grey/white
+                // Pre-action grey buttons have saturation < 0.2
+                if (saturation > 0.20f && value > 0.25f) {
+                    brightPixelsCount++
+                }
+                totalSamples++
             }
         }
-        return false
+        
+        // If at least 15% of sampled pixels are colorful, it's a bright button
+        return brightPixelsCount.toFloat() / totalSamples > 0.15f
     }
 
     companion object {
