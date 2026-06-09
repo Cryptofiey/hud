@@ -38,13 +38,18 @@ class ScreenScanner(
     private var imageReader: ImageReader? = null
     private var virtualDisplay: android.hardware.display.VirtualDisplay? = null
     private fun isColorfulButton(bitmap: android.graphics.Bitmap, box: android.graphics.Rect): Boolean {
-        // Sample points to find a non-white, saturated background color
+        // Sample points to find a non-white, saturated background color.
+        // We include points outside the text box since the button is usually larger than the text.
         val pts = listOf(
             Pair(box.left + box.width()/10, box.top + box.height()/10),
             Pair(box.right - box.width()/10, box.top + box.height()/10),
             Pair(box.left + box.width()/10, box.bottom - box.height()/10),
             Pair(box.right - box.width()/10, box.bottom - box.height()/10),
-            Pair(box.centerX(), box.top + 2)
+            Pair(box.centerX(), box.top + 2),
+            Pair(box.centerX(), box.top - box.height()/2), // Above
+            Pair(box.centerX(), box.bottom + box.height()/2), // Below
+            Pair(box.left - box.width()/4, box.centerY()), // Left
+            Pair(box.right + box.width()/4, box.centerY()) // Right
         )
         for (pt in pts) {
             val x = pt.first.coerceIn(0, bitmap.width - 1)
@@ -52,7 +57,7 @@ class ScreenScanner(
             val color = bitmap.getPixel(x, y)
             val hsv = FloatArray(3)
             android.graphics.Color.colorToHSV(color, hsv)
-            // If saturation > 0.4 and value > 0.4 it's a solid bright color (Action button)
+            // If saturation > 0.25 and value > 0.25 it's a solid bright color (Action button)
             // Pre-action grey buttons have saturation < 0.2
             if (hsv[1] > 0.25f && hsv[2] > 0.25f) {
                 return true
@@ -1055,7 +1060,7 @@ class ScreenScanner(
             
             if (currentContext == AppScreenState.APP_UNKNOWN) {
                 emptyOpponentsFrames++
-                if (emptyOpponentsFrames < 15) {
+                if (emptyOpponentsFrames < 30) {
                     // Temporary glitch, return and keep previous state
                     image?.close()
                     return true
@@ -1086,11 +1091,12 @@ class ScreenScanner(
                 RobotPlayer.availableActionButtons = emptyMap()
                 RobotPlayer.lobbyTransitionButtons = emptyMap()
                 scanStatus.value = "Агент-Сторож: Мы в CoinPoker, но неизвестная страница. Ждем..."
-                // Still update cards if there's any stray data just in case, or ignore.
+                heroActionOptions.clear()
             } else if (currentContext == AppScreenState.COINPOKER_PROFILE) {
                 RobotPlayer.availableActionButtons = emptyMap()
                 RobotPlayer.lobbyTransitionButtons = emptyMap()
                 scanStatus.value = "Агент-Сторож: Открыт профиль игрока. Автокликер приостановлен."
+                heroActionOptions.clear()
             } else {
                 RobotPlayer.availableActionButtons = actionButtonsMap
                 RobotPlayer.lobbyTransitionButtons = transitionButtonsMap
