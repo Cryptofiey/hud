@@ -365,9 +365,9 @@ class ScreenScanner(
             val textUpper = fullScanText
             var isPasswordScreen = false
             if (textUpper.contains("PASSWORD") || textUpper.contains("ПАРОЛЬ") || 
-                textUpper.contains("ПИН") || textUpper.contains("PIN") || 
+                textUpper.matches(Regex(".*\\bПИН\\b.*")) || textUpper.matches(Regex(".*\\bPIN\\b.*")) || 
                 textUpper.contains("ВВЕДИТЕ") || textUpper.contains("ENTER CODE") ||
-                textUpper.contains("LOG IN") || textUpper.contains("LOGIN")) {
+                textUpper.matches(Regex(".*\\bLOG IN\\b.*")) || textUpper.matches(Regex(".*\\bLOGIN\\b.*"))) {
                 isPasswordScreen = true
                 lastPasswordScreenTime = System.currentTimeMillis()
             }
