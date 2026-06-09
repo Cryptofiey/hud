@@ -2162,12 +2162,12 @@ class PokerHudService : Service() {
         
         val infoRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = createBackgroundDrawable(AndroidColor.TRANSPARENT, dpToPx(4f).toFloat(), dpToPx(1f), AndroidColor.parseColor("#44FFFFFF"))
-            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
+            background = createBackgroundDrawable(AndroidColor.TRANSPARENT, dpToPx(8f).toFloat(), dpToPx(1f), AndroidColor.parseColor("#44FFFFFF"))
+            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = 0
-                rightMargin = dpToPx(4f)
-                topMargin = dpToPx(4f)
+                leftMargin = -dpToPx(3f)
+                rightMargin = -dpToPx(3f)
+                topMargin = -dpToPx(2f)
                 bottomMargin = dpToPx(4f)
             }
         }
