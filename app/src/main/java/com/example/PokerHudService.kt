@@ -1206,6 +1206,7 @@ class PokerHudService : Service() {
                         currentState.heroCard2 == action.hero2 && 
                         currentState.board == newBoard &&
                         !action.updateProfileBoxes &&
+                        currentState.heroActionOptions == action.heroActionOptions &&
                         (action.potSize == null || action.potSize == currentState.potSize)) {
                         return@collect
                     }

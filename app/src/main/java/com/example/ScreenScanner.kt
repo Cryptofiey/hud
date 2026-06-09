@@ -571,10 +571,18 @@ class ScreenScanner(
                                 if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
                                 
                                 val isBright = isColorfulButton(cleanBitmap!!, box)
+                                val isLargeButton = box.height() > cleanBitmap!!.height * 0.03f
+                                val isPrimary = textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || 
+                                               textUpper.contains("PАС") || textUpper.contains("CHECK") || 
+                                               textUpper.contains("CALL") || textUpper.contains("КОЛЛ") || 
+                                               textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || 
+                                               textUpper.contains("BET") || textUpper.contains("ALL-IN")
                                 
-                                // Primary actions (Must be bright colorful buttons!)
+                                // Primary actions (Must be bright colorful buttons or large enough to clearly not be a pre-action checkbox)
+                                val qualifiesAsAction = isBright || (isPrimary && isLargeButton)
+                                
                                 if ((textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) && !textUpper.contains("ANY")) {
-                                    if (isBright) {
+                                    if (qualifiesAsAction) {
                                         heroActionOptions.add("Fold")
                                         actionButtonsMap[textUpper] = box
                                     } else {
@@ -582,7 +590,7 @@ class ScreenScanner(
                                     }
                                 } 
                                 else if ((textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) && !textUpper.contains("FOLD") && !textUpper.contains("ФОЛД")) {
-                                    if (isBright) {
+                                    if (qualifiesAsAction) {
                                         heroActionOptions.add("Check")
                                         actionButtonsMap[textUpper] = box
                                     } else {
@@ -590,7 +598,7 @@ class ScreenScanner(
                                     }
                                 } 
                                 else if ((textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) && !textUpper.contains("ANY") && !textUpper.contains("ЛЮБ")) {
-                                    if (isBright) {
+                                    if (qualifiesAsAction) {
                                         heroActionOptions.add("Call")
                                         actionButtonsMap[textUpper] = box
                                     } else {
@@ -600,7 +608,7 @@ class ScreenScanner(
                                 else if (textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || 
                                          textUpper.contains("BET") || textUpper.contains("БЕТ") || 
                                          textUpper.contains("CONFIRM") || textUpper.contains("ПОДТВЕРДИТЬ")) {
-                                    if (isBright) {
+                                    if (qualifiesAsAction) {
                                         heroActionOptions.add("Raise") // Mapping Confirm to Raise internally
                                         actionButtonsMap[textUpper] = box
                                     } else {
@@ -610,7 +618,7 @@ class ScreenScanner(
                                 else if (textUpper.contains("ALL-IN") || textUpper.contains("ALL IN") || 
                                          textUpper.contains("ОЛЛ-ИН") || textUpper.contains("ALL") || 
                                          textUpper.contains("ОЛЛ")) {
-                                    if (isBright) {
+                                    if (qualifiesAsAction) {
                                         heroActionOptions.add("All-in")
                                         actionButtonsMap[textUpper] = box
                                     }
