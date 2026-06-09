@@ -60,10 +60,12 @@ class ScreenScanner(
                 android.graphics.Color.colorToHSV(color, hsv)
                 val saturation = hsv[1]
                 val value = hsv[2]
+                val hue = hsv[0]
                 
                 // Solid bright color (e.g. green, orange, red) vs dark grey/white
-                // Pre-action grey buttons have saturation < 0.2
-                if (saturation > 0.20f && value > 0.25f) {
+                // Exclude Purple/Blue table felt hues (approx 240 to 320)
+                val isPurpleFelt = hue in 240f..320f
+                if (saturation > 0.20f && value > 0.25f && !isPurpleFelt) {
                     brightPixelsCount++
                 }
                 totalSamples++
