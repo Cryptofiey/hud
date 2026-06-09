@@ -628,9 +628,19 @@ class ScreenScanner(
                 }
             }
             
-            if (hasPreactions) {
-                actionButtonsMap.clear()
+            if (hasPreactions && actionButtonsMap.isEmpty()) {
                 heroActionOptions.clear()
+            } else if (actionButtonsMap.isNotEmpty()) {
+                // If we detected at least one colorful action button, ensure we ignore any false-positive preactions.
+                actionButtonsMap.keys.forEach { key ->
+                    when {
+                        key.contains("FOLD") || key.contains("ФОЛД") || key.contains("ПАС") -> heroActionOptions.add("Fold")
+                        key.contains("CHECK") || key.contains("ЧЕК") -> heroActionOptions.add("Check")
+                        key.contains("CALL") || key.contains("КОЛЛ") -> heroActionOptions.add("Call")
+                        key.contains("RAISE") || key.contains("РЕЙЗ") || key.contains("BET") || key.contains("БЕТ") -> heroActionOptions.add("Raise")
+                        key.contains("ALL-IN") || key.contains("ОЛЛ") -> heroActionOptions.add("All-in")
+                    }
+                }
             }
             
             // Periodically save screenshot if bot has actions available
@@ -1041,6 +1051,17 @@ class ScreenScanner(
                 }
             } else {
                 AppScreenState.APP_UNKNOWN
+            }
+            
+            if (currentContext == AppScreenState.APP_UNKNOWN) {
+                emptyOpponentsFrames++
+                if (emptyOpponentsFrames < 5) {
+                    // Temporary glitch, return and keep previous state
+                    image?.close()
+                    return true
+                }
+            } else {
+                emptyOpponentsFrames = 0
             }
             
             PokerHudSharedState.appScreenContext.value = currentContext

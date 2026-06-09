@@ -2065,7 +2065,7 @@ class PokerHudService : Service() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
             dpToPx(160f),
-            dpToPx(210f),
+            WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -2161,11 +2161,11 @@ class PokerHudService : Service() {
         val infoRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = createBackgroundDrawable(AndroidColor.TRANSPARENT, dpToPx(6f).toFloat(), dpToPx(1f), AndroidColor.parseColor("#44FFFFFF"))
-            setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = 0
-                rightMargin = 0
-                topMargin = 0
+                leftMargin = -dpToPx(2f)
+                rightMargin = -dpToPx(2f)
+                topMargin = -dpToPx(2f)
                 bottomMargin = dpToPx(4f)
             }
         }
@@ -2301,7 +2301,7 @@ class PokerHudService : Service() {
         advVert.addView(txtL5Advisor)
         
         val scrollAdvisor = android.widget.ScrollView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         scrollAdvisor.addView(advVert)
         
