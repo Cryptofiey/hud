@@ -55,7 +55,8 @@ sealed class ExternalAction {
         val tablePosition: TablePosition? = null,
         val smallBlind: Float? = null,
         val bigBlind: Float? = null,
-        val tournamentStage: TournamentStage? = null
+        val tournamentStage: TournamentStage? = null,
+        val isBbDisplay: Boolean = false
     ) : ExternalAction()
     data class ControlHud(val command: String) : ExternalAction()
 }
@@ -1308,7 +1309,8 @@ class PokerHudService : Service() {
                         position = action.tablePosition ?: currentState.position,
                         smallBlind = action.smallBlind ?: currentState.smallBlind,
                         bigBlind = action.bigBlind ?: currentState.bigBlind,
-                        stage = action.tournamentStage ?: currentState.stage
+                        stage = action.tournamentStage ?: currentState.stage,
+                        isBbDisplay = action.isBbDisplay
                     )
                     PokerHudSharedState.uiState.update { updatedState }
                     

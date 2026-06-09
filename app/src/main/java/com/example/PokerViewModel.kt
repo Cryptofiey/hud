@@ -53,7 +53,8 @@ data class PokerUiState(
     val advancedRecommendation: Recommendation? = null,
     val l4Recommendation: Recommendation? = null,
     val profileBoxes: List<ScannedBox>? = null,
-    val rawScannerBoxes: List<ScannedBox>? = null
+    val rawScannerBoxes: List<ScannedBox>? = null,
+    val isBbDisplay: Boolean = false
 ) {
     // Collect all selected cards on the table to dim them in the card picker grid
     fun getAllSelectedCards(): Set<Card> {
@@ -383,7 +384,8 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     stage = state.stage,
                     smallBlind = state.smallBlind,
                     bigBlind = state.bigBlind,
-                    heroStack = state.heroStack
+                    heroStack = state.heroStack,
+                    isBbDisplay = state.isBbDisplay
                 )
 
                 // 2. Advanced
@@ -409,7 +411,8 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     stage = state.stage,
                     smallBlind = state.smallBlind,
                     bigBlind = state.bigBlind,
-                    heroStack = state.heroStack
+                    heroStack = state.heroStack,
+                    isBbDisplay = state.isBbDisplay
                 )
 
                 val l2Recommendation = AdvisorEngine.computeRecommendationL2(
@@ -426,7 +429,8 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     stage = state.stage,
                     smallBlind = state.smallBlind,
                     bigBlind = state.bigBlind,
-                    heroStack = state.heroStack
+                    heroStack = state.heroStack,
+                    isBbDisplay = state.isBbDisplay
                 )
 
                 val l4Recommendation = AdvisorEngine.computeRecommendationL4(
@@ -443,7 +447,8 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     stage = state.stage,
                     smallBlind = state.smallBlind,
                     bigBlind = state.bigBlind,
-                    heroStack = state.heroStack
+                    heroStack = state.heroStack,
+                    isBbDisplay = state.isBbDisplay
                 )
 
                 withContext(Dispatchers.Main) {

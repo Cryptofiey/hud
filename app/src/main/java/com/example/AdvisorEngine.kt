@@ -237,7 +237,8 @@ object AdvisorEngine {
         smallBlind: Float,
         bigBlind: Float,
         heroStack: Float,
-        lastActions: String = ""
+        lastActions: String = "",
+        isBbDisplay: Boolean = false
     ): Recommendation {
         // Zero cards check
         if (heroCard1 == null || heroCard2 == null) {
@@ -317,8 +318,7 @@ object AdvisorEngine {
         fun fmt(f: Float): String = String.format(Locale.US, "%.1f", f)
 
         val mRatioRaw = if (heroStack > 0 && bigBlind > 0) (heroStack.toFloat() / bigBlind) else 20.0f
-        // Heuristic: If heroStack contains decimals, it is likely already in BB format
-        val mRatio = if (heroStack > 0 && heroStack % 1.0f != 0.0f) heroStack else mRatioRaw
+        val mRatio = if (heroStack > 0 && isBbDisplay) heroStack else mRatioRaw
 
         if (betToCall > 0) {
             if (profitableCall) {
@@ -399,7 +399,8 @@ object AdvisorEngine {
         stage: TournamentStage,
         smallBlind: Float,
         bigBlind: Float,
-        heroStack: Float
+        heroStack: Float,
+        isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
             return Recommendation("FOLD", 100f, "Enter cards.")
@@ -555,7 +556,7 @@ object AdvisorEngine {
 
         // 6. Stack levels (Table stack limits / M-Ratio)
         val mRatioRaw = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
-        val mRatio = if (heroStack > 0 && heroStack % 1.0f != 0.0f) heroStack else mRatioRaw
+        val mRatio = if (heroStack > 0 && isBbDisplay) heroStack else mRatioRaw
         val stackAdjustment = if (mRatio < 10.0f) {
             // Under short-stack pressure, reduce speculative play and tilt decisions to push/fold
             if (sklanskyGroup <= 3) 0.05f else -0.05f
@@ -674,7 +675,8 @@ object AdvisorEngine {
         smallBlind: Float,
         bigBlind: Float,
         heroStack: Float,
-        lastActions: String = ""
+        lastActions: String = "",
+        isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
             return Recommendation("FOLD", 100f, "Enter cards.")
@@ -729,7 +731,7 @@ object AdvisorEngine {
         }
 
         val mRatioRaw = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
-        val mRatio = if (heroStack > 0 && heroStack % 1.0f != 0.0f) heroStack else mRatioRaw
+        val mRatio = if (heroStack > 0 && isBbDisplay) heroStack else mRatioRaw
 
         // 2. Identify active opponents, build robust fallback profiles for first zone if none exists
         val activeOpponents = opponents.filter { it.isActive }
@@ -959,7 +961,8 @@ object AdvisorEngine {
         smallBlind: Float,
         bigBlind: Float,
         heroStack: Float,
-        lastActions: String = ""
+        lastActions: String = "",
+        isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
             return Recommendation("FOLD", 100f, "Enter cards.")

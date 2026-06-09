@@ -1053,7 +1053,8 @@ class ScreenScanner(
                         profileBoxes = null, updateProfileBoxes = false, rawScannerBoxes = null,
                         potSize = null, heroActionOptions = emptyList(), heroTurn = false,
                         heroStack = null, heroBet = null, tablePosition = null,
-                        smallBlind = null, bigBlind = null, tournamentStage = null
+                        smallBlind = null, bigBlind = null, tournamentStage = null,
+                        isBbDisplay = false
                     )
                 )
                 scanStatus.value = "Агент-Сторож: Приложение не распознано. Автокликер приостановлен."
@@ -1090,7 +1091,8 @@ class ScreenScanner(
                     tablePosition = heroPos,
                     smallBlind = parsedSB,
                     bigBlind = parsedBB,
-                    tournamentStage = parsedStage
+                    tournamentStage = parsedStage,
+                    isBbDisplay = (fullScanText.contains("BB") || fullScanText.contains("ББ"))
                 )
             )
             
