@@ -296,10 +296,18 @@ object AdvisorEngine {
             (s1 * 0.80f) + (s4 * 0.20f)
         }
 
-        // Perfect GTO Tighter Standards for Multi-Way fields to avoid equity dilution
         val isMultiway = activeOpponentsCount >= 2
-        val raiseThreshold = if (isMultiway) 0.68f else 0.60f
-        val betThreshold = if (isMultiway) 0.55f else 0.45f
+        val fairShare = if (activeOpponentsCount > 0) 1.0f / (activeOpponentsCount + 1.0f) else 0.5f
+        val betThreshold = if (isPreflop) {
+            if (isMultiway) 0.50f else 0.45f
+        } else {
+            fairShare + if (isMultiway) 0.10f else 0.05f
+        }
+        val raiseThreshold = if (isPreflop) {
+            if (isMultiway) 0.65f else 0.60f
+        } else {
+            fairShare + if (isMultiway) 0.25f else 0.15f
+        }
 
         val action: String
         val explanation: String
@@ -577,10 +585,25 @@ object AdvisorEngine {
         val explanation: String
         fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
 
+        val activeOpponentsCount = opponents.count { it.isActive }
+        val isMultiway = activeOpponentsCount >= 2
+        val fairShare = if (activeOpponentsCount > 0) 1.0f / (activeOpponentsCount + 1.0f) else 0.5f
+
+        val betThreshold = if (isPreflop) {
+            if (isMultiway) 0.45f else 0.40f
+        } else {
+            fairShare + if (isMultiway) 0.10f else 0.05f
+        }
+        val raiseThreshold = if (isPreflop) {
+            if (isMultiway) 0.60f else 0.55f
+        } else {
+            fairShare + if (isMultiway) 0.25f else 0.15f
+        }
+
         if (betToCall > 0) {
             if (profitableCall) {
                 // Positively expected call (L2 score > pot odds)
-                if (l2Score > 0.60f || (isPreflop && sklanskyGroup <= 2 && l2Score > 0.45f)) {
+                if (l2Score > raiseThreshold || (isPreflop && sklanskyGroup <= 2 && l2Score > 0.45f)) {
                     if (mRatio < 12.0f) {
                         action = "ALL-IN"
                         explanation = "L2 ОЛЛ-ИН: защита укороченного стека [M=${String.format(Locale.US, "%.1f", mRatio)}]"
@@ -604,18 +627,18 @@ object AdvisorEngine {
             }
         } else {
             // No bet to call -> Check / Bet / Raise solver
-            if (l2Score > 0.60f) {
-                if (mRatio < 12.0f && (l2Score > 0.70f || sklanskyGroup <= 2)) {
+            if (l2Score > raiseThreshold) {
+                if (mRatio < 12.0f && (l2Score > raiseThreshold + 0.10f || sklanskyGroup <= 2)) {
                     action = "ALL-IN"
                     explanation = "L2 ОЛЛ-ИН: велью пуш, сила ${pct(l2Score)}%"
                 } else {
                     action = "RAISE"
                     explanation = "L2 Рейз (атака): инициатива, сила ${pct(l2Score)}%, ΔSD ${avgDeltaSD.toInt()}%"
                 }
-            } else if (l2Score > 0.45f || (isPreflop && sklanskyGroup <= 3)) {
+            } else if (l2Score > betThreshold || (isPreflop && sklanskyGroup <= 3)) {
                 action = "BET"
                 explanation = "L2 Ставка: велью-линия, сила ${pct(l2Score)}%, КПФ ${String.format(Locale.US, "%.2f", avgFocus)}"
-            } else if (l2Score > 0.35f) {
+            } else if (l2Score > fairShare - 0.05f) {
                 action = "CHECK"
                 explanation = "L2 Чек (контроль): ведение пота, сила ${pct(l2Score)}%"
             } else {
@@ -828,6 +851,21 @@ object AdvisorEngine {
         val action: String
         val branchSummary: String
 
+        val isMultiway = opponents.count { it.isActive } >= 2
+        val activeOpponentsCount = opponents.count { it.isActive }
+        val fairShare = if (activeOpponentsCount > 0) 1.0f / (activeOpponentsCount + 1.0f) else 0.5f
+
+        val betThreshold = if (isPreflop) {
+            if (isMultiway) 0.45f else 0.40f
+        } else {
+            fairShare + if (isMultiway) 0.10f else 0.05f
+        }
+        val raiseThreshold = if (isPreflop) {
+            if (isMultiway) 0.60f else 0.55f
+        } else {
+            fairShare + if (isMultiway) 0.25f else 0.15f
+        }
+
         if (evL3_5 > evL3_0 && evL3_5 > evL2_5) {
             bestBranch = "L3.5 (Блеф)"
             l3Score = evL3_5
@@ -840,12 +878,12 @@ object AdvisorEngine {
             l3Score = evL3_0
             if (betToCall > 0) {
                 if (l3Score > potOdds) {
-                    action = if (l3Score > 0.60f || sklanskyGroup <= 2) "RAISE" else "CALL"
+                    action = if (l3Score > raiseThreshold || (isPreflop && sklanskyGroup <= 2)) "RAISE" else "CALL"
                 } else {
                     action = if (isPreflop && sklanskyGroup <= 4 && l3Score > 0.45f) "CALL" else "FOLD"
                 }
             } else {
-                action = if (l3Score > 0.50f) "BET" else "CHECK"
+                action = if (l3Score > betThreshold) "BET" else "CHECK"
             }
             branchSummary = "Извлечение велью из сильной спектральной структуры"
         } else {
