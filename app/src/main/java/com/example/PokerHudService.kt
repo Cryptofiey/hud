@@ -2116,8 +2116,8 @@ class PokerHudService : Service() {
             setOnTouchListener { view, event ->
                 when(event.action) {
                     MotionEvent.ACTION_DOWN -> {
-                        initialWidth = params.width
-                        initialHeight = params.height
+                        initialWidth = if (params.width > 0) params.width else frame.width
+                        initialHeight = if (params.height > 0) params.height else frame.height
                         initialTouchX = event.rawX
                         initialTouchY = event.rawY
                         isClick = true
@@ -2130,6 +2130,7 @@ class PokerHudService : Service() {
                             isClick = false
                             params.width = Math.max(dpToPx(130f), initialWidth + deltaX.toInt())
                             params.height = Math.max(dpToPx(150f), initialHeight + deltaY.toInt())
+                            
                             try {
                                 windowManager?.updateViewLayout(frame, params)
                             } catch(e: Exception) {}
