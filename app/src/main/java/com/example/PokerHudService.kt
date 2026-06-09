@@ -2104,47 +2104,77 @@ class PokerHudService : Service() {
             textSize = 10f
             setTextColor(AndroidColor.parseColor("#888888"))
             layoutParams = FrameLayout.LayoutParams(dpToPx(16f), dpToPx(16f)).apply {
-                gravity = Gravity.TOP or Gravity.END
-                topMargin = dpToPx(3f)
-                rightMargin = dpToPx(6f)
+                gravity = Gravity.BOTTOM or Gravity.END
+                bottomMargin = dpToPx(3f)
+                rightMargin = dpToPx(3f)
             }
-            setOnClickListener {
-                val isVert = PokerHudSharedState.isProbsHudVertical.value
-                val isMin = PokerHudSharedState.isProbsHudMinimized.value
-                if (!isVert && !isMin) {
-                    PokerHudSharedState.isProbsHudVertical.value = true
-                    PokerHudSharedState.isProbsHudMinimized.value = false
-                } else if (isVert && !isMin) {
-                    PokerHudSharedState.isProbsHudVertical.value = false
-                    PokerHudSharedState.isProbsHudMinimized.value = true
-                } else {
-                    PokerHudSharedState.isProbsHudVertical.value = false
-                    PokerHudSharedState.isProbsHudMinimized.value = false
+            
+            var initialWidth = 0
+            var initialHeight = 0
+            var initialTouchX = 0f
+            var initialTouchY = 0f
+            var isClick = false
+
+            setOnTouchListener { view, event ->
+                when(event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        initialWidth = params.width
+                        initialHeight = params.height
+                        initialTouchX = event.rawX
+                        initialTouchY = event.rawY
+                        isClick = true
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val deltaX = (event.rawX - initialTouchX)
+                        val deltaY = (event.rawY - initialTouchY)
+                        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+                            isClick = false
+                            params.width = Math.max(dpToPx(130f), initialWidth + deltaX.toInt())
+                            params.height = Math.max(dpToPx(150f), initialHeight + deltaY.toInt())
+                            try {
+                                windowManager?.updateViewLayout(frame, params)
+                            } catch(e: Exception) {}
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        if (isClick) {
+                            val isVert = PokerHudSharedState.isProbsHudVertical.value
+                            val isMin = PokerHudSharedState.isProbsHudMinimized.value
+                            if (!isVert && !isMin) {
+                                PokerHudSharedState.isProbsHudVertical.value = true
+                                PokerHudSharedState.isProbsHudMinimized.value = false
+                            } else if (isVert && !isMin) {
+                                PokerHudSharedState.isProbsHudVertical.value = false
+                                PokerHudSharedState.isProbsHudMinimized.value = true
+                            } else {
+                                PokerHudSharedState.isProbsHudVertical.value = false
+                                PokerHudSharedState.isProbsHudMinimized.value = false
+                            }
+                        }
+                        true
+                    }
+                    else -> false
                 }
             }
         }
         
         val infoRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            background = createBackgroundDrawable(AndroidColor.TRANSPARENT, dpToPx(4f).toFloat(), dpToPx(1f), AndroidColor.parseColor("#44FFFFFF"))
+            setPadding(dpToPx(4f), dpToPx(4f), dpToPx(4f), dpToPx(4f))
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 leftMargin = 0
                 rightMargin = dpToPx(4f)
-            }
-        }
-        
-        val title = TextView(this).apply {
-            text = "LHD | L1: 0.0% | L2: 0.0% | L3: 0.0%"
-            setTextColor(AndroidColor.parseColor("#FFFFD54F"))
-            textSize = 8f
-            typeface = Typeface.DEFAULT_BOLD
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                rightMargin = dpToPx(38f) // Keep clear of the 3 buttons at the top right!
+                topMargin = dpToPx(4f)
+                bottomMargin = dpToPx(4f)
             }
         }
         
         // Info Slot Content
         val txtCardsBoard = TextView(this).apply {
-            text = "Карты: -- | Борд: --"
+            text = "🎴 -- | 📋 --"
             setTextColor(AndroidColor.parseColor("#FFD54F"))
             textSize = 8f
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -2153,7 +2183,7 @@ class PokerHudService : Service() {
         }
 
         val txtHandRankStrength = TextView(this).apply {
-            text = "Комбо: -- | Сила: --"
+            text = "🎯 -- | 💪 --"
             setTextColor(AndroidColor.parseColor("#90CAF9"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -2163,7 +2193,7 @@ class PokerHudService : Service() {
         }
         
         val txtSklan = TextView(this).apply {
-            text = "Группа: [Нет карт]"
+            text = "👥 [Нет карт]"
             setTextColor(AndroidColor.parseColor("#FFFF7043"))
             textSize = 8f
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -2171,20 +2201,9 @@ class PokerHudService : Service() {
             }
         }
 
-        val txtSynthetic = TextView(this).apply {
-            text = "L2: ΔSD: -- | КоэфPF: -- | БлефPF: --"
-            setTextColor(AndroidColor.parseColor("#FFCC80"))
-            textSize = 8f
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dpToPx(1.5f)
-            }
-        }
-        
-        infoRow.addView(title)
         infoRow.addView(txtCardsBoard)
         infoRow.addView(txtHandRankStrength)
         infoRow.addView(txtSklan)
-        infoRow.addView(txtSynthetic)
         
         mainVert.addView(infoRow)
         
@@ -2597,7 +2616,7 @@ class PokerHudService : Service() {
 
                         if (state.heroCard1 != null && state.heroCard2 != null) {
                             val groupNum = AdvisorEngine.getSklanskyGroup(state.heroCard1, state.heroCard2)
-                            txtSklan.text = "Группа: $groupNum | Диапазон: 1-$sRange"
+                            txtSklan.text = "👥 $groupNum | 📊 1-$sRange"
                             
                             val strengthDesc = when (groupNum) {
                                 1, 2 -> "Топ (1/20)"
@@ -2609,35 +2628,8 @@ class PokerHudService : Service() {
                             val relativePos = if (groupNum <= sRange) "Впереди диапазона" else "Позади диапазона"
                             currentStrength = "$strengthDesc ($relativePos)"
                         } else {
-                            txtSklan.text = "Группа: [Нет карт]"
+                            txtSklan.text = "👥 [Нет карт]"
                             currentStrength = "--"
-                        }
-
-                        // Update L2 Synthetic parameter values inside HUD overlay reactive collector
-                        val stats = mainOpp?.stats
-                        if (stats != null) {
-                            val v = stats.histVpip ?: stats.vpip
-                            val p = stats.histPfr ?: stats.pfr
-                            
-                            // Delta SD: WSD - WTSD
-                            val wtsd = stats.histWtsd ?: 30f
-                            val wsd = stats.histWsd ?: 50f
-                            val deltaSD = wsd - wtsd
-                            
-                            // Preflop Focus Factor representing PFR / VPIP
-                            val preflopFocus = if (v > 0) (p / v) else 0f
-                            
-                            // Preflop Bluff Tendency representing PFR * (Fold to 3-Bet / 100)
-                            val fold3 = stats.histFoldTo3Bet ?: 45f
-                            val preflopBluff = p * (fold3 / 100f)
-                            
-                            txtSynthetic.text = String.format(
-                                Locale.US,
-                                "L2: ΔSD: %+.0f%% | КоэфPF: %.2f | БлефPF: %.0f%%",
-                                deltaSD, preflopFocus, preflopBluff
-                            )
-                        } else {
-                            txtSynthetic.text = "L2: ΔSD: -- | КоэфPF: -- | БлефPF: --"
                         }
                     }
 
@@ -2649,9 +2641,8 @@ class PokerHudService : Service() {
                         } else {
                             "0.0%"
                         }
-                        title.text = "LHD | L1: $currentWin | L2: $currentAdvWin | L3: $l3Val"
-                        txtCardsBoard.text = android.text.Html.fromHtml("<b>Карты:</b> $currentCardsStr | <b>Борд:</b> $currentBoardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
-                        txtHandRankStrength.text = "Комбо: $currentHandRank | Сила: $currentStrength"
+                        txtCardsBoard.text = android.text.Html.fromHtml("🎴 $currentCardsStr | 📋 $currentBoardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
+                        txtHandRankStrength.text = "🎯 $currentHandRank | 💪 $currentStrength"
                     }
                     
                     if (recommendationChanged) {
