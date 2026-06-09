@@ -2087,16 +2087,14 @@ class PokerHudService : Service() {
                 dpToPx(1.5f), 
                 AndroidColor.parseColor("#FF4CAF50")
             )
-            setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
+            setPadding(dpToPx(1f), dpToPx(1f), dpToPx(1f), dpToPx(1f))
         }
         val content = FrameLayout(this)
         
         val mainVert = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            clipChildren = false
-            clipToPadding = false
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-            setPadding(dpToPx(6f), dpToPx(5f), dpToPx(6f), dpToPx(5f))
+            setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
         }
         
         val toggleBtnHorizontal = TextView(this).apply {
@@ -2162,12 +2160,12 @@ class PokerHudService : Service() {
         
         val infoRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = createBackgroundDrawable(AndroidColor.TRANSPARENT, dpToPx(8f).toFloat(), dpToPx(1f), AndroidColor.parseColor("#44FFFFFF"))
+            background = createBackgroundDrawable(AndroidColor.TRANSPARENT, dpToPx(6f).toFloat(), dpToPx(1f), AndroidColor.parseColor("#44FFFFFF"))
             setPadding(dpToPx(6f), dpToPx(2f), dpToPx(6f), dpToPx(2f))
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                leftMargin = -dpToPx(3f)
-                rightMargin = -dpToPx(3f)
-                topMargin = -dpToPx(2f)
+                leftMargin = 0
+                rightMargin = 0
+                topMargin = 0
                 bottomMargin = dpToPx(4f)
             }
         }
