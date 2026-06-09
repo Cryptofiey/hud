@@ -500,7 +500,8 @@ class ScreenScanner(
                                 transitionKey = "TAKE_SEAT"
                             }
                             // Join Back
-                            normalized == "JOINBACK" || normalized.contains("ВЕРНУТЬСЯ") || 
+                            normalized == "JOINBACK" || normalized == "IMBACK" || normalized == "RETURN" || 
+                            normalized == "BACK" || normalized.contains("ВЕРНУТЬСЯ") || normalized.contains("ЯВЕРНУ") || 
                             normalized.contains("ПРОДОЛЖИТЬИГРУ") -> {
                                 isTransitionButton = true
                                 transitionKey = "JOIN_BACK"
@@ -1092,7 +1093,8 @@ class ScreenScanner(
                     smallBlind = parsedSB,
                     bigBlind = parsedBB,
                     tournamentStage = parsedStage,
-                    isBbDisplay = (fullScanText.contains("BB") || fullScanText.contains("ББ"))
+                    isBbDisplay = (scannedHeroStack != null && scannedHeroStack < 5000f && scannedHeroStack % 1.0f != 0.0f) || 
+                                  Regex("([0-9.,]+)\\s*(BB|ББ)").containsMatchIn(result.text.uppercase())
                 )
             )
             
