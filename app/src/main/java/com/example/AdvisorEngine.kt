@@ -316,7 +316,9 @@ object AdvisorEngine {
         fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
         fun fmt(f: Float): String = String.format(Locale.US, "%.1f", f)
 
-        val mRatio = if (heroStack > 0 && bigBlind > 0) (heroStack.toFloat() / bigBlind) else 20.0f
+        val mRatioRaw = if (heroStack > 0 && bigBlind > 0) (heroStack.toFloat() / bigBlind) else 20.0f
+        // Heuristic: If heroStack contains decimals, it is likely already in BB format
+        val mRatio = if (heroStack > 0 && heroStack % 1.0f != 0.0f) heroStack else mRatioRaw
 
         if (betToCall > 0) {
             if (profitableCall) {
@@ -552,7 +554,8 @@ object AdvisorEngine {
         }
 
         // 6. Stack levels (Table stack limits / M-Ratio)
-        val mRatio = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
+        val mRatioRaw = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
+        val mRatio = if (heroStack > 0 && heroStack % 1.0f != 0.0f) heroStack else mRatioRaw
         val stackAdjustment = if (mRatio < 10.0f) {
             // Under short-stack pressure, reduce speculative play and tilt decisions to push/fold
             if (sklanskyGroup <= 3) 0.05f else -0.05f
@@ -628,13 +631,8 @@ object AdvisorEngine {
         } else {
             // No bet to call -> Check / Bet / Raise solver
             if (l2Score > raiseThreshold) {
-                if (mRatio < 12.0f && (l2Score > raiseThreshold + 0.10f || sklanskyGroup <= 2)) {
-                    action = "ALL-IN"
-                    explanation = "L2 ОЛЛ-ИН: велью пуш, сила ${pct(l2Score)}%"
-                } else {
-                    action = "RAISE"
-                    explanation = "L2 Рейз (атака): инициатива, сила ${pct(l2Score)}%, ΔSD ${avgDeltaSD.toInt()}%"
-                }
+                action = "RAISE"
+                explanation = "L2 Рейз (атака): инициатива, сила ${pct(l2Score)}%, ΔSD ${avgDeltaSD.toInt()}%"
             } else if (l2Score > betThreshold || (isPreflop && sklanskyGroup <= 3)) {
                 action = "BET"
                 explanation = "L2 Ставка: велью-линия, сила ${pct(l2Score)}%, КПФ ${String.format(Locale.US, "%.2f", avgFocus)}"
@@ -730,7 +728,8 @@ object AdvisorEngine {
             (s1 * 0.80f) + (s4 * 0.20f)
         }
 
-        val mRatio = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
+        val mRatioRaw = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
+        val mRatio = if (heroStack > 0 && heroStack % 1.0f != 0.0f) heroStack else mRatioRaw
 
         // 2. Identify active opponents, build robust fallback profiles for first zone if none exists
         val activeOpponents = opponents.filter { it.isActive }

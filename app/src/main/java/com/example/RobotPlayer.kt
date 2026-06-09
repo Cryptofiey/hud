@@ -201,7 +201,8 @@ object RobotPlayer {
                 "CALL" -> upperKey.contains("CALL") || upperKey.contains("КОЛЛ")
                 "BET", "RAISE" -> upperKey.contains("BET") || upperKey.contains("БЕТ") || 
                                   upperKey.contains("RAISE") || upperKey.contains("РЕЙЗ") || 
-                                  upperKey.contains("CONFIRM") || upperKey.contains("ПОДТВЕРДИТЬ")
+                                  upperKey.contains("CONFIRM") || upperKey.contains("ПОДТВЕРДИТЬ") ||
+                                  upperKey.contains("ALL-IN") || upperKey.contains("ОЛЛ-ИН") || upperKey.contains("ALL") || upperKey.contains("ОЛЛ")
                 "ALL-IN" -> upperKey.contains("ALL-IN") || upperKey.contains("ОЛЛ-ИН") || upperKey.contains("ALL") || upperKey.contains("ОЛЛ")
                 else -> false
             }
