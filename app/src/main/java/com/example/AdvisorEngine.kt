@@ -287,8 +287,14 @@ object AdvisorEngine {
             (s1 * 1.15f).coerceIn(0f, 1f)
         }
 
+        val isPreflop = board.filterNotNull().isEmpty()
+
         // Pure GTO Math Core - clean of any psychological or position heuristics
-        val l1Score = (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
+        val l1Score = if (isPreflop) {
+            (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
+        } else {
+            (s1 * 0.80f) + (s4 * 0.20f)
+        }
 
         // Perfect GTO Tighter Standards for Multi-Way fields to avoid equity dilution
         val isMultiway = activeOpponentsCount >= 2
@@ -428,8 +434,14 @@ object AdvisorEngine {
             (s1 * 1.15f).coerceIn(0f, 1f)
         }
 
+        val isPreflop = board.filterNotNull().isEmpty()
+
         // Clean L1 GTO base score (the foundation we build on top of)
-        val baseL1Score = (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
+        val baseL1Score = if (isPreflop) {
+            (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
+        } else {
+            (s1 * 0.80f) + (s4 * 0.20f)
+        }
 
         // 2. Average table stats for fallback strategy
         val opponentsWithStats = opponents.filter { it.stats != null }
@@ -559,7 +571,6 @@ object AdvisorEngine {
             if (avgTableVpip > 0) avgTablePfr / avgTableVpip else 0.5f
         }
 
-        val isPreflop = board.filterNotNull().isEmpty()
         val profitableCall = l2Score > potOdds
 
         val action: String
@@ -687,10 +698,15 @@ object AdvisorEngine {
             (s1 * 1.15f).coerceIn(0f, 1f)
         }
 
-        val baseL1Score = (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
-
         val isPreflop = board.filterNotNull().isEmpty()
         val isPostflop = !isPreflop
+
+        val baseL1Score = if (isPreflop) {
+            (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
+        } else {
+            (s1 * 0.80f) + (s4 * 0.20f)
+        }
+
         val mRatio = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
 
         // 2. Identify active opponents, build robust fallback profiles for first zone if none exists
@@ -815,13 +831,19 @@ object AdvisorEngine {
         if (evL3_5 > evL3_0 && evL3_5 > evL2_5) {
             bestBranch = "L3.5 (Блеф)"
             l3Score = evL3_5
-            action = if (betToCall > 0) "RAISE" else "BET"
+            action = if (betToCall > 0) {
+                if (l3Score > potOdds + 0.15f) "RAISE" else if (l3Score > potOdds || (isPreflop && sklanskyGroup <= 4)) "CALL" else "FOLD"
+            } else "BET"
             branchSummary = "Максимизация фолд-эквити блефом"
         } else if (evL3_0 > evL2_5) {
             bestBranch = "L3.0 (Велью)"
             l3Score = evL3_0
             if (betToCall > 0) {
-                action = if (l3Score > 0.60f || sklanskyGroup <= 2) "RAISE" else "CALL"
+                if (l3Score > potOdds) {
+                    action = if (l3Score > 0.60f || sklanskyGroup <= 2) "RAISE" else "CALL"
+                } else {
+                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > 0.45f) "CALL" else "FOLD"
+                }
             } else {
                 action = if (l3Score > 0.50f) "BET" else "CHECK"
             }
@@ -829,7 +851,15 @@ object AdvisorEngine {
         } else {
             bestBranch = "L2.5 (Пассив)"
             l3Score = evL2_5
-            action = if (betToCall > 0) "CALL" else "CHECK"
+            if (betToCall > 0) {
+                if (l3Score > potOdds) {
+                    action = "CALL"
+                } else {
+                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > 0.48f) "CALL" else "FOLD"
+                }
+            } else {
+                action = "CHECK"
+            }
             branchSummary = "Имитация слабости / Сбор блефов прокаткой"
         }
 
