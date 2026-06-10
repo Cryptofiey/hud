@@ -15,7 +15,10 @@ object OpponentScanner {
         var boundingBox: Rect,
         var nickname: String,
         var consecutiveMisses: Int = 0,
-        var consecutiveHits: Int = 1
+        var consecutiveHits: Int = 1,
+        var isMature: Boolean = false,
+        var pendingNickname: String = "",
+        var pendingNicknameCount: Int = 0
     )
 
     private val trackedAnchors = mutableListOf<TrackedAnchor>()
@@ -123,8 +126,8 @@ object OpponentScanner {
                 val box = line.boundingBox ?: continue
                 
                 // Stack is usually directly below the name
-                val isBelow = box.top >= nameBox.bottom - 30 && box.top < nameBox.bottom + 150
-                val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < 250
+                val isBelow = box.top >= nameBox.bottom - (height * 0.015f) && box.top < nameBox.bottom + (height * 0.08f)
+                val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < (width * 0.15f)
                 
                 if (isBelow && isAlignedHorizontally) {
                     val textTrimmed = line.text.trim()
@@ -141,26 +144,19 @@ object OpponentScanner {
                 }
             }
 
-            // Require a stack element to confirm this is a player profile
-            if (chipBox == null) continue
-
-            // Create unified bounding box for the player combining their name and stack
-            val playerBox = Rect(nameBox)
-            playerBox.union(chipBox)
-
             // 3. Find Action (near the name, often above or overlapping)
             val actionRegion = Rect(
-                nameBox.left - 150,
-                nameBox.top - 300,
-                nameBox.right + 150,
-                nameBox.bottom + 100
+                (nameBox.left - width * 0.12f).toInt(),
+                (nameBox.top - height * 0.15f).toInt(),
+                (nameBox.right + width * 0.12f).toInt(),
+                (nameBox.bottom + height * 0.05f).toInt()
             )
 
             var detectedAction = PlayerAction.NONE
             
             for (line in linesList) {
                 val box = line.boundingBox ?: continue
-                if (box.top > cleanBitmap.height * 0.8f) continue // skip hero action buttons
+                if (box.top > height * 0.85f) continue // skip hero action buttons
                 if (actionRegion.contains(box.centerX(), box.centerY())) {
                     val txt = line.text.uppercase(java.util.Locale.US)
                     if (txt.contains("FOLD") || txt.contains("ФОЛД") || txt.contains("ПАС") || txt.contains("СБРОС")) detectedAction = PlayerAction.FOLD
@@ -171,6 +167,24 @@ object OpponentScanner {
                     
                     if (detectedAction != PlayerAction.NONE) break
                 }
+            }
+            
+            // Require a stack element OR a valid action to confirm this is a player profile
+            // This prevents players who went all-in (and have 0/no stack text) from disappearing.
+            if (chipBox == null && detectedAction == PlayerAction.NONE) {
+                // If we also want to keep players with no chips and no action (e.g. sitting out), 
+                // we'd need to match against existing anchors, but we'll do that below by looking up tracked anchors.
+                val matchesExisting = trackedAnchors.any { 
+                    Math.hypot((nameBox.centerX() - it.boundingBox.centerX()).toDouble(), 
+                               (nameBox.centerY() - it.boundingBox.centerY()).toDouble()) < (width * 0.15)
+                }
+                if (!matchesExisting) continue
+            }
+
+            // Create unified bounding box for the player combining their name and stack
+            val playerBox = Rect(nameBox)
+            if (chipBox != null) {
+                playerBox.union(chipBox)
             }
             
             // Fallback color check for fold/call
@@ -225,7 +239,7 @@ object OpponentScanner {
                 val anchor = iterator.next()
                 
                 // Allow some movement
-                val anchorRadius = 250.0
+                val anchorRadius = width * 0.18
                 
                 val bestCandidate = uniqueCandidates
                     .filter { 
@@ -246,20 +260,32 @@ object OpponentScanner {
                     // Update bounding box strictly to the new candidate to prevent endless growth
                     anchor.boundingBox = android.graphics.Rect(bestCandidate.boundingBox!!)
                     
-                    // Allow name update if the new name is valid, but anchor provides stability
-                    anchor.nickname = bestCandidate.nickname
+                    // Allow name update if the new name is valid, but require stability
+                    if (bestCandidate.nickname != anchor.nickname) {
+                        if (bestCandidate.nickname == anchor.pendingNickname) {
+                            anchor.pendingNicknameCount++
+                            if (anchor.pendingNicknameCount >= 3) {
+                                anchor.nickname = bestCandidate.nickname
+                                anchor.pendingNicknameCount = 0
+                            }
+                        } else {
+                            anchor.pendingNickname = bestCandidate.nickname
+                            anchor.pendingNicknameCount = 1
+                        }
+                    } else {
+                        anchor.pendingNicknameCount = 0
+                    }
                     
                     if (anchor.consecutiveHits >= 3) {
+                        anchor.isMature = true
                         finalOpponents.add(bestCandidate.copy(nickname = anchor.nickname, boundingBox = anchor.boundingBox))
                     }
                 } else {
                     anchor.consecutiveMisses++
-                    // Also decay the hits if they vanish, so a ghost that blinks doesn't accumulate to 3 easily
-                    anchor.consecutiveHits = maxOf(0, anchor.consecutiveHits - 1)
                     
-                    if (anchor.consecutiveMisses > 15) {
+                    if (anchor.consecutiveMisses > 25) {
                         iterator.remove() // Player left, or we missed them too many times
-                    } else if (anchor.consecutiveHits >= 3) {
+                    } else if (anchor.isMature) {
                         // Remember them for a few frames only if they were confirmed
                         finalOpponents.add(OpponentState(
                             id = 0,
@@ -276,7 +302,7 @@ object OpponentScanner {
 
             for (candidate in uniqueCandidates) {
                 if (candidate !in matchedCandidates) {
-                    val newAnchor = TrackedAnchor(candidate.boundingBox!!, candidate.nickname, 0, 1)
+                    val newAnchor = TrackedAnchor(candidate.boundingBox!!, candidate.nickname, 0, 1, false)
                     trackedAnchors.add(newAnchor)
                     // We DO NOT add them to finalOpponents immediately on first sighting.
                     // They'll be added on frame 3 to prevent flickering ghosts.
