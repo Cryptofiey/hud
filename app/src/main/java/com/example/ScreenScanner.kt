@@ -786,8 +786,9 @@ class ScreenScanner(
                 }
                 
                 // Compute the total bounding box area for each cluster to distinguish real cards from tiny noise
-                val clustersWithArea = clusters.map { cluster ->
+                val clustersWithAreaAndX = clusters.map { cluster ->
                     val area = cluster.sumOf { it.second.width() * it.second.height() }
+                    val minX = cluster.minOf { it.second.centerX() }
                     
                     val ranks = cluster.map { it.first.rank }
                     val finalRank = ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
@@ -795,20 +796,21 @@ class ScreenScanner(
                     val suits = cluster.map { it.first.suit }
                     val finalSuit = suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     
-                    Pair(Card(finalRank, finalSuit), area)
+                    Triple(Card(finalRank, finalSuit), area, minX)
                 }
                 
                 // Deduplicate consecutive identical cards
-                val deduplicated = clustersWithArea.filterIndexed { index, item -> 
-                    index == 0 || item.first != clustersWithArea[index - 1].first
+                val deduplicated = clustersWithAreaAndX.filterIndexed { index, item -> 
+                    index == 0 || item.first != clustersWithAreaAndX[index - 1].first
                 }
                 
                 // Sort by area descending so real cards beat noise like the timer, then take maxCards
+                // Then sort them back by X coordinate so they are in left-to-right order
                 val topCards = deduplicated.sortedByDescending { it.second }
                     .take(maxCards)
+                    .sortedBy { it.third }
                     .map { it.first }
                 
-                // Sort them back by X coordinate mentally or just leave them unordered
                 for (i in 0 until topCards.size) {
                     resultList[i] = topCards[i]
                 }
