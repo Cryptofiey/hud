@@ -38,42 +38,46 @@ class ScreenScanner(
     private var imageReader: ImageReader? = null
     private var virtualDisplay: android.hardware.display.VirtualDisplay? = null
     private fun isColorfulButton(bitmap: android.graphics.Bitmap, box: android.graphics.Rect): Boolean {
-        // Expand the search area slightly to ensure we check the background, not just the white text
+        // Expand the search area significantly vertically to ensure we hit the button background.
+        // OCR box is just the text tightly bounded, so we must look above and below it.
+        val xExpand = (box.width() * 0.3f).toInt()
+        val yExpand = (box.height() * 0.8f).toInt()
+        
         val bounds = android.graphics.Rect(
-            (box.left - box.width() / 4).coerceAtLeast(0),
-            (box.top - box.height() / 4).coerceAtLeast(0),
-            (box.right + box.width() / 4).coerceAtMost(bitmap.width - 1),
-            (box.bottom + box.height() / 4).coerceAtMost(bitmap.height - 1)
+            (box.left - xExpand).coerceAtLeast(0),
+            (box.top - yExpand).coerceAtLeast(0),
+            (box.right + xExpand).coerceAtMost(bitmap.width - 1),
+            (box.bottom + yExpand).coerceAtMost(bitmap.height - 1)
         )
         
         var brightPixelsCount = 0
         var totalSamples = 0
         
         // Sample a grid across the expanded area
-        val xStep = (bounds.width() / 6).coerceAtLeast(1)
-        val yStep = (bounds.height() / 6).coerceAtLeast(1)
+        val xStep = (bounds.width() / 8).coerceAtLeast(1)
+        val yStep = (bounds.height() / 8).coerceAtLeast(1)
         
         for (x in bounds.left..bounds.right step xStep) {
             for (y in bounds.top..bounds.bottom step yStep) {
                 val color = bitmap.getPixel(x, y)
                 val hsv = FloatArray(3)
                 android.graphics.Color.colorToHSV(color, hsv)
+                val hue = hsv[0]
                 val saturation = hsv[1]
                 val value = hsv[2]
-                val hue = hsv[0]
                 
                 // Solid bright color (e.g. green, orange, red) vs dark grey/white
-                // Exclude Purple/Blue table felt hues (approx 240 to 320)
-                val isPurpleFelt = hue in 240f..320f
-                if (saturation > 0.15f && value > 0.15f && !isPurpleFelt) {
+                // Exclude Purple/Blue table felt hues (approx 230 to 330)
+                val isPurpleFelt = hue in 230f..330f
+                if (saturation > 0.25f && value > 0.25f && !isPurpleFelt) {
                     brightPixelsCount++
                 }
                 totalSamples++
             }
         }
         
-        // If at least 10% of sampled pixels are colorful, it's a bright button
-        return brightPixelsCount.toFloat() / totalSamples > 0.10f
+        // If at least 5% of sampled pixels are colorful, it's a bright button
+        return (brightPixelsCount.toFloat() / totalSamples) > 0.05f
     }
 
     companion object {
@@ -575,7 +579,8 @@ class ScreenScanner(
                         
                             // Action buttons logic
                             if (box.top > bottomZoneTop) {
-                                val textUpper = element.text.uppercase()
+                                val originalTextUpper = element.text.uppercase()
+                                val textUpper = originalTextUpper.replace(" ", "")
                                 
                                 // Prevent tiny non-button text from being recognized:
                                 if (box.width() < cleanBitmap!!.width * 0.01f) continue
@@ -586,7 +591,7 @@ class ScreenScanner(
                                                textUpper.contains("PАС") || textUpper.contains("CHECK") || 
                                                textUpper.contains("CALL") || textUpper.contains("КОЛЛ") || 
                                                textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || 
-                                               textUpper.contains("BET") || textUpper.contains("ALL-IN")
+                                               textUpper.contains("BET") || textUpper.contains("ALL-IN") || textUpper.contains("ALLIN")
                                 
                                 // Primary actions MUST be brightly colored (solid fill). 
                                 // Grey/transparent pre-action buttons will fail此 check.
@@ -595,7 +600,7 @@ class ScreenScanner(
                                 if ((textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) && !textUpper.contains("ANY")) {
                                     if (qualifiesAsAction) {
                                         heroActionOptions.add("Fold")
-                                        actionButtonsMap[textUpper] = box
+                                        actionButtonsMap[originalTextUpper] = box
                                     } else {
                                         hasPreactions = true
                                     }
@@ -603,7 +608,7 @@ class ScreenScanner(
                                 else if ((textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) && !textUpper.contains("FOLD") && !textUpper.contains("ФОЛД")) {
                                     if (qualifiesAsAction) {
                                         heroActionOptions.add("Check")
-                                        actionButtonsMap[textUpper] = box
+                                        actionButtonsMap[originalTextUpper] = box
                                     } else {
                                         hasPreactions = true
                                     }
@@ -611,7 +616,7 @@ class ScreenScanner(
                                 else if ((textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) && !textUpper.contains("ANY") && !textUpper.contains("ЛЮБ")) {
                                     if (qualifiesAsAction) {
                                         heroActionOptions.add("Call")
-                                        actionButtonsMap[textUpper] = box
+                                        actionButtonsMap[originalTextUpper] = box
                                     } else {
                                         hasPreactions = true
                                     }
@@ -621,31 +626,31 @@ class ScreenScanner(
                                          textUpper.contains("CONFIRM") || textUpper.contains("ПОДТВЕРДИТЬ")) {
                                     if (qualifiesAsAction) {
                                         heroActionOptions.add("Raise") // Mapping Confirm to Raise internally
-                                        actionButtonsMap[textUpper] = box
+                                        actionButtonsMap[originalTextUpper] = box
                                     } else {
                                         hasPreactions = true
                                     }
                                 } 
-                                else if (textUpper.contains("ALL-IN") || textUpper.contains("ALL IN") || 
+                                else if (textUpper.contains("ALL-IN") || textUpper.contains("ALLIN") || 
                                          textUpper.contains("ОЛЛ-ИН") || textUpper.contains("ALL") || 
-                                         textUpper.contains("ОЛЛ")) {
+                                         textUpper.contains("ОЛЛ") || textUpper.contains("ВЫСТАВИТЬ")) {
                                     if (qualifiesAsAction) {
                                         heroActionOptions.add("All-in")
-                                        actionButtonsMap[textUpper] = box
+                                        actionButtonsMap[originalTextUpper] = box
                                     }
                                 }
                                 else if (textUpper.contains("STRADDLE") || textUpper.contains("СТРАДДЛ")) {
-                                    if (isBright) actionButtonsMap[textUpper] = box
+                                    if (isBright) actionButtonsMap[originalTextUpper] = box
                                 }
                                 
                                 // Add common bet sizing multipliers. These are usually grey, so we ignore color.
-                                val noSpaceText = textUpper.replace(" ", "")
+                                val noSpaceText = textUpper
                                 if (noSpaceText == "1/2" || noSpaceText == "1/3" || noSpaceText == "2/3" || noSpaceText == "3/4" || 
                                     noSpaceText == "1/2POT" || noSpaceText == "2/3POT" || noSpaceText == "3/4POT" ||
                                     textUpper.contains("POT") || textUpper.contains("ПОТ") || textUpper.contains("MAX") || textUpper.contains("МАКС") ||
                                     textUpper.contains("MIN") || textUpper.contains("МИН") || textUpper.matches(Regex(".*\\d+X.*")) || textUpper.contains("%") ||
                                     noSpaceText == "+" || noSpaceText == "-") {
-                                    actionButtonsMap[textUpper] = box
+                                    actionButtonsMap[originalTextUpper] = box
                                 }
                             }
                     }

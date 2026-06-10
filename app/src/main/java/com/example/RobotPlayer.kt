@@ -287,18 +287,18 @@ object RobotPlayer {
     private fun findButtonRect(canonicalAction: String): Rect? {
         // Buttons could have names like "Check/Call" depending on how OCR sees them.
         for ((key, rect) in availableActionButtons) {
-            val upperKey = key.uppercase()
+            val upperKey = key.uppercase().replace(" ", "")
             
             // Check direct matches in both English and Russian
             val match = when (canonicalAction) {
-                "FOLD" -> upperKey.contains("FOLD") || upperKey.contains("ФОЛД")
+                "FOLD" -> upperKey.contains("FOLD") || upperKey.contains("ФОЛД") || upperKey.contains("PАС")
                 "CHECK" -> upperKey.contains("CHECK") || upperKey.contains("ЧЕК")
                 "CALL" -> upperKey.contains("CALL") || upperKey.contains("КОЛЛ")
                 "BET", "RAISE" -> upperKey.contains("BET") || upperKey.contains("БЕТ") || 
                                   upperKey.contains("RAISE") || upperKey.contains("РЕЙЗ") || 
                                   upperKey.contains("CONFIRM") || upperKey.contains("ПОДТВЕРДИТЬ") ||
-                                  upperKey.contains("ALL-IN") || upperKey.contains("ОЛЛ-ИН") || upperKey.contains("ALL") || upperKey.contains("ОЛЛ")
-                "ALL-IN" -> upperKey.contains("ALL-IN") || upperKey.contains("ОЛЛ-ИН") || upperKey.contains("ALL") || upperKey.contains("ОЛЛ")
+                                  upperKey.contains("ALL-IN") || upperKey.contains("ALLIN") || upperKey.contains("ОЛЛ-ИН") || upperKey.contains("ALL") || upperKey.contains("ОЛЛ") || upperKey.contains("ВЫСТАВИТЬ")
+                "ALL-IN" -> upperKey.contains("ALL-IN") || upperKey.contains("ALLIN") || upperKey.contains("ОЛЛ-ИН") || upperKey.contains("ALL") || upperKey.contains("ОЛЛ") || upperKey.contains("ВЫСТАВИТЬ")
                 else -> false
             }
             if (match) return rect
