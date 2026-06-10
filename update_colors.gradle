@@ -1,0 +1,59 @@
+tasks.register("modifyFiles") {
+    doLast {
+        def file = new File("app/src/main/java/com/example/MainActivity.kt")
+        def content = file.text
+        
+        content = content.replace("Color(0xFF1B4D22)", "Color(0xFF121212)")
+        content = content.replace("Color(0xFFD82229)", "Color(0xFF1E88E5)")
+        content = content.replace("0xFFD82229", "0xFF1E88E5")
+        content = content.replace("0xFF1B4D22", "0xFF121212")
+
+        content = content.replace("fontSize = 20.sp", "fontSize = 18.sp")
+        content = content.replace("fontSize = 15.sp", "fontSize = 14.sp")
+        content = content.replace("fontSize = 14.sp", "fontSize = 13.sp")
+        content = content.replace("fontSize = 13.sp", "fontSize = 12.sp")
+        content = content.replace("fontSize = 12.sp", "fontSize = 11.sp")
+        content = content.replace("fontSize = 11.sp", "fontSize = 10.sp")
+
+        content = content.replace("padding(16.dp)", "padding(12.dp)")
+        content = content.replace("padding(horizontal = 16.dp, vertical = 14.dp)", "padding(horizontal = 14.dp, vertical = 10.dp)")
+        content = content.replace("height(24.dp)", "height(20.dp)")
+        content = content.replace("height(30.dp)", "height(24.dp)")
+        content = content.replace("spacedBy(8.dp)", "spacedBy(6.dp)")
+        content = content.replace("spacedBy(10.dp)", "spacedBy(8.dp)")
+        content = content.replace("spacedBy(12.dp)", "spacedBy(10.dp)")
+        content = content.replace("padding(12.dp)", "padding(8.dp)")
+
+        file.text = content
+        
+        def serviceFile = new File("app/src/main/java/com/example/PokerHudService.kt")
+        def serviceContent = serviceFile.text
+        serviceContent = serviceContent.replace("dpToPx(60f)", "dpToPx(48f)") // scale down heights
+        serviceContent = serviceContent.replace("dpToPx(8f)", "dpToPx(6f)")
+        serviceContent = serviceContent.replace("textSize = 9.5f", "textSize = 8.5f")
+        serviceContent = serviceContent.replace("textSize = 8.5f", "textSize = 7.5f")
+        serviceContent = serviceContent.replace("textSize = 8f", "textSize = 7f")
+        serviceContent = serviceContent.replace("textSize = 7.5f", "textSize = 6.5f")
+        serviceContent = serviceContent.replace("textSize = 7f", "textSize = 6f")
+        serviceContent = serviceContent.replace("textSize = 6.5f", "textSize = 5.5f")
+        serviceContent = serviceContent.replace("textSize = 10f", "textSize = 9f")
+        serviceContent = serviceContent.replace("textSize = 10.5f", "textSize = 9.5f")
+        serviceContent = serviceContent.replace("dpToPx(50f)", "dpToPx(40f)")
+        serviceContent = serviceContent.replace("dpToPx(40f)", "dpToPx(32f)")
+        serviceContent = serviceContent.replace("dpToPx(30f)", "dpToPx(24f)")
+        serviceContent = serviceContent.replace("dpToPx(24f)", "dpToPx(20f)")
+        serviceContent = serviceContent.replace("dpToPx(20f)", "dpToPx(16f)")
+        serviceContent = serviceContent.replace("dpToPx(18f)", "dpToPx(14f)")
+        serviceContent = serviceContent.replace("dpToPx(16f)", "dpToPx(12f)")
+        serviceContent = serviceContent.replace("dpToPx(14f)", "dpToPx(11f)")
+        serviceContent = serviceContent.replace("dpToPx(12f)", "dpToPx(10f)")
+        serviceContent = serviceContent.replace("dpToPx(10f)", "dpToPx(8f)")
+        serviceContent = serviceContent.replace("dpToPx(8f)", "dpToPx(6f)")
+        serviceContent = serviceContent.replace("dpToPx(6f)", "dpToPx(4f)")
+        serviceContent = serviceContent.replace("dpToPx(4f)", "dpToPx(2f)")
+        serviceContent = serviceContent.replace("dpToPx(2f)", "dpToPx(1f)")
+        serviceContent = serviceContent.replace("dpToPx(2f)", "dpToPx(1f)")
+        
+        serviceFile.text = serviceContent
+    }
+}
