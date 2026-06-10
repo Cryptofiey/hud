@@ -289,7 +289,11 @@ object RobotPlayer {
 
     private fun findButtonRect(canonicalAction: String): Rect? {
         // Buttons could have names like "Check/Call" depending on how OCR sees them.
-        for ((key, rect) in availableActionButtons) {
+        // We sort by descending Y position (bottom of screen first) to ensure we NEVER click speech bubbles 
+        // higher up if they somehow passed the 85% threshold.
+        val sortedButtons = availableActionButtons.entries.sortedByDescending { it.value.top }
+        
+        for ((key, rect) in sortedButtons) {
             val upperKey = key.uppercase().replace(" ", "")
             
             // Primary direct matches in both English and Russian
@@ -308,7 +312,7 @@ object RobotPlayer {
         }
         
         // Logical Fallbacks if exact target not found
-        for ((key, rect) in availableActionButtons) {
+        for ((key, rect) in sortedButtons) {
             val upperKey = key.uppercase().replace(" ", "")
             
             // FOLD FALLBACK: If we want to fold, but there's a free CHECK button, we must click CHECK instead of folding.

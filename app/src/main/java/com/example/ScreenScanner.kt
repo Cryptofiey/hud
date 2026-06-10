@@ -380,8 +380,8 @@ class ScreenScanner(
             val transitionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
             val sizingButtonsMap = mutableMapOf<String, android.graphics.Rect>()
 
-            // We look for action buttons in the bottom 25% of the screen (to exclude opponent status tags near the hero)
-            val bottomZoneTop = cleanBitmap!!.height * 0.75
+            // We look for action buttons in the bottom 15% of the screen (to exclude opponent status tags and speech bubbles near the hero)
+            val bottomZoneTop = cleanBitmap!!.height * 0.85
 
             var scannedPotSize: Float? = null
             
