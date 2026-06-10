@@ -552,18 +552,19 @@ class ScreenScanner(
                         val cx = box.centerX()
                         val cy = box.centerY()
                         
+                        // Generous expansion to allow the user to place frames roughly, not pixel-perfect.
                         val expandedCommRect = android.graphics.Rect(
-                            commRect.left - commRect.width() / 20,
-                            commRect.top - commRect.height() / 10,
-                            commRect.right + commRect.width() / 20,
-                            commRect.bottom + commRect.height() / 10
+                            commRect.left - commRect.width() / 2,
+                            commRect.top - commRect.height() / 2,
+                            commRect.right + commRect.width() / 2,
+                            commRect.bottom + commRect.height() / 2
                         )
                         
                         val expandedHoleRect = android.graphics.Rect(
-                            holeRect.left - holeRect.width() / 20,
-                            holeRect.top - holeRect.height() / 10,
-                            holeRect.right + holeRect.width() / 20,
-                            holeRect.bottom + holeRect.height() / 10
+                            holeRect.left - holeRect.width() / 2,
+                            holeRect.top - holeRect.height() / 2,
+                            holeRect.right + holeRect.width(), // generously biased to the right for 2nd card
+                            holeRect.bottom + holeRect.height() / 2
                         )
                         
                         if (commRect.width() > 20 && expandedCommRect.contains(cx, cy)) {
