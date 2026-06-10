@@ -69,10 +69,11 @@ class ScreenScanner(
                 val diff = maxC - minC
                 
                 // Action buttons are BRIGHT and HIGHLY SATURATED.
-                // Pre-action buttons are either transparent (background is dark table felt, so maxC is low < 100)
+                // Pre-action buttons are either transparent (background is dark table felt, so maxC is low usually < 60)
                 // or they are light grey (so diff is very small).
                 // White text has high maxC but very low diff.
-                if (maxC > 120 && diff > 50) {
+                // Adjusted down to 80/35 to support users with "Extra Dim" Android screen overlays
+                if (maxC > 80 && diff > 35) {
                     brightColorPixels++
                 }
                 totalSamples++
