@@ -20,11 +20,8 @@ object RobotPlayer {
     private var lastActedBoardCards = 0
     private var lastActedAction = ""
     private var lastActionTime = 0L
-<<<<<<< HEAD
-=======
     private var pendingActionSignature = ""
     private var pendingActionStartTime = 0L
->>>>>>> origin/main
     
     init {
         // Background loop for Lobby / Table Buy-in Transition clicks
@@ -122,42 +119,29 @@ object RobotPlayer {
                     // Already acted for this phase recently
                     return@collectLatest
                 }
-<<<<<<< HEAD
-=======
                 
                 if (pendingActionSignature == signature && (now - pendingActionStartTime < 4000L)) {
                     // We are currently waiting to execute this same action, let the existing coroutine finish
                     return@collectLatest
                 }
->>>>>>> origin/main
 
                 // Match with available rectangles
                 // E.g., if canonicalAction is "CALL", look for "CALL" or "CHECK" in map.
                 val targetRect = findButtonRect(canonicalAction) ?: return@collectLatest
                 
-<<<<<<< HEAD
-                // Execute after humanizer delay
-                lastActedAction = signature
-                lastActedBoardCards = commCardsSize
-                lastActionTime = now
+                // Target rect acquired
                 
-                Log.d("RobotPlayer", "Executing AI Action: $canonicalAction on rectangle $targetRect (sig: $signature)")
-=======
                 // Track pending action so we don't start multiple parallel timers for the same action
                 pendingActionSignature = signature
                 pendingActionStartTime = now
                 
                 Log.d("RobotPlayer", "Scheduling AI Action: $canonicalAction on rectangle $targetRect (sig: $signature)")
->>>>>>> origin/main
                 
                 CoroutineScope(Dispatchers.Default).launch {
                     delay(calculateHumanDelay(canonicalAction))
                     
                     var iterations = 0
-<<<<<<< HEAD
-=======
                     var successfulClick = false
->>>>>>> origin/main
                     while (isActive && iterations < 5) {
                         val currentRecText = PokerHudSharedState.uiState.value.let { it.advancedRecommendation ?: it.recommendation }?.action?.uppercase() ?: ""
                         val stillMatching = when (canonicalAction) {
@@ -172,10 +156,7 @@ object RobotPlayer {
                         // If recommendation changed, and we STILL see action buttons, it means the turn is active
                         // but the situation/recommendation changed. We must abort the old action.
                         if (!stillMatching && availableActionButtons.isNotEmpty()) {
-<<<<<<< HEAD
-=======
                             pendingActionSignature = "" // Clear pending state so it can retry
->>>>>>> origin/main
                             break
                         }
                         
@@ -193,15 +174,12 @@ object RobotPlayer {
                             continue
                         }
                         
-<<<<<<< HEAD
-=======
                         // We are about to click - record it!
                         lastActedAction = signature
                         lastActedBoardCards = commCardsSize
                         lastActionTime = System.currentTimeMillis()
                         successfulClick = true
                         
->>>>>>> origin/main
                         executeClickOnRect(targetRect)
                         
                         if (canonicalAction == "BET" || canonicalAction == "RAISE") {
@@ -249,14 +227,11 @@ object RobotPlayer {
                         delay(2500)
                         iterations++
                     }
-<<<<<<< HEAD
-=======
                     
                     if (!successfulClick) {
                         // If the loop finished but we never successfully clicked, clear the pending signature to unblock retries
                         pendingActionSignature = ""
                     }
->>>>>>> origin/main
                 }
             }
         }
