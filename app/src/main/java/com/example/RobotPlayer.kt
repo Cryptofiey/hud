@@ -292,9 +292,9 @@ object RobotPlayer {
         for ((key, rect) in availableActionButtons) {
             val upperKey = key.uppercase().replace(" ", "")
             
-            // Check direct matches in both English and Russian
+            // Primary direct matches in both English and Russian
             val match = when (canonicalAction) {
-                "FOLD" -> upperKey.contains("FOLD") || upperKey.contains("ФОЛД") || upperKey.contains("PАС")
+                "FOLD" -> upperKey.contains("FOLD") || upperKey.contains("ФОЛД") || upperKey.contains("PАС") || upperKey.contains("ПАС")
                 "CHECK" -> upperKey.contains("CHECK") || upperKey.contains("ЧЕК")
                 "CALL" -> upperKey.contains("CALL") || upperKey.contains("КОЛЛ")
                 "BET", "RAISE" -> upperKey.contains("BET") || upperKey.contains("БЕТ") || 
@@ -305,14 +305,29 @@ object RobotPlayer {
                 else -> false
             }
             if (match) return rect
-
-            // Synonyms
-            if (canonicalAction == "FOLD" && (upperKey.contains("CHECK") || upperKey.contains("ЧЕК"))) return rect
-            if ((canonicalAction == "CALL" || canonicalAction == "CHECK") && 
-                (upperKey.contains("CALL") || upperKey.contains("CHECK") || upperKey.contains("КОЛЛ") || upperKey.contains("ЧЕК"))) return rect
-            if ((canonicalAction == "BET" || canonicalAction == "RAISE") && 
-                (upperKey.contains("BET") || upperKey.contains("RAISE") || upperKey.contains("БЕТ") || upperKey.contains("РЕЙЗ"))) return rect
         }
+        
+        // Logical Fallbacks if exact target not found
+        for ((key, rect) in availableActionButtons) {
+            val upperKey = key.uppercase().replace(" ", "")
+            
+            // FOLD FALLBACK: If we want to fold, but there's a free CHECK button, we must click CHECK instead of folding.
+            if (canonicalAction == "FOLD" && (upperKey.contains("CHECK") || upperKey.contains("ЧЕК"))) return rect
+            
+            // CHECK FALLBACK: If we want to check, but there is no CHECK button (meaning someone bet), we MUST FOLD. 
+            // We should NEVER fallback a Check to a Call logic-wise, as that will lose money on weak hands!
+            if (canonicalAction == "CHECK" && (upperKey.contains("FOLD") || upperKey.contains("ФОЛД") || upperKey.contains("ПАС"))) return rect
+            
+            // CALL FALLBACK: If we want to call, but there's only an ALL IN button (because the bet covers our remaining stack)
+            if (canonicalAction == "CALL" && (upperKey.contains("ALL-IN") || upperKey.contains("ALLIN") || upperKey.contains("ОЛЛ"))) return rect
+            
+            // CALL FALLBACK 2: If we want to Call but it's checked to us (no money needed), check instead
+            if (canonicalAction == "CALL" && (upperKey.contains("CHECK") || upperKey.contains("ЧЕК"))) return rect
+            
+            // BET/RAISE FALLBACK: If we want to raise but can't (e.g. we are already all-in, or just CALL is max)
+            if ((canonicalAction == "BET" || canonicalAction == "RAISE") && (upperKey.contains("ALL-IN") || upperKey.contains("ALLIN"))) return rect
+        }
+        
         return null
     }
 

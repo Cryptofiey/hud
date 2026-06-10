@@ -40,8 +40,9 @@ class ScreenScanner(
     private fun isColorfulButton(bitmap: android.graphics.Bitmap, box: android.graphics.Rect): Boolean {
         // Expand the search area significantly vertically to ensure we hit the button background.
         // OCR box is just the text tightly bounded, so we must look above and below it.
-        val xExpand = (box.width() * 0.3f).toInt()
-        val yExpand = (box.height() * 0.8f).toInt()
+        // We expand generously to guarantee we hit the solid button color.
+        val xExpand = (box.width() * 0.5f).toInt()
+        val yExpand = (box.height() * 1.5f).toInt()
         
         val bounds = android.graphics.Rect(
             (box.left - xExpand).coerceAtLeast(0),
@@ -54,8 +55,8 @@ class ScreenScanner(
         var totalSamples = 0
         
         // Sample a grid across the expanded area
-        val xStep = (bounds.width() / 8).coerceAtLeast(1)
-        val yStep = (bounds.height() / 8).coerceAtLeast(1)
+        val xStep = (bounds.width() / 15).coerceAtLeast(1)
+        val yStep = (bounds.height() / 15).coerceAtLeast(1)
         
         for (x in bounds.left..bounds.right step xStep) {
             for (y in bounds.top..bounds.bottom step yStep) {
@@ -67,18 +68,18 @@ class ScreenScanner(
                 val value = hsv[2]
                 
                 // Solid bright color (e.g. green, orange, red) vs dark grey/white
-                // Exclude Purple/Blue table felt hues (approx 230 to 330)
-                val isPurpleFelt = hue in 230f..330f
-                if (saturation > 0.1f && value > 0.1f && !isPurpleFelt) {
+                // Exclude Purple/Blue table felt hues (approx 190 to 330)
+                val isPurpleFelt = hue in 190f..330f
+                if (saturation > 0.15f && value > 0.15f && !isPurpleFelt) {
                     brightPixelsCount++
                 }
                 totalSamples++
             }
         }
         
-        // If at least ONE sampled pixel is colorful, it's a bright button!
+        // If at least a few sampled pixels are colorful, it's a bright button!
         // Pre-action buttons have only white text and purple table background, so they will have 0.
-        return brightPixelsCount > 0
+        return brightPixelsCount >= 2
     }
 
     companion object {
