@@ -69,15 +69,16 @@ class ScreenScanner(
                 // Solid bright color (e.g. green, orange, red) vs dark grey/white
                 // Exclude Purple/Blue table felt hues (approx 230 to 330)
                 val isPurpleFelt = hue in 230f..330f
-                if (saturation > 0.25f && value > 0.25f && !isPurpleFelt) {
+                if (saturation > 0.1f && value > 0.1f && !isPurpleFelt) {
                     brightPixelsCount++
                 }
                 totalSamples++
             }
         }
         
-        // If at least 5% of sampled pixels are colorful, it's a bright button
-        return (brightPixelsCount.toFloat() / totalSamples) > 0.05f
+        // If at least ONE sampled pixel is colorful, it's a bright button!
+        // Pre-action buttons have only white text and purple table background, so they will have 0.
+        return brightPixelsCount > 0
     }
 
     companion object {
@@ -374,6 +375,7 @@ class ScreenScanner(
             val holeElements = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
             val actionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
             val transitionButtonsMap = mutableMapOf<String, android.graphics.Rect>()
+            val sizingButtonsMap = mutableMapOf<String, android.graphics.Rect>()
 
             // We look for action buttons in the bottom 25% of the screen (to exclude opponent status tags near the hero)
             val bottomZoneTop = cleanBitmap!!.height * 0.75
@@ -587,6 +589,13 @@ class ScreenScanner(
                                 if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
                                 
                                 val isBright = isColorfulButton(cleanBitmap!!, box)
+                                android.util.Log.d("BotActionDetect", "Bottom element: $originalTextUpper | isBright=$isBright")
+
+                                val isSizing = textUpper.contains("MAX") || textUpper.contains("МАКС") || textUpper.contains("POT") || textUpper.contains("ПОТ") || textUpper.contains("ALL") || textUpper.contains("1/2") || textUpper.contains("3/4") || textUpper == "+" || textUpper == "-"
+                                if (isSizing) {
+                                    sizingButtonsMap[originalTextUpper] = box
+                                }
+
                                 val isPrimary = textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || 
                                                textUpper.contains("PАС") || textUpper.contains("CHECK") || 
                                                textUpper.contains("CALL") || textUpper.contains("КОЛЛ") || 
@@ -1132,16 +1141,19 @@ class ScreenScanner(
             } else if (currentContext == AppScreenState.COINPOKER_UNKNOWN) {
                 RobotPlayer.availableActionButtons = emptyMap()
                 RobotPlayer.lobbyTransitionButtons = emptyMap()
+                RobotPlayer.sizingButtonsMap = emptyMap()
                 scanStatus.value = "Агент-Сторож: Мы в CoinPoker, но неизвестная страница. Ждем..."
                 heroActionOptions.clear()
             } else if (currentContext == AppScreenState.COINPOKER_PROFILE) {
                 RobotPlayer.availableActionButtons = emptyMap()
                 RobotPlayer.lobbyTransitionButtons = emptyMap()
+                RobotPlayer.sizingButtonsMap = emptyMap()
                 scanStatus.value = "Агент-Сторож: Открыт профиль игрока. Автокликер приостановлен."
                 heroActionOptions.clear()
             } else {
                 RobotPlayer.availableActionButtons = actionButtonsMap
                 RobotPlayer.lobbyTransitionButtons = transitionButtonsMap
+                RobotPlayer.sizingButtonsMap = sizingButtonsMap
             }
 
             PokerHudSharedState.externalActions.tryEmit(

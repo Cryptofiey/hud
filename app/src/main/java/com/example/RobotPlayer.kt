@@ -14,6 +14,7 @@ object RobotPlayer {
     // Map of Action Name (e.g. "FOLD", "CALL", "CHECK", "BET", "RAISE") to its screen Rect
     var availableActionButtons = emptyMap<String, Rect>()
     var lobbyTransitionButtons = emptyMap<String, Rect>()
+    var sizingButtonsMap = emptyMap<String, Rect>()
     var autoPlayDelayMs = 1500L
     
     // Keep track of last action to avoid spamming the same action multiple times per turn
@@ -189,8 +190,10 @@ object RobotPlayer {
                             // Active polling loop for sizing options or confirm button
                             for (i in 0 until 15) {
                                 delay(200) // Poll every 200ms
-                                val currentKeys = availableActionButtons.keys
-                                if (currentKeys.any { it.contains("1/2") || it.contains("POT") || it.contains("ПОТ") || it.contains("CONFIRM") || it.contains("РЕЙЗ") || it.contains("RAISE") || it.contains("MAX") }) {
+                                val currentSizingKeys = sizingButtonsMap.keys
+                                val currentActionKeys = availableActionButtons.keys
+                                if (currentSizingKeys.any { it.contains("1/2") || it.contains("POT") || it.contains("ПОТ") || it.contains("MAX") } || 
+                                    currentActionKeys.any { it.contains("CONFIRM") || it.contains("РЕЙЗ") || it.contains("RAISE") }) {
                                     sizeOptionsAppeared = true
                                     break
                                 }
@@ -203,31 +206,31 @@ object RobotPlayer {
                             // Step 2: Try to find and click the specific size if Advisor gave one
                             var sizeRect: Rect? = null
                             if (targetActionRaw.contains("1/2")) {
-                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("1/2") }?.value
+                                sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.replace(" ", "").contains("1/2") }?.value
                             } else if (targetActionRaw.contains("1/3") || targetActionRaw.contains("30%")) {
-                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("1/3") }?.value
+                                sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.replace(" ", "").contains("1/3") }?.value
                             } else if (targetActionRaw.contains("2/3")) {
-                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("2/3") }?.value
+                                sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.replace(" ", "").contains("2/3") }?.value
                             } else if (targetActionRaw.contains("3/4") || targetActionRaw.contains("75%")) {
-                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("3/4") || it.key.contains("75") }?.value
+                                sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.replace(" ", "").contains("3/4") || it.key.contains("75") }?.value
                             } else if (targetActionRaw.contains("3/5") || targetActionRaw.contains("60%")) {
-                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("3/5") }?.value
+                                sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.replace(" ", "").contains("3/5") }?.value
                             } else if (targetActionRaw.contains("POT") || targetActionRaw.contains("MAX") || targetActionRaw.contains("ALL-IN")) {
-                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("MAX") || it.key.contains("POT") || it.key.contains("МАКС") || it.key.contains("ПОТ") }?.value
+                                sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.contains("MAX") || it.key.contains("POT") || it.key.contains("МАКС") || it.key.contains("ПОТ") }?.value
                             } else if (targetActionRaw.contains("2X")) {
-                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("2X") }?.value
+                                sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.contains("2X") }?.value
                             } else if (targetActionRaw.contains("3X")) {
-                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("3X") }?.value
+                                sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.contains("3X") }?.value
                             } else if (targetActionRaw.contains("5X") || targetActionRaw.contains("4X")) {
-                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("5X") || it.key.contains("4X") }?.value
+                                sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.contains("5X") || it.key.contains("4X") }?.value
                             } else if (targetActionRaw.contains("6X")) {
-                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("6X") }?.value
+                                sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.contains("6X") }?.value
                             }
                             
                             // If no specific size requested or matched, fallback to 1/2 POT or 3/5 POT to prevent empty bet errors
                             if (sizeRect == null) {
-                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("1/2") }?.value
-                                    ?: availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("3/5") }?.value
+                                sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.replace(" ", "").contains("1/2") }?.value
+                                    ?: sizingButtonsMap.entries.firstOrNull { it.key.replace(" ", "").contains("3/5") }?.value
                             }
                             
                             if (sizeRect != null) {
