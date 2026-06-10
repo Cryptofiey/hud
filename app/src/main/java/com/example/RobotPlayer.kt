@@ -358,7 +358,7 @@ object RobotPlayer {
         val y = rawY.coerceIn(minOf(safeMinY, safeMaxY), maxOf(safeMinY, safeMaxY))
 
         // Longer tap (120ms to 240ms) with slight randomness to pass touchslop and emulate human pressure time
-        val clickDuration = Random.nextLong(120, 240) 
+        val clickDuration = kotlin.random.Random.nextLong(120, 240) 
         
         BotLogSharedState.appendLogBot("[BOT][L5] DispatchClick: action x=${x.toInt()}, y=${y.toInt()}, w=${rect.width()}, h=${rect.height()}")
         autoPlayer.dispatchClick(x, y, clickDuration)

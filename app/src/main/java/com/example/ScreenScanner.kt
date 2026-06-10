@@ -38,11 +38,10 @@ class ScreenScanner(
     private var imageReader: ImageReader? = null
     private var virtualDisplay: android.hardware.display.VirtualDisplay? = null
     private fun isColorfulButton(bitmap: android.graphics.Bitmap, box: android.graphics.Rect): Boolean {
-        // Expand the search area significantly vertically to ensure we hit the button background.
-        // OCR box is just the text tightly bounded, so we must look above and below it.
-        // We expand generously to guarantee we hit the solid button color.
-        val xExpand = (box.width() * 0.5f).toInt()
-        val yExpand = (box.height() * 1.5f).toInt()
+        // Expand the search area slightly to ensure we check the button background
+        // 0.2f horizontal and 0.5f vertical expands enough beyond the white text.
+        val xExpand = (box.width() * 0.2f).toInt()
+        val yExpand = (box.height() * 0.5f).toInt()
         
         val bounds = android.graphics.Rect(
             (box.left - xExpand).coerceAtLeast(0),
@@ -51,35 +50,37 @@ class ScreenScanner(
             (box.bottom + yExpand).coerceAtMost(bitmap.height - 1)
         )
         
-        var brightPixelsCount = 0
+        var brightColorPixels = 0
         var totalSamples = 0
         
-        // Sample a grid across the expanded area
+        // Sample a tighter grid
         val xStep = (bounds.width() / 15).coerceAtLeast(1)
         val yStep = (bounds.height() / 15).coerceAtLeast(1)
         
         for (x in bounds.left..bounds.right step xStep) {
             for (y in bounds.top..bounds.bottom step yStep) {
                 val color = bitmap.getPixel(x, y)
-                val hsv = FloatArray(3)
-                android.graphics.Color.colorToHSV(color, hsv)
-                val hue = hsv[0]
-                val saturation = hsv[1]
-                val value = hsv[2]
+                val r = android.graphics.Color.red(color)
+                val g = android.graphics.Color.green(color)
+                val b = android.graphics.Color.blue(color)
                 
-                // Solid bright color (e.g. green, orange, red) vs dark grey/white
-                // Exclude Purple/Blue table felt hues (approx 190 to 330)
-                val isPurpleFelt = hue in 190f..330f
-                if (saturation > 0.15f && value > 0.15f && !isPurpleFelt) {
-                    brightPixelsCount++
+                val maxC = maxOf(r, g, b)
+                val minC = minOf(r, g, b)
+                val diff = maxC - minC
+                
+                // Action buttons are BRIGHT and HIGHLY SATURATED.
+                // Pre-action buttons are either transparent (background is dark table felt, so maxC is low < 100)
+                // or they are light grey (so diff is very small).
+                // White text has high maxC but very low diff.
+                if (maxC > 120 && diff > 50) {
+                    brightColorPixels++
                 }
                 totalSamples++
             }
         }
         
-        // If at least a few sampled pixels are colorful, it's a bright button!
-        // Pre-action buttons have only white text and purple table background, so they will have 0.
-        return brightPixelsCount >= 2
+        // If we found at least 3 pixels matching the bright saturated profile, it's an action button
+        return brightColorPixels >= 3
     }
 
     companion object {
@@ -454,7 +455,8 @@ class ScreenScanner(
                         val box = element.boundingBox ?: continue
                         
                         // Ignore tiny text for action/transition buttons to prevent clicking on player avatars/names
-                        if (box.height() < cleanBitmap!!.height * 0.015f) continue
+                        // 0.008f is approx 19px on 2400h screen, small enough to catch button text but avoid static noise
+                        if (box.height() < cleanBitmap!!.height * 0.008f) continue
                         
                         var insideHud = false
                         for (hudRect in hudRects) {
