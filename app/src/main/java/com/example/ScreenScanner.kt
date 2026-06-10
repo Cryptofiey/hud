@@ -916,7 +916,8 @@ class ScreenScanner(
             var scannedHeroStack: Float? = null
             var scannedHeroBet: Float? = null
             var heroBoundingBox: android.graphics.Rect? = null
-            val finalOpponents = finalOpponentsRaw.filter { opp ->
+            
+            var validOpponents = finalOpponentsRaw.filter { opp ->
                 val box = opp.boundingBox
                 if (box != null && box.top > cleanBitmap!!.height * 0.70f && box.left > cleanBitmap.width * 0.2f && box.right < cleanBitmap.width * 0.8f) {
                     scannedHeroStack = opp.stackSize
@@ -924,9 +925,15 @@ class ScreenScanner(
                     heroBoundingBox = box
                     false // EXCLUDE from opponents
                 } else {
-                    true // Keep as opponent
+                    opp.nickname != "Unknown" && opp.nickname != "Player"
                 }
             }
+            
+            // Limit to 5 opponents max for 6-max format to prevent breaking position assignments
+            if (validOpponents.size > 5) {
+                validOpponents = validOpponents.sortedByDescending { it.boundingBox?.height() ?: 0 }.take(5)
+            }
+            val finalOpponents = validOpponents
 
             // Build seated players list clockwise starting from Hero
             val seatedPlayers = mutableListOf<OpponentState>()
