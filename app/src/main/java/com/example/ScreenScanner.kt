@@ -65,15 +65,15 @@ class ScreenScanner(
                 // Solid bright color (e.g. green, orange, red) vs dark grey/white
                 // Exclude Purple/Blue table felt hues (approx 240 to 320)
                 val isPurpleFelt = hue in 240f..320f
-                if (saturation > 0.20f && value > 0.25f && !isPurpleFelt) {
+                if (saturation > 0.15f && value > 0.15f && !isPurpleFelt) {
                     brightPixelsCount++
                 }
                 totalSamples++
             }
         }
         
-        // If at least 15% of sampled pixels are colorful, it's a bright button
-        return brightPixelsCount.toFloat() / totalSamples > 0.15f
+        // If at least 10% of sampled pixels are colorful, it's a bright button
+        return brightPixelsCount.toFloat() / totalSamples > 0.10f
     }
 
     companion object {
@@ -581,7 +581,7 @@ class ScreenScanner(
                                 if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
                                 
                                 val isBright = isColorfulButton(cleanBitmap!!, box)
-                                val isLargeButton = box.height() > cleanBitmap!!.height * 0.03f
+                                val isLargeButton = box.height() > cleanBitmap!!.height * 0.015f || box.width() > cleanBitmap!!.width * 0.1f
                                 val isPrimary = textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || 
                                                textUpper.contains("PАС") || textUpper.contains("CHECK") || 
                                                textUpper.contains("CALL") || textUpper.contains("КОЛЛ") || 
@@ -743,7 +743,7 @@ class ScreenScanner(
                     safeText.contains("OF") || safeText.isEmpty()) continue
 
                 // We skip isCardBackground for hole cards because they can be covered by player graphics or shadows.
-                val parsedRanks = findCardsInText(safeText)
+                val parsedRanks = findCardsInText(safeText, isHoleCard = true)
                 for ((idx, rank) in parsedRanks.withIndex()) {
                     // Slicing the bounding box if multiple ranks are merged in a single text block
                     val sliceWidth = box.width() / parsedRanks.size
@@ -785,23 +785,32 @@ class ScreenScanner(
                     }
                 }
                 
-                val finalCards = clusters.map { cluster ->
+                // Compute the total bounding box area for each cluster to distinguish real cards from tiny noise
+                val clustersWithArea = clusters.map { cluster ->
+                    val area = cluster.sumOf { it.second.width() * it.second.height() }
+                    
                     val ranks = cluster.map { it.first.rank }
                     val finalRank = ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     
                     val suits = cluster.map { it.first.suit }
                     val finalSuit = suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
                     
-                    Card(finalRank, finalSuit)
+                    Pair(Card(finalRank, finalSuit), area)
                 }
                 
-                // Deduplicate consecutive identical cards (e.g. if big rank and small rank were detected separately)
-                val deduplicated = finalCards.filterIndexed { index, card -> 
-                    index == 0 || card != finalCards[index - 1] 
+                // Deduplicate consecutive identical cards
+                val deduplicated = clustersWithArea.filterIndexed { index, item -> 
+                    index == 0 || item.first != clustersWithArea[index - 1].first
                 }
                 
-                for (i in 0 until minOf(maxCards, deduplicated.size)) {
-                    resultList[i] = deduplicated[i]
+                // Sort by area descending so real cards beat noise like the timer, then take maxCards
+                val topCards = deduplicated.sortedByDescending { it.second }
+                    .take(maxCards)
+                    .map { it.first }
+                
+                // Sort them back by X coordinate mentally or just leave them unordered
+                for (i in 0 until topCards.size) {
+                    resultList[i] = topCards[i]
                 }
                 
                 return resultList
@@ -1157,7 +1166,7 @@ class ScreenScanner(
 
     // isCardBackground removed because it was aggressively dropping cards with shiny or dark backgrounds
 
-    private fun findCardsInText(text: String): List<Rank> {
+    private fun findCardsInText(text: String, isHoleCard: Boolean = false): List<Rank> {
         val found = mutableListOf<Rank>()
         // Pre-replace common OCR symbol mistakes before stripping
         var preProcessed = text.uppercase(java.util.Locale.US)
@@ -1171,9 +1180,11 @@ class ScreenScanner(
         if (raw.length > 20) return emptyList() // Too long, likely noise
         if (raw.isEmpty()) return emptyList()
         
-        // Block obvious chip stacks or bets
-        val noSymbols = text.uppercase(java.util.Locale.US).replace(Regex("[^A-Z0-9 ]"), "")
-        if (noSymbols.matches(Regex(".*\\d{3,}.*"))) return emptyList() // 100, 500 etc.
+        // Block obvious chip stacks or bets, but ONLY for community cards (hole cards might be '104' without space)
+        if (!isHoleCard) {
+            val noSymbols = text.uppercase(java.util.Locale.US).replace(Regex("[^A-Z0-9 ]"), "")
+            if (noSymbols.matches(Regex(".*\\d{3,}.*"))) return emptyList() // 100, 500 etc.
+        }
 
         var i = 0
         while (i < raw.length) {

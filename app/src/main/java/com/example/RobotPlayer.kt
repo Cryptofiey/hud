@@ -89,6 +89,12 @@ object RobotPlayer {
                 
                 if (advisorText.isEmpty() || advisorText.contains("N/A", ignoreCase=true)) return@collectLatest
                 
+                // CRITICAL SAFETY CHECK: Do not blindly act if hole cards are not detected!
+                // The Advisor outputs a FOLD fallback when cards are missing, but we shouldn't mechanically click it
+                if (uiState.heroCard1 == null || uiState.heroCard2 == null) {
+                    return@collectLatest
+                }
+                
                 // Parse the advice.
                 val targetActionRaw = advisorText
                 
