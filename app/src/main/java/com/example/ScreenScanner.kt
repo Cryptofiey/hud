@@ -582,7 +582,7 @@ class ScreenScanner(
                                 if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
                                 
                                 val isBright = isColorfulButton(cleanBitmap!!, box)
-                                val isLargeButton = box.height() > cleanBitmap!!.height * 0.015f || box.width() > cleanBitmap!!.width * 0.1f
+                                val isLargeButton = box.height() > cleanBitmap!!.height * 0.008f || box.width() > cleanBitmap!!.width * 0.04f
                                 val isPrimary = textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || 
                                                textUpper.contains("PАС") || textUpper.contains("CHECK") || 
                                                textUpper.contains("CALL") || textUpper.contains("КОЛЛ") || 
