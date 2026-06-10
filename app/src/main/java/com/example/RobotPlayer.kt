@@ -29,54 +29,59 @@ object RobotPlayer {
         CoroutineScope(Dispatchers.Default).launch {
             val lastClickedTimeMap = mutableMapOf<String, Long>()
             while (isActive) {
-                delay(800) // check every 800ms
-                if (!isRobotModeEnabled.value) continue
-                if (AutoPlayerService.instance == null) continue
-                
-                // If we have active game table action buttons, we shouldn't click random lobby buttons!
-                if (availableActionButtons.isNotEmpty()) continue
-                
-                val currentLobbyButtons = lobbyTransitionButtons
-                if (currentLobbyButtons.isEmpty()) continue
-                
-                // Priority scan of transition keys
-                val priorityKeys = listOf("OK", "CONFIRM", "BUY_IN", "TAKE_SEAT", "JOIN_BACK", "PLAY", "JOIN", "REGISTER")
-                val now = System.currentTimeMillis()
-                val uiState = PokerHudSharedState.uiState.value
-                val hasTableElements = uiState.heroCard1 != null || uiState.heroCard2 != null || uiState.board.any { it != null } || uiState.opponents.count { it.nickname != "Unknown" && !it.nickname.startsWith("Opponent") } > 0
-                
-                for (key in priorityKeys) {
-                    val rect = currentLobbyButtons[key] ?: continue
+                try {
+                    delay(800) // check every 800ms
+                    if (!isRobotModeEnabled.value) continue
+                    if (AutoPlayerService.instance == null) continue
                     
-                    if (hasTableElements && (key == "REGISTER" || key == "PLAY" || key == "JOIN")) {
-                        continue // Prevent accidentally joining another table while already at a table
+                    // If we have active game table action buttons, we shouldn't click random lobby buttons!
+                    if (availableActionButtons.isNotEmpty()) continue
+                    
+                    val currentLobbyButtons = lobbyTransitionButtons
+                    if (currentLobbyButtons.isEmpty()) continue
+                    
+                    // Priority scan of transition keys
+                    val priorityKeys = listOf("OK", "CONFIRM", "BUY_IN", "TAKE_SEAT", "JOIN_BACK", "PLAY", "JOIN", "REGISTER")
+                    val now = System.currentTimeMillis()
+                    val uiState = PokerHudSharedState.uiState.value
+                    val hasTableElements = uiState.heroCard1 != null || uiState.heroCard2 != null || uiState.board.any { it != null } || uiState.opponents.count { it.nickname != "Unknown" && !it.nickname.startsWith("Opponent") } > 0
+                    
+                    for (key in priorityKeys) {
+                        val rect = currentLobbyButtons[key] ?: continue
+                        
+                        if (hasTableElements && (key == "REGISTER" || key == "PLAY" || key == "JOIN")) {
+                            continue // Prevent accidentally joining another table while already at a table
+                        }
+                        
+                        // Throttling: avoid clicking the exact same transition state faster than once per 5 seconds
+                        val lastClicked = lastClickedTimeMap[key] ?: 0L
+                        if (now - lastClicked < 5000L) {
+                            continue // wait for screen transition or server processing
+                        }
+                        
+                        Log.d("RobotPlayer", "[LOBBY] Found transition button: $key inside $rect. Executing transition click.")
+                        BotLogSharedState.appendLogBot("[BOT][L5] Transition/Lobby action: click on '$key' to navigate to game table")
+                        
+                        // Human delay before transition action
+                        delay(Random.nextLong(200, 700))
+                        executeClickOnRect(rect)
+                        
+                        lastClickedTimeMap[key] = System.currentTimeMillis()
+                        break // perform only 1 action per tick to avoid fast multi-click errors
                     }
-                    
-                    // Throttling: avoid clicking the exact same transition state faster than once per 5 seconds
-                    val lastClicked = lastClickedTimeMap[key] ?: 0L
-                    if (now - lastClicked < 5000L) {
-                        continue // wait for screen transition or server processing
-                    }
-                    
-                    Log.d("RobotPlayer", "[LOBBY] Found transition button: $key inside $rect. Executing transition click.")
-                    BotLogSharedState.appendLogBot("[BOT][L5] Transition/Lobby action: click on '$key' to navigate to game table")
-                    
-                    // Human delay before transition action
-                    delay(Random.nextLong(200, 700))
-                    executeClickOnRect(rect)
-                    
-                    lastClickedTimeMap[key] = System.currentTimeMillis()
-                    break // perform only 1 action per tick to avoid fast multi-click errors
+                } catch (e: Exception) {
+                    Log.e("RobotPlayer", "Error in lobby transition loop", e)
                 }
             }
         }
 
         CoroutineScope(Dispatchers.Default).launch {
             PokerHudSharedState.uiState.collectLatest { uiState ->
-                if (!isRobotModeEnabled.value) return@collectLatest
-                if (AutoPlayerService.instance == null) {
-                    return@collectLatest
-                }
+                try {
+                    if (!isRobotModeEnabled.value) return@collectLatest
+                    if (AutoPlayerService.instance == null) {
+                        return@collectLatest
+                    }
                 
                 // If there are no action buttons detected, it's not our turn
                 if (availableActionButtons.isEmpty()) {
@@ -272,6 +277,9 @@ object RobotPlayer {
                         // If the loop finished but we never successfully clicked, clear the pending signature to unblock retries
                         pendingActionSignature = ""
                     }
+                }
+                } catch (e: Exception) {
+                    Log.e("RobotPlayer", "Error processing UI State in bot logic", e)
                 }
             }
         }

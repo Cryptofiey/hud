@@ -991,10 +991,15 @@ class ScreenScanner(
             
             // Fallback rules if dealer button is temporarily blocked or hidden
             if (dealerPlayer == null) {
+                // Try to find who was dealer last frame
                 val prevDealerOpp = currentState.opponents.firstOrNull { it.isDealer }
                 if (prevDealerOpp != null) {
-                    dealerPlayer = seatedPlayers.firstOrNull { it.nickname == prevDealerOpp.nickname }
+                    // Even if they are temporarily missing from seatedPlayers due to OCR flicker, 
+                    // we remember they were the dealer.
+                    dealerPlayer = seatedPlayers.firstOrNull { it.nickname == prevDealerOpp.nickname } 
+                        ?: prevDealerOpp // Use the old opponent state as the dealer
                 } else if (currentState.position == TablePosition.BTN) {
+                    // Only assume hero is dealer if hero was genuinely the dealer
                     dealerPlayer = heroState
                 }
             }
@@ -1018,10 +1023,25 @@ class ScreenScanner(
             }.map { it.first }
             
             var btnIdx = orderedSeated.indexOfFirst { it.nickname == dealerPlayer?.nickname }
-            if (btnIdx == -1) btnIdx = 0
             
-            val mappedPositions = assignPositions(orderedSeated, btnIdx)
-            val heroPos = mappedPositions[heroNick] ?: TablePosition.BTN
+            val mappedPositions = if (btnIdx != -1) {
+                assignPositions(orderedSeated, btnIdx)
+            } else {
+                // If the dealer is missing entirely from the list (e.g. left table and no D visible),
+                // fallback to the previous frame's exact positions to prevent random shuffles.
+                val prevMap = mutableMapOf<String, TablePosition>()
+                prevMap[heroNick] = currentState.position
+                for (op in currentState.opponents) {
+                    try {
+                        prevMap[op.nickname] = TablePosition.valueOf(op.positionName)
+                    } catch (e: Exception) {
+                        prevMap[op.nickname] = TablePosition.BTN
+                    }
+                }
+                prevMap
+            }
+            
+            val heroPos = mappedPositions[heroNick] ?: currentState.position
             
             val finalOpponentsWithPositions = finalOpponents.map { opp ->
                 val isD = (opp.nickname == dealerPlayer?.nickname)
