@@ -184,26 +184,48 @@ object RobotPlayer {
                         
                         if (canonicalAction == "BET" || canonicalAction == "RAISE") {
                             BotLogSharedState.appendLogBot("[BOT][L5] Waiting for bet slider/options to appear...")
-                            delay(1200) // Wait for UI transition and a new OCR scan tick
+
+                            var sizeOptionsAppeared = false
+                            // Active polling loop for sizing options or confirm button
+                            for (i in 0 until 15) {
+                                delay(200) // Poll every 200ms
+                                val currentKeys = availableActionButtons.keys
+                                if (currentKeys.any { it.contains("1/2") || it.contains("POT") || it.contains("ПОТ") || it.contains("CONFIRM") || it.contains("РЕЙЗ") || it.contains("RAISE") || it.contains("MAX") }) {
+                                    sizeOptionsAppeared = true
+                                    break
+                                }
+                            }
                             
+                            if (!sizeOptionsAppeared) {
+                                BotLogSharedState.appendLogBot("[BOT][L5] Fallback: Bet options not cleanly detected, trying anyway...")
+                            }
+
                             // Step 2: Try to find and click the specific size if Advisor gave one
                             var sizeRect: Rect? = null
                             if (targetActionRaw.contains("1/2")) {
                                 sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("1/2") }?.value
-                            } else if (targetActionRaw.contains("1/3")) {
+                            } else if (targetActionRaw.contains("1/3") || targetActionRaw.contains("30%")) {
                                 sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("1/3") }?.value
                             } else if (targetActionRaw.contains("2/3")) {
                                 sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("2/3") }?.value
                             } else if (targetActionRaw.contains("3/4") || targetActionRaw.contains("75%")) {
                                 sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("3/4") || it.key.contains("75") }?.value
+                            } else if (targetActionRaw.contains("3/5") || targetActionRaw.contains("60%")) {
+                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("3/5") }?.value
                             } else if (targetActionRaw.contains("POT") || targetActionRaw.contains("MAX") || targetActionRaw.contains("ALL-IN")) {
                                 sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("MAX") || it.key.contains("POT") || it.key.contains("МАКС") || it.key.contains("ПОТ") }?.value
+                            }
+                            
+                            // If no specific size requested or matched, fallback to 1/2 POT or 3/5 POT to prevent empty bet errors
+                            if (sizeRect == null) {
+                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("1/2") }?.value
+                                    ?: availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("3/5") }?.value
                             }
                             
                             if (sizeRect != null) {
                                 BotLogSharedState.appendLogBot("[BOT][L5] Selecting bet size option")
                                 executeClickOnRect(sizeRect)
-                                delay(600) // Wait for amount to register
+                                delay(600) // Wait for amount to register visually
                             }
                             
                             // Step 3: Confirm the bet
@@ -216,7 +238,14 @@ object RobotPlayer {
                             executeClickOnRect(confirmRect)
                         } else if (canonicalAction == "ALL-IN") {
                             BotLogSharedState.appendLogBot("[BOT][L5] Waiting for all-in confirmation...")
-                            delay(1200)
+                            
+                            for (i in 0 until 15) {
+                                delay(200)
+                                if (availableActionButtons.keys.any { it.contains("CONFIRM") || it.contains("ALL-IN") || it.contains("ОЛЛ") || it.contains("ВЫСТАВИТЬ") }) {
+                                    break
+                                }
+                            }
+                            
                             val confirmRect = availableActionButtons.entries.firstOrNull { 
                                 val key = it.key.uppercase()
                                 key.contains("CONFIRM") || key.contains("ПОДТВЕРДИТЬ") || key.contains("ALL-IN") || key.contains("ОЛЛ") || key.contains("ALL") || key.contains("ВЫСТАВИТЬ")
