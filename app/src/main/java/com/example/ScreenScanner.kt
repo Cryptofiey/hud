@@ -552,7 +552,7 @@ class ScreenScanner(
                         }
                         
                         if (isTransitionButton) {
-                            transitionButtonsMap[transitionKey] = box
+                            transitionButtonsMap[transitionKey] = line.boundingBox ?: box
                         }
                         
                         val cx = box.centerX()
@@ -593,7 +593,7 @@ class ScreenScanner(
 
                                 val isSizing = textUpper.contains("MAX") || textUpper.contains("МАКС") || textUpper.contains("POT") || textUpper.contains("ПОТ") || textUpper.contains("ALL") || textUpper.contains("1/2") || textUpper.contains("3/4") || textUpper == "+" || textUpper == "-"
                                 if (isSizing) {
-                                    sizingButtonsMap[originalTextUpper] = box
+                                    sizingButtonsMap[originalTextUpper] = line.boundingBox ?: box
                                 }
 
                                 val isPrimary = textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || 
@@ -609,7 +609,7 @@ class ScreenScanner(
                                 if ((textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) && !textUpper.contains("ANY")) {
                                     if (qualifiesAsAction) {
                                         heroActionOptions.add("Fold")
-                                        actionButtonsMap[originalTextUpper] = box
+                                        actionButtonsMap[originalTextUpper] = line.boundingBox ?: box
                                     } else {
                                         hasPreactions = true
                                     }
@@ -617,7 +617,7 @@ class ScreenScanner(
                                 else if ((textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) && !textUpper.contains("FOLD") && !textUpper.contains("ФОЛД")) {
                                     if (qualifiesAsAction) {
                                         heroActionOptions.add("Check")
-                                        actionButtonsMap[originalTextUpper] = box
+                                        actionButtonsMap[originalTextUpper] = line.boundingBox ?: box
                                     } else {
                                         hasPreactions = true
                                     }
@@ -625,7 +625,7 @@ class ScreenScanner(
                                 else if ((textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) && !textUpper.contains("ANY") && !textUpper.contains("ЛЮБ")) {
                                     if (qualifiesAsAction) {
                                         heroActionOptions.add("Call")
-                                        actionButtonsMap[originalTextUpper] = box
+                                        actionButtonsMap[originalTextUpper] = line.boundingBox ?: box
                                     } else {
                                         hasPreactions = true
                                     }
@@ -635,7 +635,7 @@ class ScreenScanner(
                                          textUpper.contains("CONFIRM") || textUpper.contains("ПОДТВЕРДИТЬ")) {
                                     if (qualifiesAsAction) {
                                         heroActionOptions.add("Raise") // Mapping Confirm to Raise internally
-                                        actionButtonsMap[originalTextUpper] = box
+                                        actionButtonsMap[originalTextUpper] = line.boundingBox ?: box
                                     } else {
                                         hasPreactions = true
                                     }
@@ -645,7 +645,7 @@ class ScreenScanner(
                                          textUpper.contains("ОЛЛ") || textUpper.contains("ВЫСТАВИТЬ")) {
                                     if (qualifiesAsAction) {
                                         heroActionOptions.add("All-in")
-                                        actionButtonsMap[originalTextUpper] = box
+                                        actionButtonsMap[originalTextUpper] = line.boundingBox ?: box
                                     }
                                 }
                                 else if (textUpper.contains("STRADDLE") || textUpper.contains("СТРАДДЛ")) {

@@ -156,7 +156,7 @@ object RobotPlayer {
                         }
                         // If recommendation changed, and we STILL see action buttons, it means the turn is active
                         // but the situation/recommendation changed. We must abort the old action.
-                        if (!stillMatching && availableActionButtons.isNotEmpty()) {
+                        if (currentRecText.isNotEmpty() && !stillMatching && availableActionButtons.isNotEmpty()) {
                             pendingActionSignature = "" // Clear pending state so it can retry
                             break
                         }
