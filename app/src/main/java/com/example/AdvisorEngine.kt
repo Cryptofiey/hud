@@ -122,6 +122,32 @@ object AdvisorEngine {
     }
 
     // Helper: Determine Sklansky & Malmuth Hand Group for two cards
+    private fun getPositionalHazard(position: TablePosition, isPreflop: Boolean): Float {
+        return when(position) {
+            TablePosition.UTG -> if (isPreflop) 0.08f else 0.04f
+            TablePosition.MP -> if (isPreflop) 0.05f else 0.03f
+            TablePosition.CO -> if (isPreflop) 0.02f else 0.01f
+            TablePosition.BTN -> 0.0f
+            TablePosition.SB -> if (isPreflop) 0.03f else 0.08f
+            TablePosition.BB -> if (isPreflop) 0.0f else 0.05f
+        }
+    }
+
+    private fun getTargetPotOdds(basePotOdds: Float, betToCall: Float, heroStack: Float, activeOpponentsCount: Int, position: TablePosition, isPreflop: Boolean): Float {
+        val stackRisk = if (heroStack > 0) (betToCall / heroStack).coerceIn(0f, 1f) else 0f
+        // Increase safety margin if we risk a large portion of our stack (up to +15% equity needed)
+        val stackRiskMargin = stackRisk * 0.15f 
+        
+        // Penalize for multiple active opponents (squeeze hazard & multiway dilution)
+        val multiwayHazard = if (activeOpponentsCount > 1) {
+            (activeOpponentsCount - 1) * 0.04f
+        } else 0f
+
+        val positionalHazard = getPositionalHazard(position, isPreflop)
+
+        return basePotOdds + stackRiskMargin + multiwayHazard + positionalHazard
+    }
+
     fun getSklanskyGroup(card1: Card, card2: Card): Int {
         val r1 = maxOf(card1.rank.value, card2.rank.value)
         val r2 = minOf(card1.rank.value, card2.rank.value)
@@ -280,16 +306,16 @@ object AdvisorEngine {
         val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
         val activePot = potSize + totalOpponentBets + heroBet
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
+        val isPreflop = board.filterNotNull().isEmpty()
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop)
 
         // 4. Source 4: Pot Odds & Margin Factor (EV_OddsGap)
         val s4 = if (betToCall > 0f) {
-            val gap = s1 - potOdds
+            val gap = s1 - targetPotOdds
             ((gap + 1f) / 2f).coerceIn(0f, 1f)
         } else {
             (s1 * 1.15f).coerceIn(0f, 1f)
         }
-
-        val isPreflop = board.filterNotNull().isEmpty()
 
         // Pure GTO Math Core - clean of any psychological or position heuristics
         val l1Score = if (isPreflop) {
@@ -313,7 +339,7 @@ object AdvisorEngine {
 
         val action: String
         val explanation: String
-        val profitableCall = s1 > potOdds
+        val profitableCall = s1 > targetPotOdds
 
         fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
         fun fmt(f: Float): String = String.format(Locale.US, "%.1f", f)
@@ -333,7 +359,7 @@ object AdvisorEngine {
                     }
                 } else {
                     action = "CALL"
-                    explanation = "Колл: выгодно по шансам банка, эквити ${pct(s1)}% > шансы ${pct(potOdds)}%"
+                    explanation = "Колл: эквити ${pct(s1)}% > шансы ${pct(targetPotOdds)}% (с учетом маржи)"
                 }
             } else {
                 // Unprofitable call based on raw win percentage. Check if playability score offers GTO defense
@@ -438,16 +464,17 @@ object AdvisorEngine {
         val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
         val activePot = potSize + totalOpponentBets + heroBet
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
+        
+        val isPreflop = board.filterNotNull().isEmpty()
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop)
 
         // Core Source 4: Margin / Potential Odds Gap
         val s4 = if (betToCall > 0f) {
-            val gap = s1 - potOdds
+            val gap = s1 - targetPotOdds
             ((gap + 1f) / 2f).coerceIn(0f, 1f)
         } else {
             (s1 * 1.15f).coerceIn(0f, 1f)
         }
-
-        val isPreflop = board.filterNotNull().isEmpty()
 
         // Clean L1 GTO base score (the foundation we build on top of)
         val baseL1Score = if (isPreflop) {
@@ -591,7 +618,7 @@ object AdvisorEngine {
         // Apply overlays to the pure Monte Carlo win rate to get a calibrated true equity estimate
         val adjustedS1 = (s1 + l2Overlays).coerceIn(0.0f, 1.0f)
 
-        val profitableCall = adjustedS1 > potOdds
+        val profitableCall = adjustedS1 > targetPotOdds
 
         val action: String
         val explanation: String
@@ -625,16 +652,16 @@ object AdvisorEngine {
                     }
                 } else {
                     action = "CALL"
-                    explanation = "L2 Колл (по шансам банка): сила ${pct(l2Score)}% > шансы ${pct(potOdds)}%"
+                    explanation = "L2 Колл: сила ${pct(l2Score)}% > шансы ${pct(targetPotOdds)}% (с учетом маржи)"
                 }
             } else {
                 // Negative expected call (L2 score <= pot odds)
-                if (l2Score > 0.48f && (isPreflop && sklanskyGroup <= 4)) {
+                if (l2Score > targetPotOdds + 0.05f && (isPreflop && sklanskyGroup <= 4)) {
                     action = "CALL"
                     explanation = "L2 Колл (оборона): сильная позиционная дожидаемость"
                 } else {
                     action = "FOLD"
-                    explanation = "L2 Фолд: математически невыгодно, сила ${pct(l2Score)}% < шансы ${pct(potOdds)}%"
+                    explanation = "L2 Фолд: невыгодно, сила ${pct(l2Score)}% < шансы ${pct(targetPotOdds)}%"
                 }
             }
         } else {
@@ -721,17 +748,19 @@ object AdvisorEngine {
         val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
         val activePot = potSize + totalOpponentBets + heroBet
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
+        
+        val isPreflop = board.filterNotNull().isEmpty()
+        val isPostflop = !isPreflop
+        val activeOpponentsCount = opponents.count { it.isActive }
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop)
 
         // Core Source 4: Margin / Potential Odds Gap
         val s4 = if (betToCall > 0f) {
-            val gap = s1 - potOdds
+            val gap = s1 - targetPotOdds
             ((gap + 1f) / 2f).coerceIn(0f, 1f)
         } else {
             (s1 * 1.15f).coerceIn(0f, 1f)
         }
-
-        val isPreflop = board.filterNotNull().isEmpty()
-        val isPostflop = !isPreflop
 
         val baseL1Score = if (isPreflop) {
             (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
@@ -861,8 +890,7 @@ object AdvisorEngine {
         val action: String
         val branchSummary: String
 
-        val isMultiway = opponents.count { it.isActive } >= 2
-        val activeOpponentsCount = opponents.count { it.isActive }
+        val isMultiway = activeOpponentsCount >= 2
         val fairShare = if (activeOpponentsCount > 0) 1.0f / (activeOpponentsCount + 1.0f) else 0.5f
 
         val betThreshold = if (isPreflop) {
@@ -882,7 +910,7 @@ object AdvisorEngine {
             l3Score = evL3_5
             val adjustedS1 = (s1 + (l3Score - baseL1Score)).coerceIn(0f, 1f)
             action = if (betToCall > 0) {
-                if (l3Score > raiseThreshold) "RAISE" else if (adjustedS1 > potOdds || (isPreflop && sklanskyGroup <= 4)) "CALL" else "FOLD"
+                if (l3Score > raiseThreshold) "RAISE" else if (adjustedS1 > targetPotOdds || (isPreflop && sklanskyGroup <= 4)) "CALL" else "FOLD"
             } else "BET"
             branchSummary = "Максимизация фолд-эквити блефом"
         } else if (evL3_0 > evL2_5) {
@@ -890,10 +918,10 @@ object AdvisorEngine {
             l3Score = evL3_0
             val adjustedS1 = (s1 + (l3Score - baseL1Score)).coerceIn(0f, 1f)
             if (betToCall > 0) {
-                if (adjustedS1 > potOdds) {
+                if (adjustedS1 > targetPotOdds) {
                     action = if (l3Score > raiseThreshold || (isPreflop && sklanskyGroup <= 2)) "RAISE" else "CALL"
                 } else {
-                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > 0.45f) "CALL" else "FOLD"
+                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > targetPotOdds + 0.05f) "CALL" else "FOLD"
                 }
             } else {
                 action = if (l3Score > betThreshold) "BET" else "CHECK"
@@ -904,10 +932,10 @@ object AdvisorEngine {
             l3Score = evL2_5
             val adjustedS1 = (s1 + (l3Score - baseL1Score)).coerceIn(0f, 1f)
             if (betToCall > 0) {
-                if (adjustedS1 > potOdds) {
+                if (adjustedS1 > targetPotOdds) {
                     action = "CALL"
                 } else {
-                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > 0.48f) "CALL" else "FOLD"
+                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > targetPotOdds + 0.05f) "CALL" else "FOLD"
                 }
             } else {
                 action = "CHECK"
