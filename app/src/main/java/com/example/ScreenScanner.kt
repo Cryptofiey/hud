@@ -404,6 +404,7 @@ class ScreenScanner(
             
             val heroActionOptions = mutableSetOf<String>()
             var hasPreactions = false
+            var hasBrightActionButton = false
 
             for (block in result.textBlocks) {
                 for (line in block.lines) {
@@ -582,6 +583,7 @@ class ScreenScanner(
                                 if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
                                 
                                 val isBright = isColorfulButton(cleanBitmap!!, box)
+                                if (isBright) hasBrightActionButton = true
                                 val isLargeButton = box.height() > cleanBitmap!!.height * 0.008f || box.width() > cleanBitmap!!.width * 0.04f
                                 val isPrimary = textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || 
                                                textUpper.contains("PАС") || textUpper.contains("CHECK") || 
@@ -652,7 +654,12 @@ class ScreenScanner(
                 }
             }
             
-            if (hasPreactions && actionButtonsMap.isEmpty()) {
+            if (!hasBrightActionButton) {
+                // If there are no brightly colored buttons anywhere in the action zone, it's NOT our turn.
+                // Pre-actions are all grey/dark. 
+                actionButtonsMap.clear()
+                heroActionOptions.clear()
+            } else if (hasPreactions && actionButtonsMap.isEmpty()) {
                 heroActionOptions.clear()
             } else if (actionButtonsMap.isNotEmpty()) {
                 // If we detected at least one colorful action button, ensure we ignore any false-positive preactions.
