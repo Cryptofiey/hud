@@ -1357,21 +1357,29 @@ class ScreenScanner(
     }
 
     private fun hasDealerButton(bitmap: Bitmap, box: android.graphics.Rect, textBlocks: List<com.google.mlkit.vision.text.Text.TextBlock>): Boolean {
+        // Expand the search box slightly to catch the dealer button which sits outside the main profile box
+        val searchRegion = android.graphics.Rect(
+            box.left - (bitmap.width * 0.08f).toInt(),
+            box.top - (bitmap.height * 0.08f).toInt(),
+            box.right + (bitmap.width * 0.08f).toInt(),
+            box.bottom + (bitmap.height * 0.08f).toInt()
+        )
+        
         for (block in textBlocks) {
             for (line in block.lines) {
                 val txt = line.text.trim().uppercase()
                 val lineBox = line.boundingBox ?: continue
                 if ((txt == "D" || txt == "DEALER" || txt == "BTN") && 
-                    android.graphics.Rect.intersects(box, lineBox)) {
+                    android.graphics.Rect.intersects(searchRegion, lineBox)) {
                     return true
                 }
             }
         }
         
-        val searchLeft = maxOf(0, box.left - 45)
-        val searchTop = maxOf(0, box.top - 45)
-        val searchRight = minOf(bitmap.width - 1, box.right + 45)
-        val searchBottom = minOf(bitmap.height - 1, box.bottom + 45)
+        val searchLeft = maxOf(0, searchRegion.left)
+        val searchTop = maxOf(0, searchRegion.top)
+        val searchRight = minOf(bitmap.width - 1, searchRegion.right)
+        val searchBottom = minOf(bitmap.height - 1, searchRegion.bottom)
         
         var redPixelsCount = 0
         for (x in searchLeft..searchRight step 2) {
@@ -1397,7 +1405,7 @@ class ScreenScanner(
         if (n == 0) return emptyMap()
         
         val positionsPattern = when (n) {
-            2 -> listOf(TablePosition.SB, TablePosition.BTN)
+            2 -> listOf(TablePosition.BTN, TablePosition.BB) // In Heads-Up, BTN is also SB, but post-flop BTN has positional advantage. For logic purposes, the dealer acts last post-flop. BB acts first.
             3 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB)
             4 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG)
             5 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG, TablePosition.CO)

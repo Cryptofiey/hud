@@ -195,6 +195,7 @@ class PokerHudService : Service() {
     // Automated VPIP/PFR hand tracking state definitions
     private var lastHandKey: String? = null
     private val countedHandPlayers = mutableSetOf<String>()
+    private val foldedPlayersThisHand = mutableSetOf<String>()
     private val countedVpipPlayers = mutableSetOf<String>()
     private val countedPfrPlayers = mutableSetOf<String>()
     private val countedShowdownPlayers = mutableSetOf<String>()
@@ -1217,6 +1218,7 @@ class PokerHudService : Service() {
                     if (heroCardsString != "Empty_Empty" && heroCardsString != lastHandKey) {
                         lastHandKey = heroCardsString
                         countedHandPlayers.clear()
+                        foldedPlayersThisHand.clear()
                         countedVpipPlayers.clear()
                         countedPfrPlayers.clear()
                         countedShowdownPlayers.clear()
@@ -1226,6 +1228,11 @@ class PokerHudService : Service() {
                         for (opponent in action.opponents) {
                             val name = opponent.nickname
                             if (name.isNotEmpty() && name != "Unknown") {
+                                // Track folds globally for this hand
+                                if (!opponent.isActive && (opponent.currentAction == "FOLD" || opponent.currentAction == "SIT_OUT")) {
+                                    foldedPlayersThisHand.add(name)
+                                }
+                                
                                 if (!countedHandPlayers.contains(name)) {
                                     countedHandPlayers.add(name)
                                     val stats = prefs.loadPlayerStats(name)
@@ -1291,7 +1298,9 @@ class PokerHudService : Service() {
                             // Actually loadPlayerStats uses SharedPreferences which is mostly cached in memory by Android anyway,
                             // but we still want to avoid unnecessary copies.
                             val dbStats = prefs.loadPlayerStats(opp.nickname)
-                            if (opp.stats == dbStats) opp else opp.copy(stats = dbStats)
+                            val isStillFolded = foldedPlayersThisHand.contains(opp.nickname)
+                            val updatedOpp = if (isStillFolded) opp.copy(isActive = false, currentAction = "FOLD") else opp
+                            if (updatedOpp.stats == dbStats) updatedOpp else updatedOpp.copy(stats = dbStats)
                         }
                     }
 

@@ -164,6 +164,7 @@ object OpponentScanner {
                     else if (txt.contains("RAISE") || txt.contains("РЕЙЗ")) detectedAction = PlayerAction.RAISE
                     else if (txt.contains("CHECK") || txt.contains("ЧЕК")) detectedAction = PlayerAction.CHECK
                     else if (txt.contains("ALL-IN") || txt.contains("ALL IN") || txt.contains("ОЛЛ-ИН") || txt.contains("ОЛЛ ИН")) detectedAction = PlayerAction.ALL_IN
+                    else if (txt.contains("SIT OUT") || txt.contains("SITTING OUT") || txt.contains("ОТСУТСТВУЕТ") || txt.contains("ВНЕ ИГРЫ") || txt.contains("AWAY")) detectedAction = PlayerAction.SIT_OUT
                     
                     if (detectedAction != PlayerAction.NONE) break
                 }
