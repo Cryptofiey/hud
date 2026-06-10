@@ -214,6 +214,14 @@ object RobotPlayer {
                                 sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("3/5") }?.value
                             } else if (targetActionRaw.contains("POT") || targetActionRaw.contains("MAX") || targetActionRaw.contains("ALL-IN")) {
                                 sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("MAX") || it.key.contains("POT") || it.key.contains("МАКС") || it.key.contains("ПОТ") }?.value
+                            } else if (targetActionRaw.contains("2X")) {
+                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("2X") }?.value
+                            } else if (targetActionRaw.contains("3X")) {
+                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("3X") }?.value
+                            } else if (targetActionRaw.contains("5X") || targetActionRaw.contains("4X")) {
+                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("5X") || it.key.contains("4X") }?.value
+                            } else if (targetActionRaw.contains("6X")) {
+                                sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("6X") }?.value
                             }
                             
                             // If no specific size requested or matched, fallback to 1/2 POT or 3/5 POT to prevent empty bet errors
