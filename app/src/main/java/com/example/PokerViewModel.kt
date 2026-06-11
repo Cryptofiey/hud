@@ -423,7 +423,7 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     heroBet = state.heroBet,
                     opponents = state.opponents,
                     activeOpponentsCount = state.opponents.count { it.isActive },
-                    simResult = advResult,
+                    simResult = result,
                     settings = state.settings,
                     position = state.position,
                     stage = state.stage,
