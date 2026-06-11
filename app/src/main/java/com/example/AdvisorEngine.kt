@@ -133,7 +133,7 @@ object AdvisorEngine {
         }
     }
 
-    private fun getTargetPotOdds(basePotOdds: Float, betToCall: Float, heroStack: Float, activeOpponentsCount: Int, position: TablePosition, isPreflop: Boolean, stage: TournamentStage, sklanskyGroup: Int): Float {
+    private fun getTargetPotOdds(basePotOdds: Float, betToCall: Float, heroStack: Float, activeOpponentsCount: Int, position: TablePosition, isPreflop: Boolean, stage: TournamentStage, sklanskyGroup: Int, bigBlind: Float = 0f): Float {
         val stackRisk = if (heroStack > 0) (betToCall / heroStack).coerceIn(0f, 1f) else 0f
         // Increase safety margin if we risk a large portion of our stack (up to +15% equity needed)
         val stackRiskMargin = stackRisk * 0.15f 
@@ -146,7 +146,7 @@ object AdvisorEngine {
         val positionalHazard = getPositionalHazard(position, isPreflop)
         
         // Stage & Bubble Hazard (Tighter ranges as game progresses)
-        val stageHazard = if (isPreflop) {
+        var stageHazard = if (isPreflop) {
             when (stage) {
                 TournamentStage.EARLY -> {
                     // Early game: we want to play speculative hands cheaply to felt fish.
@@ -175,6 +175,14 @@ object AdvisorEngine {
                 TournamentStage.MIDDLE -> 0.02f
                 TournamentStage.LATE -> 0.06f 
             }
+        }
+
+        // --- CHEAP FLOP FIX ---
+        // If it's preflop and we can see the flop for 1-2 big blinds (like a limp or min-raise), 
+        // we shouldn't heavily penalize medium hands.
+        if (isPreflop && betToCall > 0f && bigBlind > 0f && betToCall <= bigBlind * 2.1f) {
+            stageHazard = 0.0f // Remove late stage penalty for super cheap calls
+            stageHazard -= 0.03f // Small bonus to encourage seeing cheap flops with marginal hands
         }
 
         return basePotOdds + stackRiskMargin + multiwayHazard + positionalHazard + stageHazard
@@ -339,7 +347,7 @@ object AdvisorEngine {
         val activePot = potSize + totalOpponentBets + heroBet
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
         val isPreflop = board.filterNotNull().isEmpty()
-        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup)
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup, bigBlind)
 
         // 4. Source 4: Pot Odds & Margin Factor (EV_OddsGap)
         val s4 = if (betToCall > 0f) {
@@ -498,7 +506,7 @@ object AdvisorEngine {
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
         
         val isPreflop = board.filterNotNull().isEmpty()
-        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup)
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup, bigBlind)
 
         // Core Source 4: Margin / Potential Odds Gap
         val s4 = if (betToCall > 0f) {
@@ -803,7 +811,7 @@ object AdvisorEngine {
         val isPreflop = board.filterNotNull().isEmpty()
         val isPostflop = !isPreflop
         val activeOpponentsCount = opponents.count { it.isActive }
-        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup)
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup, bigBlind)
 
         // Core Source 4: Margin / Potential Odds Gap
         val s4 = if (betToCall > 0f) {
@@ -1003,7 +1011,7 @@ object AdvisorEngine {
 
         // Специфический пуш-фолд эксплойт на коротких стеках
         if (mRatio < 12f && isPreflop) {
-            if (sklanskyGroup <= 3 || finalScore > 0.58f) {
+            if (sklanskyGroup <= 3 || (finalScore > 0.58f && sklanskyGroup <= 5)) {
                 finalAction = "ALL-IN"
                 explanation = "ОЛЛ-ИН по короткому стеку префлоп [M=${String.format(Locale.US, "%.1f", mRatio)}]"
             } else if (finalAction == "CALL") {
@@ -1159,6 +1167,16 @@ object AdvisorEngine {
             }
         } else {
             customExplanation = "DNA: Ожидание профиля (Баланс)"
+        }
+
+        // Global safeguard: never fold if checking is free/possible
+        val betToCall = maxOf(0f, heroBet.let { hb -> 
+            opponents.filter { it.isActive }.maxOfOrNull { opp -> if (settings.usePip) opp.betSize else 0f }?.minus(hb) ?: 0f 
+        })
+        if (betToCall <= 0f && action == "FOLD") {
+            action = "CHECK"
+            customExplanation = "Чек: бесплатно (исправление случайного фолда)"
+            confidence = 100f
         }
 
         return Recommendation(action, confidence, customExplanation)
