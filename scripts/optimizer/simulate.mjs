@@ -65,8 +65,12 @@ export async function runSimulation(iterations, params, opponentsConfig) {
     return rawProfit;
 }
 
+import { fileURLToPath } from 'url';
+import path from 'path';
+
 // Позволяет запускать файл напрямую из терминала
-if (process.argv[1].includes('simulate.mjs')) {
+const __filename = fileURLToPath(import.meta.url);
+if (process.argv.length >= 3 && process.argv[2].includes('simulate.mjs') || process.argv[1].includes('simulate.mjs')) {
     const args = process.argv.slice(2);
     let iterations = parseInt(args.find(a => a.startsWith('--hands='))?.split('=')[1] || '1000');
     
