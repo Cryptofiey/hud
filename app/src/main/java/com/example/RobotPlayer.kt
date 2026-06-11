@@ -358,8 +358,11 @@ object RobotPlayer {
             // CALL FALLBACK 2: If we want to Call but it's checked to us (no money needed), check instead
             if (canonicalAction == "CALL" && (upperKey.contains("CHECK") || upperKey.contains("ЧЕК"))) return rect
             
-            // BET/RAISE FALLBACK: If we want to raise but can't (e.g. we are already all-in, or just CALL is max)
-            if ((canonicalAction == "BET" || canonicalAction == "RAISE") && (upperKey.contains("ALL-IN") || upperKey.contains("ALLIN"))) return rect
+            // BET/RAISE/ALL-IN FALLBACK: If we want to raise/all-in but can't (we face an all-in, or just CALL is max)
+            if ((canonicalAction == "BET" || canonicalAction == "RAISE" || canonicalAction == "ALL-IN") && (upperKey.contains("ALL-IN") || upperKey.contains("ALLIN"))) return rect
+            
+            // ALL-IN FALLBACK: If we want to shove, but there's no raise/bet/all-in buttons (only Call), click Call
+            if (canonicalAction == "ALL-IN" && (upperKey.contains("CALL") || upperKey.contains("КОЛЛ"))) return rect
         }
         
         // POSITIONAL RAW FALLBACK: If OCR completely failed to extract text like "BET" or "RAISE"
