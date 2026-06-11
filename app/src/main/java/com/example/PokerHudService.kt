@@ -855,14 +855,14 @@ class PokerHudService : Service() {
             return btn
         }
 
-        val btnProfile = TextView(this).apply {
-            text = "👤"
+        val btnScan = TextView(this).apply {
+            text = "🔍"
             textSize = 11f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(dpToPx(26f), dpToPx(26f)).apply {
                 setMargins(0, dpToPx(3f), 0, dpToPx(3f))
             }
-            background = createDynamicGlow(true, "#FFD500F9")
+            background = createDynamicGlow(true, "#FF9B59B6")
             setOnClickListener {
                 if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
                     val originalVisibility = floatingOverlayView?.visibility ?: View.VISIBLE
@@ -896,13 +896,13 @@ class PokerHudService : Service() {
         val btnBoard = createControllerEmojiButton("📋", PokerHudSharedState.showCommBox, "#FF2ECC71")
         val btnCards = createControllerEmojiButton("🎴", PokerHudSharedState.showHoleBox, "#FFF39C12")
         val btnProbs = createControllerEmojiButton("📊", PokerHudSharedState.showProbsBox, "#FF3498DB")
-        val btnScan = createControllerEmojiButton("🔍", PokerHudSharedState.showScannerBoxes, "#FF9B59B6")
+        val btnRobot = createControllerEmojiButton("🤖", RobotPlayer.isRobotModeEnabled, "#FF00E676")
 
-        emojiContainer.addView(btnProfile)
+        emojiContainer.addView(btnScan)
         emojiContainer.addView(btnBoard)
         emojiContainer.addView(btnCards)
         emojiContainer.addView(btnProbs)
-        emojiContainer.addView(btnScan)
+        emojiContainer.addView(btnRobot)
         
         expanded.addView(emojiContainer)
 
@@ -958,7 +958,7 @@ class PokerHudService : Service() {
                 miniHandleView.visibility = View.GONE
             } else if (isVertical) {
                 params.width = dpToPx(55f)
-                params.height = dpToPx(240f) // Tall vertical shape
+                params.height = WindowManager.LayoutParams.WRAP_CONTENT
                 if (params.x < 0) {
                     params.x = dpToPx(10f)
                 }
@@ -966,7 +966,7 @@ class PokerHudService : Service() {
                 // Match expanded layout dimensions to vertical parent size
                 expanded.layoutParams = (expanded.layoutParams as FrameLayout.LayoutParams).apply {
                     width = dpToPx(55f)
-                    height = dpToPx(240f)
+                    height = FrameLayout.LayoutParams.WRAP_CONTENT
                 }
                 
                 parentFrame.background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FFD500F9"))
