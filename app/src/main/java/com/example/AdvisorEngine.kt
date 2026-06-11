@@ -1142,7 +1142,7 @@ object AdvisorEngine {
                         if (action == "RAISE" || action == "BET") {
                             confidence = (confidence + 15f).coerceAtMost(98f)
                             customExplanation = "DNA: Value Push > 🐋"
-                        } else if (action == "CALL" && baseL3.confidence < 60f) {
+                        } else if (action == "CALL" && baseL3.confidence < 40f) {
                             action = "FOLD"
                             confidence = 75f
                             customExplanation = "DNA: Fold marginal > 🐋"
@@ -1164,7 +1164,7 @@ object AdvisorEngine {
                     }
                     "Nit🦎" -> {
                         // Chameleon is tight-passive. Overfold to his bets, steal his blinds.
-                        if (action == "RAISE" && baseL3.confidence < 65f) {
+                        if (action == "CALL" && baseL3.confidence < 55f) {
                             action = "FOLD"
                             confidence = 90f
                             customExplanation = "DNA: Fold > 🦎"
