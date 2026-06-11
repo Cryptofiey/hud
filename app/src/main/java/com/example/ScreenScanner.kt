@@ -1213,8 +1213,7 @@ class ScreenScanner(
                     smallBlind = parsedSB,
                     bigBlind = parsedBB,
                     tournamentStage = parsedStage,
-                    isBbDisplay = (scannedHeroStack != null && scannedHeroStack < 5000f && scannedHeroStack % 1.0f != 0.0f) || 
-                                  Regex("([0-9.,]+)\\s*(BB|ББ)").containsMatchIn(result.text.uppercase())
+                    isBbDisplay = Regex("([0-9.,]+)\\s*(BB|ББ)").containsMatchIn(result.text.uppercase())
                 )
             )
             
