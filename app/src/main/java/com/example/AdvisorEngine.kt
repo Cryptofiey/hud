@@ -443,7 +443,11 @@ object AdvisorEngine {
 
         val confidence = when(action) {
             "RAISE", "ALL-IN", "BET" -> (((l1Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
-            "FOLD" -> (((0.5f - l1Score) / 0.5f) * 100f).coerceIn(10f, 98f)
+            "FOLD" -> {
+                val msg = "🚨 DECISION-LOG [FOLD L1]: EV = ${pct(l1Score)}%, Target PotOdds/Threshold = ${pct(targetPotOdds)}%. (s1=${pct(s1)}%). Reason: L1 threshold missed."
+                BotLogSharedState.appendLogBot(msg)
+                (((0.5f - l1Score) / 0.5f) * 100f).coerceIn(10f, 98f)
+            }
             "CALL" -> ((1.0f - kotlin.math.abs(l1Score - 0.45f) / 0.55f) * 100f).coerceIn(10f, 98f)
             "CHECK" -> ((1.0f - kotlin.math.abs(l1Score - 0.35f) / 0.65f) * 100f).coerceIn(10f, 98f)
             else -> 50f
@@ -745,7 +749,11 @@ object AdvisorEngine {
 
         val confidenceValue = when(action) {
             "RAISE", "ALL-IN", "BET" -> (((l2Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 95f)
-            "FOLD" -> (((0.5f - l2Score) / 0.5f) * 100f).coerceIn(10f, 95f)
+            "FOLD" -> {
+                val msg = "🚨 DECISION-LOG [FOLD L2]: EV = ${pct(l2Score)}%, Target PotOdds/Threshold = ${pct(targetPotOdds)}%. (s1=${pct(s1)}%, baseL1=${pct(baseL1Score)}%). Reason: L2 threshold missed."
+                BotLogSharedState.appendLogBot(msg)
+                (((0.5f - l2Score) / 0.5f) * 100f).coerceIn(10f, 95f)
+            }
             "CALL" -> ((1.0f - kotlin.math.abs(l2Score - 0.45f) / 0.55f) * 100f).coerceIn(10f, 95f)
             "CHECK" -> ((1.0f - kotlin.math.abs(l2Score - 0.35f) / 0.65f) * 100f).coerceIn(10f, 95f)
             else -> 50f
@@ -1017,6 +1025,7 @@ object AdvisorEngine {
             } else if (finalAction == "CALL") {
                 finalAction = "FOLD"
                 explanation = "Пас укороченного стека префлоп"
+                BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD]: Ошибка короткого стека префлоп (M=${mRatio})")
             }
         }
         
@@ -1046,7 +1055,11 @@ object AdvisorEngine {
 
         val confidence = when(finalAction) {
             "RAISE", "ALL-IN", "BET", "BET MAX" -> (((finalScore - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
-            "FOLD" -> (((0.5f - finalScore) / 0.5f) * 100f).coerceIn(10f, 98f)
+                        "FOLD" -> {
+                            val msg = "🚨 DECISION-LOG [FOLD L3]: EV = ${pct(finalScore)}%, Target PotOdds/Threshold = ${pct(targetPotOdds)}%. (s1=${pct(s1)}%, baseL1=${pct(baseL1Score)}%). Reason: L3score ${pct(l3Score)}% <= Target."
+                            BotLogSharedState.appendLogBot(msg)
+                            (((0.5f - finalScore) / 0.5f) * 100f).coerceIn(10f, 98f)
+                        }
             "CALL" -> ((1.0f - kotlin.math.abs(finalScore - 0.45f) / 0.55f) * 100f).coerceIn(10f, 98f)
             "CHECK" -> ((1.0f - kotlin.math.abs(finalScore - 0.35f) / 0.65f) * 100f).coerceIn(10f, 98f)
             else -> 50f
@@ -1119,8 +1132,12 @@ object AdvisorEngine {
                     action = "FOLD"
                     confidence = 85f
                     customExplanation = "DNA ($dnaProfile): Сброс маргинала при <15бб"
+                    BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
                 } else {
                     customExplanation = "DNA ($dnaProfile): Сброс рук"
+                    if (action == "FOLD") {
+                        BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
+                    }
                 }
             } else {
                 // Preflop / Postflop adaptive meta game behavior matching DNA profiles:
@@ -1134,6 +1151,7 @@ object AdvisorEngine {
                             action = "FOLD"
                             confidence = 75f
                             customExplanation = "DNA: Сброс маргинальной руки против Гиппопотама"
+                            BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
                         }
                     }
                     "Гепард" -> {
@@ -1145,6 +1163,8 @@ object AdvisorEngine {
                         } else if (action == "CALL") {
                             confidence = (confidence + 10f).coerceAtMost(95f)
                             customExplanation = "DNA: Взвешенный прием ставки Гепарда"
+                        } else if (action == "FOLD") {
+                            BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: Гепард")
                         }
                     }
                     "Хамелеон" -> {
@@ -1153,6 +1173,7 @@ object AdvisorEngine {
                             action = "FOLD"
                             confidence = 90f
                             customExplanation = "DNA: Падаем под силу Хамелеона"
+                            BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
                         } else if (action == "CHECK" && position == TablePosition.BTN) {
                             action = "BET"
                             confidence = 70f

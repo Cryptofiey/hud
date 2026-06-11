@@ -347,7 +347,10 @@ object RobotPlayer {
             
             // CHECK FALLBACK: If we want to check, but there is no CHECK button (meaning someone bet), we MUST FOLD. 
             // We should NEVER fallback a Check to a Call logic-wise, as that will lose money on weak hands!
-            if (canonicalAction == "CHECK" && (upperKey.contains("FOLD") || upperKey.contains("ФОЛД") || upperKey.contains("ПАС"))) return rect
+            if (canonicalAction == "CHECK" && (upperKey.contains("FOLD") || upperKey.contains("ФОЛД") || upperKey.contains("ПАС"))) {
+                BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FALLBACK]: OVERRIDING CHECK TO FOLD! ⚠️ OCR missed a bet (betToCall=0), but forced to fold because Check button is missing.")
+                return rect
+            }
             
             // CALL FALLBACK: If we want to call, but there's only an ALL IN button (because the bet covers our remaining stack)
             if (canonicalAction == "CALL" && (upperKey.contains("ALL-IN") || upperKey.contains("ALLIN") || upperKey.contains("ОЛЛ"))) return rect
