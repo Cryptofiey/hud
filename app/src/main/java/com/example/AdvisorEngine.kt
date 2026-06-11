@@ -141,10 +141,10 @@ object AdvisorEngine {
         
         // Penalize for multiple active opponents (squeeze hazard & multiway dilution)
         val multiwayHazard = if (activeOpponentsCount > 1) {
-            (activeOpponentsCount - 1) * 0.04f
+            (activeOpponentsCount - 1) * 0.015f
         } else 0f
 
-        val positionalHazard = getPositionalHazard(position, isPreflop)
+        val positionalHazard = getPositionalHazard(position, isPreflop) * 0.5f
         
         // Stage & Bubble Hazard (Tighter ranges as game progresses)
         var stageHazard = if (isPreflop) {
@@ -404,7 +404,7 @@ object AdvisorEngine {
                 }
             } else {
                 // Unprofitable call based on raw win percentage. Check if playability score offers GTO defense
-                if (l1Score > 0.52f && s1 > 0.28f) {
+                if (l1Score > 0.48f && s1 > (0.9f / (activeOpponentsCount + 1.0f))) {
                     if (s1 > 0.45f && l1Score > raiseThreshold) {
                         action = "RAISE"
                         explanation = "Рейз (полублеф): сильная математическая структура, эквити ${pct(s1)}%"
@@ -720,7 +720,7 @@ object AdvisorEngine {
                 }
             } else {
                 // Negative expected call (L2 score <= pot odds)
-                if (l2Score > targetPotOdds + 0.05f && (isPreflop && sklanskyGroup <= 4)) {
+                if (l2Score > targetPotOdds - 0.05f && (isPreflop && sklanskyGroup <= 4)) {
                     action = "CALL"
                     explanation = "L2 Колл (оборона): сильная позиционная дожидаемость"
                 } else {
@@ -989,7 +989,7 @@ object AdvisorEngine {
                 if (adjustedS1 > targetPotOdds) {
                     action = if (l3Score > raiseThreshold || (isPreflop && sklanskyGroup <= 2)) "RAISE" else "CALL"
                 } else {
-                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > targetPotOdds + 0.05f) "CALL" else "FOLD"
+                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > targetPotOdds - 0.05f) "CALL" else "FOLD"
                 }
             } else {
                 action = if (l3Score > betThreshold) "BET" else "CHECK"
@@ -1003,7 +1003,7 @@ object AdvisorEngine {
                 if (adjustedS1 > targetPotOdds) {
                     action = "CALL"
                 } else {
-                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > targetPotOdds + 0.05f) "CALL" else "FOLD"
+                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > targetPotOdds - 0.05f) "CALL" else "FOLD"
                 }
             } else {
                 action = "CHECK"
