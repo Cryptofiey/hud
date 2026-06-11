@@ -206,7 +206,7 @@ object RobotPlayer {
                                 val currentSizingKeys = sizingButtonsMap.keys
                                 val currentActionKeys = availableActionButtons.keys
                                 if (currentSizingKeys.any { it.contains("1/2") || it.contains("POT") || it.contains("ПОТ") || it.contains("MAX") } || 
-                                    currentActionKeys.any { it.contains("CONFIRM") || it.contains("РЕЙЗ") || it.contains("RAISE") }) {
+                                    currentActionKeys.any { it.contains("CONFIRM") || it.contains("ПОДТВЕРДИТЬ") }) {
                                     sizeOptionsAppeared = true
                                     break
                                 }
@@ -265,17 +265,20 @@ object RobotPlayer {
                             
                             for (i in 0 until 15) {
                                 delay(200)
-                                if (availableActionButtons.keys.any { it.contains("CONFIRM") || it.contains("ALL-IN") || it.contains("ОЛЛ") || it.contains("ВЫСТАВИТЬ") }) {
+                                val currentButtonsKeys = availableActionButtons.keys
+                                if (currentButtonsKeys.any { it.contains("CONFIRM") || it.contains("ALL-IN") || it.contains("ОЛЛ") || it.contains("ВЫСТАВИТЬ") || it.contains("CALL") }) {
                                     break
                                 }
                             }
                             
                             val confirmRect = availableActionButtons.entries.firstOrNull { 
                                 val key = it.key.uppercase()
-                                key.contains("CONFIRM") || key.contains("ПОДТВЕРДИТЬ") || key.contains("ALL-IN") || key.contains("ОЛЛ") || key.contains("ALL") || key.contains("ВЫСТАВИТЬ")
+                                key.contains("CONFIRM") || key.contains("ПОДТВЕРДИТЬ") || key.contains("ALL-IN") || key.contains("ОЛЛ") || key.contains("ALL") || key.contains("ВЫСТАВИТЬ") || key.contains("CALL")
                             }?.value ?: targetRect
                             executeClickOnRect(confirmRect)
                         }
+                        
+                        lastActionTime = System.currentTimeMillis() // Set cooldown AFTER all clicks in the sequence
                         
                         delay(2500)
                         
@@ -330,7 +333,7 @@ object RobotPlayer {
                                   upperKey.contains("RAISE") || upperKey.contains("РЕЙЗ") || 
                                   upperKey.contains("CONFIRM") || upperKey.contains("ПОДТВЕРДИТЬ") ||
                                   isAll
-                "ALL-IN" -> isAll
+                "ALL-IN" -> isAll || upperKey.contains("RAISE") || upperKey.contains("РЕЙЗ") || upperKey.contains("BET") || upperKey.contains("БЕТ")
                 else -> false
             }
             if (match) return rect

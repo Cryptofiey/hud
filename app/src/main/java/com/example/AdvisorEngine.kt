@@ -1011,7 +1011,7 @@ object AdvisorEngine {
 
         // Специфический пуш-фолд эксплойт на коротких стеках
         if (mRatio < 12f && isPreflop) {
-            if (sklanskyGroup <= 3 || (finalScore > 0.58f && sklanskyGroup <= 5)) {
+            if (sklanskyGroup <= 2 || (finalScore > 0.62f && sklanskyGroup <= 4)) {
                 finalAction = "ALL-IN"
                 explanation = "ОЛЛ-ИН по короткому стеку префлоп [M=${String.format(Locale.US, "%.1f", mRatio)}]"
             } else if (finalAction == "CALL") {
