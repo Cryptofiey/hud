@@ -73,10 +73,12 @@ const __filename = fileURLToPath(import.meta.url);
 if (process.argv.length >= 3 && process.argv[2].includes('simulate.mjs') || process.argv[1].includes('simulate.mjs')) {
     const args = process.argv.slice(2);
     let iterations = parseInt(args.find(a => a.startsWith('--hands='))?.split('=')[1] || '1000');
+    let oppsArg = args.find(a => a.startsWith('--opponents='))?.split('=')[1] || 'Regular,Shark,Fish';
+    let oppsConfig = oppsArg.split(',');
     
     import('./bot_logic.mjs').then(async (m) => {
-        console.log(`[🚀 M.A.R.S.] Запуск тестовой симуляции: ${iterations} раздач.`);
-        let profit = await runSimulation(iterations, m.BotParams, { types: ["Regular", "Shark", "Fish"] });
+        console.log(`[🚀 M.A.R.S.] Запуск тестовой симуляции: ${iterations} раздач против ${oppsConfig.join(', ')}.`);
+        let profit = await runSimulation(iterations, m.BotParams, { types: oppsConfig });
         console.log(`✅ Итоговый расчетный профит стратегии: ${(profit).toFixed(1)} BB`);
     });
 }
