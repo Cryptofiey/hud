@@ -609,10 +609,26 @@ object AdvisorEngine {
         }
 
         // 5. Second-order environmental overlays: Tournament Stage / ICM (Bubble Proximity)
-        val stageAdj = when (stage) {
-            TournamentStage.EARLY -> 0.0f  // Deep stack comfort
-            TournamentStage.MIDDLE -> -0.01f
-            TournamentStage.LATE -> -0.04f  // Bubble / survival adjustment (play tighter in uncertain calls)
+        val stageAdj = if (isPreflop) {
+            when (stage) {
+                TournamentStage.EARLY -> 0.01f  // Deep stack comfort, slight boost for speculative plays
+                TournamentStage.MIDDLE -> if (sklanskyGroup >= 5) -0.04f else -0.01f
+                TournamentStage.LATE -> {
+                    // Bubble / survival: severely penalize weak hands, reward premium
+                    when {
+                        sklanskyGroup >= 6 -> -0.12f
+                        sklanskyGroup >= 4 -> -0.06f
+                        sklanskyGroup <= 2 -> 0.02f // Premium hands get a tiny boost for stealing
+                        else -> -0.03f
+                    }
+                }
+            }
+        } else {
+            when (stage) {
+                TournamentStage.EARLY -> 0.0f
+                TournamentStage.MIDDLE -> -0.01f
+                TournamentStage.LATE -> -0.04f  // Bubble / survival adjustment (play tighter in uncertain calls)
+            }
         }
 
         // 6. Stack levels (Table stack limits / M-Ratio)
@@ -620,7 +636,10 @@ object AdvisorEngine {
         val mRatio = if (heroStack > 0 && isBbDisplay) heroStack else mRatioRaw
         val stackAdjustment = if (mRatio < 10.0f) {
             // Under short-stack pressure, reduce speculative play and tilt decisions to push/fold
-            if (sklanskyGroup <= 3) 0.05f else -0.05f
+            if (sklanskyGroup <= 3) 0.06f else -0.06f
+        } else if (mRatio > 40.0f && stage == TournamentStage.LATE) {
+            // Big stack bully on the bubble
+            0.03f 
         } else {
             0.0f
         }
