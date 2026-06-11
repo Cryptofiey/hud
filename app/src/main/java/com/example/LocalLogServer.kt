@@ -140,8 +140,12 @@ object LocalLogServer {
 
                 <div style="text-align: center; margin-top: 20px;">
                     <a href="/export" style="background:#3b82f6; color:#fff; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold; border:none; cursor:pointer;">
-                        📥 Download ZIP (Logs & Screenshots)
+                        📥 Download ZIP (Session Logs, Logcat & Screenshots)
                     </a>
+                    <p style="color: #94a3b8; font-size: 11px; margin-top: 10px;">
+                        В ZIP-архив входят полные логи со старта программы (session_logs.txt) и системный лог (logcat.txt).<br>
+                        Не закрывайте программу полностью перед скачиванием!
+                    </p>
                 </div>
 
                 <script>
