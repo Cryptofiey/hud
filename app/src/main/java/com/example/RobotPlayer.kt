@@ -295,11 +295,26 @@ object RobotPlayer {
         isRobotModeEnabled.value = false
     }
 
-    private fun findButtonRect(canonicalAction: String): Rect? {
+    private fun findButtonRect(initialAction: String): Rect? {
+        var canonicalAction = initialAction
+        
         // Buttons could have names like "Check/Call" depending on how OCR sees them.
         // We sort by descending Y position (bottom of screen first) to ensure we NEVER click speech bubbles 
         // higher up if they somehow passed the 85% threshold.
         val sortedButtons = availableActionButtons.entries.sortedByDescending { it.value.top }
+        
+        // FOLD FALLBACK PRE-CHECK: If Advisor says FOLD (due to bad betToCall parsing), 
+        // but the table physically offers a CHECK button, we must CHECK instead of FOLD!
+        if (canonicalAction == "FOLD") {
+            val hasCheck = sortedButtons.any { 
+                val upperKey = it.key.uppercase().replace(" ", "")
+                upperKey.contains("CHECK") || upperKey.contains("ЧЕК") 
+            }
+            if (hasCheck) {
+                canonicalAction = "CHECK"
+                BotLogSharedState.appendLogBot("[BOT][L5] Safely overridden FOLD to CHECK because Check is available!")
+            }
+        }
         
         for ((key, rect) in sortedButtons) {
             val upperKey = key.uppercase().replace(" ", "")
@@ -342,6 +357,26 @@ object RobotPlayer {
             
             // BET/RAISE FALLBACK: If we want to raise but can't (e.g. we are already all-in, or just CALL is max)
             if ((canonicalAction == "BET" || canonicalAction == "RAISE") && (upperKey.contains("ALL-IN") || upperKey.contains("ALLIN"))) return rect
+        }
+        
+        // POSITIONAL RAW FALLBACK: If OCR completely failed to extract text like "BET" or "RAISE"
+        // and just extracted a number like "4.5", it's not in availableActionButtons.
+        // But the poker app's rightmost button at the bottom is almost ALWAYS the Bet/Raise button!
+        if (canonicalAction == "BET" || canonicalAction == "RAISE" || canonicalAction == "ALL-IN") {
+            val rawBoxes = PokerHudSharedState.uiState.value.rawScannerBoxes
+            if (rawBoxes != null && rawBoxes.isNotEmpty()) {
+                val bottomLimit = rawBoxes.maxOf { it.rect.bottom }
+                val thresholdTop = bottomLimit - (bottomLimit * 0.15f) // Bottom 15%
+                
+                val bottomBoxes = rawBoxes.filter { it.rect.top >= thresholdTop }
+                if (bottomBoxes.isNotEmpty()) {
+                    val rightmostBox = bottomBoxes.maxByOrNull { it.rect.right }
+                    if (rightmostBox != null) {
+                        BotLogSharedState.appendLogBot("[BOT][L5] Advanced Positional Fallback! Raw rightmost rect for $canonicalAction -> ${rightmostBox.label}")
+                        return rightmostBox.rect
+                    }
+                }
+            }
         }
         
         return null
