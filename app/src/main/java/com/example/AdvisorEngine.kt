@@ -89,7 +89,8 @@ data class PlayerStats(
 data class Recommendation(
     val action: String, // CHECK, FOLD, CALL, RAISE, ALL-IN
     val confidence: Float, // 0 - 100
-    val explanation: String
+    val explanation: String,
+    val originalScore: Float = 0f
 )
 
 enum class TablePosition(val displayName: String) {
@@ -453,7 +454,7 @@ object AdvisorEngine {
             else -> 50f
         }
 
-        return Recommendation(action, confidence, detailExplanation)
+        return Recommendation(action, confidence, detailExplanation, l1Score)
     }
 
     fun computeRecommendationL2(
@@ -759,7 +760,7 @@ object AdvisorEngine {
             else -> 50f
         }
 
-        return Recommendation(action, confidenceValue, detailedL2Explanation)
+        return Recommendation(action, confidenceValue, detailedL2Explanation, l2Score)
     }
 
     fun computeRecommendationAdvanced(
@@ -1065,7 +1066,7 @@ object AdvisorEngine {
             else -> 50f
         }
 
-        return Recommendation(finalAction, confidence, fullExpl)
+        return Recommendation(finalAction, confidence, fullExpl, finalScore)
     }
 
     fun computeRecommendationL4(
@@ -1209,7 +1210,7 @@ object AdvisorEngine {
             confidence = 100f
         }
 
-        return Recommendation(action, confidence, customExplanation)
+        return Recommendation(action, confidence, customExplanation, baseL3.originalScore)
     }
 }
 

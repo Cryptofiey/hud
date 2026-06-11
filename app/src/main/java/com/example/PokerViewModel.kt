@@ -452,6 +452,18 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                 )
 
                 withContext(Dispatchers.Main) {
+                    val finalState = state.copy(
+                        simulationResult = result,
+                        advancedSimulationResult = advResult
+                    )
+                    DiagnosticsEngine.runDiagnostics(
+                        finalState, 
+                        recommendation, 
+                        l2Recommendation, 
+                        advRecommendation, 
+                        l4Recommendation
+                    )
+
                     _uiState.update {
                         it.copy(
                             isCalculating = false,

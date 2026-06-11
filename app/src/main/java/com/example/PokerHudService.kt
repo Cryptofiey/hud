@@ -2716,8 +2716,8 @@ class PokerHudService : Service() {
                     }
 
                     // Unconditional reactive Equalizer block updating
-                    val l1FillValue = if (state.heroCard1 != null && state.heroCard2 != null && res != null) {
-                        (res.heroWinPct + res.heroTiePct) / 100f
+                    val l1FillValue = if (rec != null && state.heroCard1 != null && state.heroCard2 != null) {
+                        rec.originalScore
                     } else if (state.heroCard1 != null && state.heroCard2 != null) {
                         0.35f
                     } else {
@@ -2730,8 +2730,8 @@ class PokerHudService : Service() {
                         else -> AndroidColor.GRAY
                     }
                     
-                    val l2FillValue = if (state.heroCard1 != null && state.heroCard2 != null && advRes != null) {
-                        (advRes.heroWinPct + advRes.heroTiePct) / 100f
+                    val l2FillValue = if (l2Rec != null && state.heroCard1 != null && state.heroCard2 != null) {
+                        l2Rec.originalScore
                     } else if (state.heroCard1 != null && state.heroCard2 != null) {
                         0.35f
                     } else {
