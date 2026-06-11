@@ -913,6 +913,8 @@ class ScreenScanner(
             var parsedStage: TournamentStage? = null
             
             val nlhMatch = Regex("NLH\\s*-\\s*([0-9.,KMk]+)\\s*/\\s*([0-9.,KMk]+)(?:\\s*\\((?:LEVEL\\s*)?(\\d+)\\))?", RegexOption.IGNORE_CASE).find(fullScanText)
+            val levelMatch = Regex("LEVEL\\s*(\\d+)\\s*:\\s*([0-9.,KMk]+)\\s*/\\s*([0-9.,KMk]+)", RegexOption.IGNORE_CASE).find(fullScanText)
+            
             if (nlhMatch != null) {
                 parsedSB = parseCleanValue(nlhMatch.groupValues[1])
                 parsedBB = parseCleanValue(nlhMatch.groupValues[2])
@@ -928,6 +930,15 @@ class ScreenScanner(
                         }
                     }
                 }
+            } else if (levelMatch != null) {
+                val levelVal = levelMatch.groupValues[1].toIntOrNull() ?: 1
+                parsedStage = when {
+                    levelVal <= 6 -> TournamentStage.EARLY
+                    levelVal <= 14 -> TournamentStage.MIDDLE
+                    else -> TournamentStage.LATE
+                }
+                parsedSB = parseCleanValue(levelMatch.groupValues[2])
+                parsedBB = parseCleanValue(levelMatch.groupValues[3])
             }
 
             // Hero is usually at the bottom-center of the screen.
