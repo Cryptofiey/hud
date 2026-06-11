@@ -1326,7 +1326,7 @@ class PokerHudService : Service() {
                     
                     if (action.updateProfileBoxes && action.profileBoxes != null) {
                         serviceScope.launch {
-                            kotlinx.coroutines.delay(5000)
+                            kotlinx.coroutines.delay(15000)
                             PokerHudSharedState.uiState.update { 
                                 if (it.profileBoxes == action.profileBoxes) it.copy(profileBoxes = null) else it
                             }

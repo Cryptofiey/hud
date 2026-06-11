@@ -60,15 +60,15 @@ class ScannerBoxesView(context: Context) : View(context) {
 
     private val profileBoxPaint = Paint().apply {
         style = Paint.Style.STROKE
-        color = Color.parseColor("#80FFFFFF") // Semi-transparent white
-        strokeWidth = 2f // Thin walls
+        color = Color.parseColor("#00FF00") // Neon green
+        strokeWidth = 4f
         pathEffect = android.graphics.DashPathEffect(floatArrayOf(15f, 10f), 0f)
         isAntiAlias = true
     }
 
     private val profileFillPaint = Paint().apply {
         style = Paint.Style.FILL
-        color = Color.parseColor("#10FFFFFF") // Very transparent filler
+        color = Color.parseColor("#3300FF00") // Semi-transparent neon green
         isAntiAlias = true
     }
 
