@@ -993,7 +993,7 @@ object AdvisorEngine {
             } else {
                 action = if (l3Score > betThreshold) "BET" else "CHECK"
             }
-            branchSummary = "Извлечение велью из сильной спектральной структуры"
+            branchSummary = if (action == "CHECK") "Аккуратный контроль банка (чек сильного спектра)" else "Извлечение велью из сильной спектральной структуры"
         } else {
             bestBranch = "L2.5 (Пассив)"
             l3Score = evL2_5
@@ -1007,7 +1007,7 @@ object AdvisorEngine {
             } else {
                 action = "CHECK"
             }
-            branchSummary = "Имитация слабости / Сбор блефов прокаткой"
+            branchSummary = if (action == "CHECK") "Имитация слабости / Сбалансированный чек" else "Сбор блефов прокаткой"
         }
 
         // Ограничиваем score в пределах [0, 1]
