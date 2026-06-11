@@ -694,12 +694,12 @@ class PokerHudService : Service() {
             return tv
         }
 
-        val commCheckBox = createToggleButton("Борд", PokerHudSharedState.showCommBox)
-        val holeCheckBox = createToggleButton("Карты", PokerHudSharedState.showHoleBox)
-        val probsCheckBox = createToggleButton("Статы", PokerHudSharedState.showProbsBox)
+        val commCheckBox = createToggleButton("Board", PokerHudSharedState.showCommBox)
+        val holeCheckBox = createToggleButton("Cards", PokerHudSharedState.showHoleBox)
+        val probsCheckBox = createToggleButton("Stats", PokerHudSharedState.showProbsBox)
         
         val debugSnapBtn = TextView(this).apply {
-            text = "📷 ДЕБАГ"
+            text = "📷 DEBUG"
             textSize = 6.5f
             gravity = Gravity.CENTER
             setTextColor(AndroidColor.WHITE)
@@ -2105,7 +2105,7 @@ class PokerHudService : Service() {
         }
         
         val txtSklan = TextView(this).apply {
-            text = "👥 [Нет карт]"
+            text = "👥 [No Cards]"
             setTextColor(AndroidColor.parseColor("#FFFF7043"))
             textSize = 8f
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -2545,14 +2545,14 @@ class PokerHudService : Service() {
                                 val combinedWin = res.heroWinPct + res.heroTiePct
                                 currentWin = String.format(Locale.US, "%.1f%%", combinedWin)
                             } else {
-                                currentWin = "Ждем..."
+                                currentWin = "Wait..."
                             }
 
                             if (advRes != null) {
                                 val combinedWin = advRes.heroWinPct + advRes.heroTiePct
                                 currentAdvWin = String.format(Locale.US, "%.1f%%", combinedWin)
                             } else {
-                                currentAdvWin = "Ждем..."
+                                currentAdvWin = "Wait..."
                             }
                             
                             currentCardsStr = "${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}"
@@ -2569,16 +2569,16 @@ class PokerHudService : Service() {
                             txtSklan.text = "👥 $groupNum | 📊 1-$sRange"
                             
                             val strengthDesc = when (groupNum) {
-                                1, 2 -> "Топ (1/20)"
-                                3, 4 -> "Высокая (4/20)"
-                                5, 6 -> "Средняя (8/20)"
-                                else -> "Слабая (14/20)"
+                                1, 2 -> "Top (1/20)"
+                                3, 4 -> "High (4/20)"
+                                5, 6 -> "Med (8/20)"
+                                else -> "Weak (14/20)"
                             }
                             
-                            val relativePos = if (groupNum <= sRange) "Впереди диапазона" else "Позади диапазона"
+                            val relativePos = if (groupNum <= sRange) "Ahead of Range" else "Behind Range"
                             currentStrength = "$strengthDesc ($relativePos)"
                         } else {
-                            txtSklan.text = "👥 [Нет карт]"
+                            txtSklan.text = "👥 [No Cards]"
                             currentStrength = "--"
                         }
                     }

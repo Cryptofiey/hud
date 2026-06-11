@@ -47,7 +47,7 @@ data class PlayerStats(
 
     // --- SYNTHETIC METRICS (Синтетические метрики) ---
 
-    // 1. Пассивный коридор (Calling Station Index)
+    // 1. Passiveный коридор (Calling Station Index)
     // Разрыв между VPIP и PFR. Если разрыв >15%, значит оппонент много коллирует префлоп, играя пассивно.
     val vpipPfrGap: Float get() {
         val currVpip = histVpip ?: vpip
@@ -388,28 +388,28 @@ object AdvisorEngine {
                 if (s1 > 0.65f && l1Score > raiseThreshold) {
                     if (mRatio < 12.0f) {
                         action = "ALL-IN"
-                        explanation = "ОЛЛ-ИН: превосходное EV ${pct(s1)}% [M=${fmt(mRatio)}]"
+                        explanation = "ALL-IN: excellent EV ${pct(s1)}% [M=${fmt(mRatio)}]"
                     } else {
                         action = "RAISE"
-                        explanation = "Рейз: сильное велью-эквити ${pct(s1)}%"
+                        explanation = "Raise: strong value equity ${pct(s1)}%"
                     }
                 } else {
                     action = "CALL"
-                    explanation = "Колл: эквити ${pct(s1)}% > шансы ${pct(targetPotOdds)}% (с учетом маржи)"
+                    explanation = "Call: equity ${pct(s1)}% > odds ${pct(targetPotOdds)}% (with margin)"
                 }
             } else {
                 // Unprofitable call based on raw win percentage. Check if playability score offers GTO defense
                 if (l1Score > 0.48f && s1 > (0.9f / (activeOpponentsCount + 1.0f))) {
                     if (s1 > 0.45f && l1Score > raiseThreshold) {
                         action = "RAISE"
-                        explanation = "Рейз (полублеф): сильная математическая структура, эквити ${pct(s1)}%"
+                        explanation = "Raise (semi-bluff): equity ${pct(s1)}%"
                     } else {
                         action = "CALL"
-                        explanation = "Колл (оборона): высокая играбельность карт, эквити ${pct(s1)}%"
+                        explanation = "Call (defense): equity ${pct(s1)}%"
                     }
                 } else {
                     action = "FOLD"
-                    explanation = "Фолд: математически невыгодно, эквити ${pct(s1)}% < шансы ${pct(potOdds)}%"
+                    explanation = "Fold: weak equity ${pct(s1)}% < odds ${pct(potOdds)}%"
                 }
             }
         } else {
@@ -417,25 +417,25 @@ object AdvisorEngine {
             if (s1 > 0.60f && l1Score > raiseThreshold) {
                 if (mRatio < 12.0f && (s1 > 0.80f || sklanskyGroup <= 2)) {
                     action = "ALL-IN"
-                    explanation = "ОЛЛ-ИН: математический превосходный пуш, эквити ${pct(s1)}%"
+                    explanation = "ALL-IN: excellent push, equity ${pct(s1)}%"
                 } else {
                     action = "RAISE"
-                    explanation = "Рейз: велью-агрессия, эквити ${pct(s1)}%"
+                    explanation = "Raise: value aggression, equity ${pct(s1)}%"
                 }
             } else if (s1 > 0.45f && l1Score > betThreshold) {
                 action = "BET"
-                explanation = "Ставка: получено математическое преимущество, эквити ${pct(s1)}%"
+                explanation = "Bet: math advantage, equity ${pct(s1)}%"
             } else if (l1Score > 0.50f) {
                 action = "BET"
-                explanation = "Ставка (блеф): защита структуры, эквити ${pct(s1)}%"
+                explanation = "Bet (bluff): equity ${pct(s1)}%"
             } else {
                 action = "CHECK"
-                explanation = "Чек: ведение банка по шансам, эквити ${pct(s1)}%"
+                explanation = "Check: pot control, equity ${pct(s1)}%"
             }
         }
 
         // Formulate highly detailed explanation with mathematical weights tracking
-        val detailExplanation = "GTO L1: EV[Sim=${pct(s1)}%|Skl=${pct(s2)}%|Chen=${pct(s3)}%|Mrg=${pct(s4)}%] (СрВыч=${pct(l1Score)}%) | $explanation"
+        val detailExplanation = "GTO L1: EV[Sim=${pct(s1)}%|Skl=${pct(s2)}%|Chen=${pct(s3)}%|Mrg=${pct(s4)}%] (Avg=${pct(l1Score)}%) | $explanation"
 
         val confidence = when(action) {
             "RAISE", "ALL-IN", "BET" -> (((l1Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
@@ -704,44 +704,44 @@ object AdvisorEngine {
                 if (l2Score > raiseThreshold || (isPreflop && sklanskyGroup <= 2 && l2Score > 0.45f)) {
                     if (mRatio < 12.0f) {
                         action = "ALL-IN"
-                        explanation = "L2 ОЛЛ-ИН: защита укороченного стека [M=${String.format(Locale.US, "%.1f", mRatio)}]"
+                        explanation = "L2 ALL-IN: short stack def [M=${String.format(Locale.US, "%.1f", mRatio)}]"
                     } else {
                         action = "RAISE"
-                        explanation = "L2 Рейз (велью-напор): эксплойт полей, сила ${pct(l2Score)}%"
+                        explanation = "L2 Raise (value): exploit field, power ${pct(l2Score)}%"
                     }
                 } else {
                     action = "CALL"
-                    explanation = "L2 Колл: сила ${pct(l2Score)}% > шансы ${pct(targetPotOdds)}% (с учетом маржи)"
+                    explanation = "L2 Call: power ${pct(l2Score)}% > odds ${pct(targetPotOdds)}% (with margin)"
                 }
             } else {
                 // Negative expected call (L2 score <= pot odds)
                 if (l2Score > targetPotOdds - 0.05f && (isPreflop && sklanskyGroup <= 4)) {
                     action = "CALL"
-                    explanation = "L2 Колл (оборона): сильная позиционная дожидаемость"
+                    explanation = "L2 Call (defense): strong pos draw"
                 } else {
                     action = "FOLD"
-                    explanation = "L2 Фолд: невыгодно, сила ${pct(l2Score)}% < шансы ${pct(targetPotOdds)}%"
+                    explanation = "L2 Fold: weak power ${pct(l2Score)}% < odds ${pct(targetPotOdds)}%"
                 }
             }
         } else {
             // No bet to call -> Check / Bet / Raise solver
             if (l2Score > raiseThreshold) {
                 action = "RAISE"
-                explanation = "L2 Рейз (атака): инициатива, сила ${pct(l2Score)}%, ΔSD ${avgDeltaSD.toInt()}%"
+                explanation = "L2 Raise (attack): initiative, power ${pct(l2Score)}%, ΔSD ${avgDeltaSD.toInt()}%"
             } else if (l2Score > betThreshold || (isPreflop && sklanskyGroup <= 3)) {
                 action = "BET"
-                explanation = "L2 Ставка: велью-линия, сила ${pct(l2Score)}%, КПФ ${String.format(Locale.US, "%.2f", avgFocus)}"
+                explanation = "L2 Bet: value line, power ${pct(l2Score)}%, Focus ${String.format(Locale.US, "%.2f", avgFocus)}"
             } else if (l2Score > fairShare - 0.05f) {
                 action = "CHECK"
-                explanation = "L2 Чек (контроль): ведение пота, сила ${pct(l2Score)}%"
+                explanation = "L2 Check: pot control, power ${pct(l2Score)}%"
             } else {
                 action = "CHECK"
-                explanation = "L2 Чек: пас линии, сила ${pct(l2Score)}%"
+                explanation = "L2 Check: passive line, power ${pct(l2Score)}%"
             }
         }
 
         // Compose high-fidelity overlay explanation reflecting GTO calibrated metrics
-        val detailedL2Explanation = "L2: EV[L1=${pct(baseL1Score)}%|Opp=${String.format(Locale.US, "%+.1f", netOpponentAdjustment*100)}%|Env=${String.format(Locale.US, "%+.1f", (positionalAdj+stageAdj+stackAdjustment)*100)}%] (Калиб=${pct(l2Score)}%) | $explanation"
+        val detailedL2Explanation = "L2: EV[L1=${pct(baseL1Score)}%|Opp=${String.format(Locale.US, "%+.1f", netOpponentAdjustment*100)}%|Env=${String.format(Locale.US, "%+.1f", (positionalAdj+stageAdj+stackAdjustment)*100)}%] (Calib=${pct(l2Score)}%) | $explanation"
 
         val confidenceValue = when(action) {
             "RAISE", "ALL-IN", "BET" -> (((l2Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 95f)
@@ -843,7 +843,7 @@ object AdvisorEngine {
         var totalEvL3_0 = 0f
         var totalEvL3_5 = 0f
         
-        var tableArchetype = "Неизвестный Пул"
+        var tableArchetype = "Unknown Pool"
         var maxExploitReason = ""
 
         if (activeOpponents.isEmpty()) {
@@ -917,19 +917,19 @@ object AdvisorEngine {
                 val cbet = profileStats.histCBet ?: 55f
 
                 if (isPreflop && (position == TablePosition.SB || position == TablePosition.BB) && steal > 40f) {
-                    maxExploitReason = "Steal >40% авто-защита блайндов"
+                    maxExploitReason = "Steal >40% auto blind def"
                 } else if (isPreflop && fold3 > 60f) {
-                    maxExploitReason = "Оверфолд на 3-Bet (>60%)"
+                    maxExploitReason = "Overfold to 3-Bet (>60%)"
                 } else if (isPostflop && betToCall == 0f && foldCbet > 55f) {
-                    maxExploitReason = "Авто-блеф (Fold to CB >55%)"
+                    maxExploitReason = "Auto-bluff (Fold to CB >55%)"
                 } else if (wtsdVal > 32f || (gap > 20f && vpipVal > 35f)) {
-                    maxExploitReason = "Опп - телефон (респект)"
+                    maxExploitReason = "Opp is station (respect)"
                 } else if (wtsdVal < 25f && wsdVal > 55f && betToCall > bigBlind) {
-                    maxExploitReason = "Респект агрессии Скале!"
+                    maxExploitReason = "Respect rock agro!"
                 } else if (isPostflop && betToCall > 0 && cbet > 70f) {
-                    maxExploitReason = "Флоат против шир. CB"
+                    maxExploitReason = "Float vs wide. CB"
                 } else if (isPostflop && cr > 15f && betToCall > 0) {
-                    maxExploitReason = "Агрессивный Чек-Рейз!"
+                    maxExploitReason = "Agro Check-Raise!"
                 }
             }
         }
@@ -969,15 +969,15 @@ object AdvisorEngine {
 
         // Determine branch and adjust pure equity (s1) with heuristic overlays
         if (evL3_5 > evL3_0 && evL3_5 > evL2_5) {
-            bestBranch = "L3.5 (Блеф)"
+            bestBranch = "L3.5 (Bluff)"
             l3Score = evL3_5
             val adjustedS1 = (s1 + (l3Score - baseL1Score)).coerceIn(0f, 1f)
             action = if (betToCall > 0) {
                 if (l3Score > raiseThreshold) "RAISE" else if (adjustedS1 > targetPotOdds || (isPreflop && sklanskyGroup <= 4)) "CALL" else "FOLD"
             } else "BET"
-            branchSummary = "Максимизация фолд-эквити блефом"
+            branchSummary = "Max fold equity bluffing"
         } else if (evL3_0 > evL2_5) {
-            bestBranch = "L3.0 (Велью)"
+            bestBranch = "L3.0 (Value)"
             l3Score = evL3_0
             val adjustedS1 = (s1 + (l3Score - baseL1Score)).coerceIn(0f, 1f)
             if (betToCall > 0) {
@@ -989,9 +989,9 @@ object AdvisorEngine {
             } else {
                 action = if (l3Score > betThreshold) "BET" else "CHECK"
             }
-            branchSummary = if (action == "CHECK") "Аккуратный контроль банка (чек сильного спектра)" else "Извлечение велью из сильной спектральной структуры"
+            branchSummary = if (action == "CHECK") "Pot control (check strong range)" else "Value extract"
         } else {
-            bestBranch = "L2.5 (Пассив)"
+            bestBranch = "L2.5 (Passive)"
             l3Score = evL2_5
             val adjustedS1 = (s1 + (l3Score - baseL1Score)).coerceIn(0f, 1f)
             if (betToCall > 0) {
@@ -1003,7 +1003,7 @@ object AdvisorEngine {
             } else {
                 action = "CHECK"
             }
-            branchSummary = if (action == "CHECK") "Имитация слабости / Сбалансированный чек" else "Сбор блефов прокаткой"
+            branchSummary = if (action == "CHECK") "Fake weak / Bal. check" else "Catch bluffs"
         }
 
         // Ограничиваем score в пределах [0, 1]
@@ -1017,36 +1017,36 @@ object AdvisorEngine {
         if (mRatio < 8f && isPreflop) {
             if (sklanskyGroup <= 4 || (finalScore > 0.60f && sklanskyGroup <= 5)) {
                 finalAction = "ALL-IN"
-                explanation = "ОЛЛ-ИН по короткому стеку префлоп [M=${String.format(Locale.US, "%.1f", mRatio)}]"
+                explanation = "ALL-IN short stack preflop [M=${String.format(Locale.US, "%.1f", mRatio)}]"
             } else if (finalAction == "CALL" && betToCall > (bigBlind * 2.5f).coerceAtLeast(0f)) {
                 finalAction = "FOLD"
-                explanation = "Пас укороченного стека префлоп"
-                BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD]: Ошибка короткого стека префлоп (M=${mRatio})")
+                explanation = "Fold short stack preflop"
+                BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD]: Short stack preflop error (M=${mRatio})")
             }
         }
         
         // Push very high equity on late streets to extract maximum value or end hand
         if (isPostflop && finalScore >= 0.85f && board.filterNotNull().size >= 4) {
              finalAction = "ALL-IN"
-             explanation = "Давление EV максимизировано. Дожим (ОЛЛ-ИН) с сильной комбинацией!"
+             explanation = "Max EV pressure. ALL-IN strong combo!"
         } else if (isPostflop && finalScore >= 0.75f && board.filterNotNull().size >= 4 && (finalAction == "BET" || finalAction == "RAISE")) {
              finalAction = "BET MAX"
-             explanation = "Мощный велью! Увеличиваем банк максимизированной ставкой."
+             explanation = "Strong value! Max bet."
         }
         
         // Remove exploit reason if action contradicts it
-        if (maxExploitReason == "Оверфолд на 3-Bet (>60%)" && finalAction != "RAISE" && finalAction != "ALL-IN") maxExploitReason = ""
-        if (maxExploitReason == "Авто-блеф (Fold to CB >55%)" && finalAction != "BET" && finalAction != "ALL-IN" && finalAction != "RAISE") maxExploitReason = ""
-        if (maxExploitReason == "Флоат против шир. CB" && finalAction != "CALL" && finalAction != "RAISE") maxExploitReason = ""
+        if (maxExploitReason == "Overfold to 3-Bet (>60%)" && finalAction != "RAISE" && finalAction != "ALL-IN") maxExploitReason = ""
+        if (maxExploitReason == "Auto-bluff (Fold to CB >55%)" && finalAction != "BET" && finalAction != "ALL-IN" && finalAction != "RAISE") maxExploitReason = ""
+        if (maxExploitReason == "Float vs wide. CB" && finalAction != "CALL" && finalAction != "RAISE") maxExploitReason = ""
 
         fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
         
-        val archetypeLabel = if (countedOpponents > 1) "Смесь [$tableArchetype+]" else "[$tableArchetype]"
+        val archetypeLabel = if (countedOpponents > 1) "Mix [$tableArchetype+]" else "[$tableArchetype]"
         
         val fullExpl: String = if (maxExploitReason.isNotEmpty()) {
-            "L3 $bestBranch: Чек=${pct(evL2_5)}%|Акт=${pct(evL3_0)}%|Агр=${pct(evL3_5)}% $archetypeLabel -> $maxExploitReason | $explanation"
+            "L3 $bestBranch: Check=${pct(evL2_5)}%|Act=${pct(evL3_0)}%|Agr=${pct(evL3_5)}% $archetypeLabel -> $maxExploitReason | $explanation"
         } else {
-            "L3 $bestBranch: Чек=${pct(evL2_5)}%|Акт=${pct(evL3_0)}%|Агр=${pct(evL3_5)}% $archetypeLabel -> $explanation"
+            "L3 $bestBranch: Check=${pct(evL2_5)}%|Act=${pct(evL3_0)}%|Agr=${pct(evL3_5)}% $archetypeLabel -> $explanation"
         }
 
         val confidence = when(finalAction) {
@@ -1098,7 +1098,7 @@ object AdvisorEngine {
 
         var action = baseL3.action
         var confidence = baseL3.confidence
-        var customExplanation = "DNA: Адаптивное решение"
+        var customExplanation = "DNA: Adaptive decision"
 
         if (stats != null) {
             val vpip = stats.histVpip ?: stats.vpip
