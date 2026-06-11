@@ -839,10 +839,10 @@ class ScreenScanner(
                     Triple(Card(finalRank, finalSuit), area, minX)
                 }
                 
-                // We don't deduplicate by card identity here, because if OCR misidentifies suit,
-                // pocket pairs might appear identical, causing us to drop a valid hole card.
-                // The cluster X-threshold already ensures they are physically distinct blocks.
-                val deduplicated = clustersWithAreaAndX
+                // Deduplicate consecutive identical cards
+                val deduplicated = clustersWithAreaAndX.filterIndexed { index, item -> 
+                    index == 0 || item.first != clustersWithAreaAndX[index - 1].first
+                }
                 
                 
                 // Sort by area descending so real cards beat noise like the timer, then take maxCards
@@ -864,31 +864,19 @@ class ScreenScanner(
 
             var rawAll = (foundHoleCardsRaw + foundCommCardsRaw).filterNotNull()
             if (rawAll.size != rawAll.toSet().size) {
-                scanStatus.value = "Warning: Duplicate cards detected. Changing suit to avoid dropping pairs."
+                scanStatus.value = "Warning: Duplicate cards detected. Ignoring duplicates in this frame."
                 val seen = mutableSetOf<Card>()
-                
-                fun deduplicateCard(c: Card?): Card? {
-                    if (c == null) return null
-                    if (!seen.contains(c)) {
-                        seen.add(c)
-                        return c
-                    }
-                    // If duplicate, try other suits until we find one not in 'seen'
-                    for (suit in Suit.values()) {
-                        val newCard = Card(c.rank, suit)
-                        if (!seen.contains(newCard)) {
-                            seen.add(newCard)
-                            return newCard
-                        }
-                    }
-                    return null
-                }
-                
                 for (i in 0 until 5) {
-                    foundCommCardsRaw[i] = deduplicateCard(foundCommCardsRaw[i])
+                    val c = foundCommCardsRaw[i]
+                    if (c != null) {
+                        if (seen.contains(c)) foundCommCardsRaw[i] = null else seen.add(c)
+                    }
                 }
                 for (i in 0 until 2) {
-                    foundHoleCardsRaw[i] = deduplicateCard(foundHoleCardsRaw[i])
+                    val c = foundHoleCardsRaw[i]
+                    if (c != null) {
+                        if (seen.contains(c)) foundHoleCardsRaw[i] = null else seen.add(c)
+                    }
                 }
             }
 
@@ -898,35 +886,24 @@ class ScreenScanner(
             val smoothedAll = (smoothedHole + smoothedComm).filterNotNull()
             if (smoothedAll.size != smoothedAll.toSet().size) {
                 // Warning: Invalid smoothed detection (duplicates)
+                // Do not clear history, just ignore duplicates for this frame
                 val seen = mutableSetOf<Card>()
-                
-                fun deduplicateCard(c: Card?): Card? {
-                    if (c == null) return null
-                    if (!seen.contains(c)) {
-                        seen.add(c)
-                        return c
-                    }
-                    for (suit in Suit.values()) {
-                        val newCard = Card(c.rank, suit)
-                        if (!seen.contains(newCard)) {
-                            seen.add(newCard)
-                            return newCard
-                        }
-                    }
-                    return null
-                }
-                
-                val mCommList = smoothedComm.toMutableList()
                 for (i in 0 until 5) {
-                    mCommList[i] = deduplicateCard(mCommList.getOrNull(i))
+                    val c = smoothedComm.getOrNull(i)
+                    if (c != null && !seen.add(c)) {
+                        val mList = smoothedComm.toMutableList()
+                        mList[i] = null
+                        smoothedComm = mList
+                    }
                 }
-                smoothedComm = mCommList
-                
-                val mHoleList = smoothedHole.toMutableList()
                 for (i in 0 until 2) {
-                    mHoleList[i] = deduplicateCard(mHoleList.getOrNull(i))
+                    val c = smoothedHole.getOrNull(i)
+                    if (c != null && !seen.add(c)) {
+                        val mList = smoothedHole.toMutableList()
+                        mList[i] = null
+                        smoothedHole = mList
+                    }
                 }
-                smoothedHole = mHoleList
             }
 
             // Board never shrinks during a hand. If we saw N cards, and now see fewer (but >0), keep N cards if possible.
