@@ -949,7 +949,7 @@ class ScreenScanner(
             
             var validOpponents = finalOpponentsRaw.filter { opp ->
                 val box = opp.boundingBox
-                if (box != null && box.top > cleanBitmap!!.height * 0.70f && box.left > cleanBitmap.width * 0.2f && box.right < cleanBitmap.width * 0.8f) {
+                if (box != null && box.top > cleanBitmap!!.height * 0.72f && box.centerX() > cleanBitmap.width * 0.35f && box.centerX() < cleanBitmap.width * 0.65f) {
                     scannedHeroStack = opp.stackSize
                     scannedHeroBet = opp.betSize
                     heroBoundingBox = box

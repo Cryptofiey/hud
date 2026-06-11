@@ -41,7 +41,8 @@ object OpponentScanner {
             "DEALER", "PASS", "SIT OUT", "SIT-OUT", "SITOUT", "CHOICE", "CHIPS",
             "FOLDED", "JOIN", "SIMILAR", "NLH", "VPIP", "PFR", "WTSD", "WSD",
             "BALANCE", "PROFILE", "HUD", "MONITOR", "MONIT", "RUNS", "GAME", "INTERPRETATION",
-            "EQUITY", "OPPONENT", "LIVE", "STATS", "TELEMETRY", "ADVISOR", "STRATEGY"
+            "EQUITY", "OPPONENT", "LIVE", "STATS", "TELEMETRY", "ADVISOR", "STRATEGY",
+            "LEVEL", "UP", "FREEROLL", "LATE", "REG", "RANK", "PAID", "TOURNEY", "BUY-IN"
         )
         if (upper in actions) return false
         
@@ -99,7 +100,7 @@ object OpponentScanner {
             val y = box.centerY().toFloat()
             
             // Define exclusion zones based on the new layout
-            val inTopHeader = y < height * 0.15f || (y < height * 0.20f && x < width * 0.5f)
+            val inTopHeader = y < height * 0.09f
             // Community cards are roughly in the center third, not fully edge to edge horizontally
             val inCommunityCards = x > width * 0.25f && x < width * 0.75f && y > height * 0.38f && y < height * 0.68f
             val inHeroCards = x > width * 0.53f && x < width * 0.95f && y > height * 0.68f && y < height * 0.98f
