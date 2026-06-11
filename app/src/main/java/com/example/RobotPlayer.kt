@@ -196,8 +196,8 @@ object RobotPlayer {
                         
                         executeClickOnRect(targetRect)
                         
-                        if (canonicalAction == "BET" || canonicalAction == "RAISE") {
-                            BotLogSharedState.appendLogBot("[BOT][L5] Waiting for bet slider/options to appear...")
+                        if (canonicalAction == "BET" || canonicalAction == "RAISE" || canonicalAction == "ALL-IN") {
+                            BotLogSharedState.appendLogBot("[BOT][L5] Waiting for bet/all-in slider or options...")
 
                             var sizeOptionsAppeared = false
                             // Active polling loop for sizing options or confirm button
@@ -206,7 +206,7 @@ object RobotPlayer {
                                 val currentSizingKeys = sizingButtonsMap.keys
                                 val currentActionKeys = availableActionButtons.keys
                                 if (currentSizingKeys.any { it.contains("1/2") || it.contains("POT") || it.contains("ПОТ") || it.contains("MAX") } || 
-                                    currentActionKeys.any { it.contains("CONFIRM") || it.contains("ПОДТВЕРДИТЬ") }) {
+                                    currentActionKeys.any { it.contains("CONFIRM") || it.contains("ПОДТВЕРДИТЬ") || it.contains("ALL-IN") || it.contains("ОЛЛ") }) {
                                     sizeOptionsAppeared = true
                                     break
                                 }
@@ -241,7 +241,7 @@ object RobotPlayer {
                             }
                             
                             // If no specific size requested or matched, fallback to 1/2 POT or 3/5 POT to prevent empty bet errors
-                            if (sizeRect == null) {
+                            if (sizeRect == null && canonicalAction != "ALL-IN") {
                                 sizeRect = sizingButtonsMap.entries.firstOrNull { it.key.replace(" ", "").contains("1/2") }?.value
                                     ?: sizingButtonsMap.entries.firstOrNull { it.key.replace(" ", "").contains("3/5") }?.value
                             }
@@ -255,26 +255,10 @@ object RobotPlayer {
                             // Step 3: Confirm the bet
                             val confirmRect = availableActionButtons.entries.firstOrNull { 
                                 val key = it.key.uppercase()
-                                key.contains("CONFIRM") || key.contains("ПОДТВЕРДИТЬ") || key.contains("BET") || key.contains("БЕТ") || key.contains("RAISE") || key.contains("РЕЙЗ") 
+                                key.contains("CONFIRM") || key.contains("ПОДТВЕРДИТЬ") || key.contains("BET") || key.contains("БЕТ") || key.contains("RAISE") || key.contains("РЕЙЗ") || key.contains("ALL-IN") || key.contains("ОЛЛ") || key.contains("ВЫСТАВИТЬ") || key.contains("CALL")
                             }?.value ?: targetRect // fallback to same position
                             
-                            BotLogSharedState.appendLogBot("[BOT][L5] Confirming bet")
-                            executeClickOnRect(confirmRect)
-                        } else if (canonicalAction == "ALL-IN") {
-                            BotLogSharedState.appendLogBot("[BOT][L5] Waiting for all-in confirmation...")
-                            
-                            for (i in 0 until 15) {
-                                delay(200)
-                                val currentButtonsKeys = availableActionButtons.keys
-                                if (currentButtonsKeys.any { it.contains("CONFIRM") || it.contains("ALL-IN") || it.contains("ОЛЛ") || it.contains("ВЫСТАВИТЬ") || it.contains("CALL") }) {
-                                    break
-                                }
-                            }
-                            
-                            val confirmRect = availableActionButtons.entries.firstOrNull { 
-                                val key = it.key.uppercase()
-                                key.contains("CONFIRM") || key.contains("ПОДТВЕРДИТЬ") || key.contains("ALL-IN") || key.contains("ОЛЛ") || key.contains("ALL") || key.contains("ВЫСТАВИТЬ") || key.contains("CALL")
-                            }?.value ?: targetRect
+                            BotLogSharedState.appendLogBot("[BOT][L5] Confirming bet/all-in")
                             executeClickOnRect(confirmRect)
                         }
                         

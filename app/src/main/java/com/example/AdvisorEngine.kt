@@ -442,10 +442,10 @@ object AdvisorEngine {
         val detailExplanation = "GTO L1: EV[Sim=${pct(s1)}%|Skl=${pct(s2)}%|Chen=${pct(s3)}%|Mrg=${pct(s4)}%] (СрВыч=${pct(l1Score)}%) | $explanation"
 
         val confidence = when(action) {
-            "RAISE", "ALL-IN" -> (((l1Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
+            "RAISE", "ALL-IN", "BET" -> (((l1Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
             "FOLD" -> (((0.5f - l1Score) / 0.5f) * 100f).coerceIn(10f, 98f)
             "CALL" -> ((1.0f - kotlin.math.abs(l1Score - 0.45f) / 0.55f) * 100f).coerceIn(10f, 98f)
-            "CHECK", "BET" -> ((1.0f - kotlin.math.abs(l1Score - 0.35f) / 0.65f) * 100f).coerceIn(10f, 98f)
+            "CHECK" -> ((1.0f - kotlin.math.abs(l1Score - 0.35f) / 0.65f) * 100f).coerceIn(10f, 98f)
             else -> 50f
         }
 
@@ -744,10 +744,10 @@ object AdvisorEngine {
         val detailedL2Explanation = "L2: EV[L1=${pct(baseL1Score)}%|Opp=${String.format(Locale.US, "%+.1f", netOpponentAdjustment*100)}%|Env=${String.format(Locale.US, "%+.1f", (positionalAdj+stageAdj+stackAdjustment)*100)}%] (Калиб=${pct(l2Score)}%) | $explanation"
 
         val confidenceValue = when(action) {
-            "RAISE", "ALL-IN" -> (((l2Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 95f)
+            "RAISE", "ALL-IN", "BET" -> (((l2Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 95f)
             "FOLD" -> (((0.5f - l2Score) / 0.5f) * 100f).coerceIn(10f, 95f)
             "CALL" -> ((1.0f - kotlin.math.abs(l2Score - 0.45f) / 0.55f) * 100f).coerceIn(10f, 95f)
-            "CHECK", "BET" -> ((1.0f - kotlin.math.abs(l2Score - 0.35f) / 0.65f) * 100f).coerceIn(10f, 95f)
+            "CHECK" -> ((1.0f - kotlin.math.abs(l2Score - 0.35f) / 0.65f) * 100f).coerceIn(10f, 95f)
             else -> 50f
         }
 
@@ -1020,6 +1020,15 @@ object AdvisorEngine {
             }
         }
         
+        // Push very high equity on late streets to extract maximum value or end hand
+        if (isPostflop && finalScore >= 0.85f && board.filterNotNull().size >= 4) {
+             finalAction = "ALL-IN"
+             explanation = "Давление EV максимизировано. Дожим (ОЛЛ-ИН) с сильной комбинацией!"
+        } else if (isPostflop && finalScore >= 0.75f && board.filterNotNull().size >= 4 && (finalAction == "BET" || finalAction == "RAISE")) {
+             finalAction = "BET MAX"
+             explanation = "Мощный велью! Увеличиваем банк максимизированной ставкой."
+        }
+        
         // Remove exploit reason if action contradicts it
         if (maxExploitReason == "Оверфолд на 3-Bet (>60%)" && finalAction != "RAISE" && finalAction != "ALL-IN") maxExploitReason = ""
         if (maxExploitReason == "Авто-блеф (Fold to CB >55%)" && finalAction != "BET" && finalAction != "ALL-IN" && finalAction != "RAISE") maxExploitReason = ""
@@ -1036,10 +1045,10 @@ object AdvisorEngine {
         }
 
         val confidence = when(finalAction) {
-            "RAISE", "ALL-IN" -> (((finalScore - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
+            "RAISE", "ALL-IN", "BET", "BET MAX" -> (((finalScore - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
             "FOLD" -> (((0.5f - finalScore) / 0.5f) * 100f).coerceIn(10f, 98f)
             "CALL" -> ((1.0f - kotlin.math.abs(finalScore - 0.45f) / 0.55f) * 100f).coerceIn(10f, 98f)
-            "CHECK", "BET" -> ((1.0f - kotlin.math.abs(finalScore - 0.35f) / 0.65f) * 100f).coerceIn(10f, 98f)
+            "CHECK" -> ((1.0f - kotlin.math.abs(finalScore - 0.35f) / 0.65f) * 100f).coerceIn(10f, 98f)
             else -> 50f
         }
 
