@@ -69,6 +69,8 @@ object LocalLogServer {
                         } else {
                             serveNotFound(output)
                         }
+                    } else if (method == "POST" && path == "/push-github") {
+                        servePushGithub(output)
                     }
                 }
             } catch (e: Exception) {
@@ -142,6 +144,9 @@ object LocalLogServer {
                     <a href="/export" style="background:#3b82f6; color:#fff; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold; border:none; cursor:pointer;">
                         📥 Download ZIP (Session Logs, Logcat & Screenshots)
                     </a>
+                    <button onclick="pushToGithub()" style="margin-left: 20px; background:#10b981; color:#fff; padding:10px 20px; text-decoration:none; border-radius:4px; font-weight:bold; border:none; cursor:pointer;">
+                        📤 Push to GitHub
+                    </button>
                     <p style="color: #94a3b8; font-size: 11px; margin-top: 10px;">
                         В ZIP-архив входят полные логи со старта программы (session_logs.txt) и системный лог (logcat.txt).<br>
                         Не закрывайте программу полностью перед скачиванием!
@@ -159,6 +164,30 @@ object LocalLogServer {
                             updateUI();
                         } catch (e) {
                             console.error('Fetch error', e);
+                        }
+                    }
+                    
+                    async function pushToGithub() {
+                        const btn = document.querySelector('button[onclick="pushToGithub()"]');
+                        if (btn) {
+                            btn.textContent = '⏳ Uploading...';
+                            btn.disabled = true;
+                        }
+                        try {
+                            const res = await fetch('/push-github', { method: 'POST' });
+                            if (res.ok) {
+                                alert('Logs pushed to GitHub successfully!');
+                            } else {
+                                const text = await res.text();
+                                alert('Failed to push to GitHub: ' + text);
+                            }
+                        } catch(e) {
+                            alert('Error: ' + e);
+                        } finally {
+                            if (btn) {
+                                btn.textContent = '📤 Push to GitHub';
+                                btn.disabled = false;
+                            }
                         }
                     }
                     
@@ -226,6 +255,75 @@ object LocalLogServer {
                 serveNotFound(output)
             }
         }
+    }
+
+    private fun servePushGithub(output: OutputStream) {
+        val ctx = context ?: return serveNotFound(output)
+        kotlinx.coroutines.runBlocking {
+            try {
+                val file = DebugLogManager.createExportZip(ctx)
+                if (file == null || !file.exists()) {
+                    serveError(output, "No debug zip found")
+                    return@runBlocking
+                }
+
+                val bytes = file.readBytes()
+                val base64Content = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+
+                var repo = BuildConfig.GITHUB_REPO
+                if (repo.startsWith("https://github.com/")) {
+                    repo = repo.removePrefix("https://github.com/")
+                }
+                
+                val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                val path = "downloaded_logs/bot_logs_${timestamp}.zip"
+
+                val url = java.net.URL("https://api.github.com/repos/${repo}/contents/${path}")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "PUT"
+                conn.setRequestProperty("Authorization", "Bearer ${BuildConfig.GITHUB_PAT}")
+                conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+
+                val json = JSONObject()
+                json.put("message", "Upload logs to $path")
+                json.put("content", base64Content)
+
+                val outStream = conn.outputStream
+                outStream.write(json.toString().toByteArray(Charsets.UTF_8))
+                outStream.flush()
+                outStream.close()
+
+                val responseCode = conn.responseCode
+                if (responseCode == 201 || responseCode == 200) {
+                    val responseStr = "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: application/json\r\n" +
+                            "Connection: close\r\n\r\n" +
+                            "{\"success\": true}"
+                    output.write(responseStr.toByteArray())
+                    output.flush()
+                } else {
+                    val errorStream = conn.errorStream?.readBytes()?.toString(Charsets.UTF_8) ?: "Unknown error"
+                    serveError(output, "GitHub API returned code $responseCode: $errorStream")
+                }
+                conn.disconnect()
+
+            } catch (e: Exception) {
+                Log.e("LocalLogServer", "Error pushing to Github", e)
+                serveError(output, e.message ?: "Exception occurred")
+            }
+        }
+    }
+
+    private fun serveError(output: OutputStream, message: String) {
+        val json = JSONObject().apply { put("error", message) }
+        val responseStr = "HTTP/1.1 500 Internal Server Error\r\n" +
+                "Content-Type: application/json\r\n" +
+                "Connection: close\r\n\r\n" +
+                json.toString()
+        output.write(responseStr.toByteArray())
+        output.flush()
     }
 
     private fun serveJson(output: OutputStream) {
