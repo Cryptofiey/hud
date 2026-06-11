@@ -911,13 +911,13 @@ class ScreenScanner(
             var parsedBB: Float? = null
             var parsedStage: TournamentStage? = null
             
-            val nlhMatch = Regex("NLH\\s*-\\s*([0-9.,KM]+)\\s*/\\s*([0-9.,KM]+)(?:\\s*\\(LEVEL\\s*(\\d+)\\))?").find(fullScanText)
+            val nlhMatch = Regex("NLH\\s*-\\s*([0-9.,KMk]+)\\s*/\\s*([0-9.,KMk]+)(?:\\s*\\((?:LEVEL\\s*)?(\\d+)\\))?", RegexOption.IGNORE_CASE).find(fullScanText)
             if (nlhMatch != null) {
                 parsedSB = parseCleanValue(nlhMatch.groupValues[1])
                 parsedBB = parseCleanValue(nlhMatch.groupValues[2])
                 
                 val levelValStr = nlhMatch.groupValues.getOrNull(3)
-                if (levelValStr != null) {
+                if (levelValStr?.isNotEmpty() == true) {
                     val levelVal = levelValStr.toIntOrNull()
                     if (levelVal != null) {
                         parsedStage = when {
