@@ -125,12 +125,12 @@ object AdvisorEngine {
     // Helper: Determine Sklansky & Malmuth Hand Group for two cards
     private fun getPositionalHazard(position: TablePosition, isPreflop: Boolean): Float {
         return when(position) {
-            TablePosition.UTG -> if (isPreflop) 0.08f else 0.04f
-            TablePosition.MP -> if (isPreflop) 0.05f else 0.03f
-            TablePosition.CO -> if (isPreflop) 0.02f else 0.01f
+            TablePosition.UTG -> if (isPreflop) 0.05f else 0.02f
+            TablePosition.MP -> if (isPreflop) 0.03f else 0.01f
+            TablePosition.CO -> if (isPreflop) 0.01f else 0.0f
             TablePosition.BTN -> 0.0f
-            TablePosition.SB -> if (isPreflop) 0.03f else 0.08f
-            TablePosition.BB -> if (isPreflop) 0.0f else 0.05f
+            TablePosition.SB -> if (isPreflop) 0.02f else 0.04f
+            TablePosition.BB -> if (isPreflop) 0.0f else 0.02f
         }
     }
 
@@ -138,57 +138,47 @@ object AdvisorEngine {
         val mRatio = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20f
         
         val stackRisk = if (heroStack > 0) (betToCall / heroStack).coerceIn(0f, 1f) else 0f
-        // Increase safety margin if we risk a large portion of our DEEP stack, but vanish this penalty if we are short-stacked (M < 10)
-        val shortStackFactor = (mRatio / 15f).coerceIn(0.1f, 1.0f)
-        val stackRiskMargin = stackRisk * 0.15f * shortStackFactor
+        val shortStackFactor = (mRatio / 20f).coerceIn(0.1f, 1.0f)
+        val stackRiskMargin = stackRisk * 0.08f * shortStackFactor
         
         // Penalize for multiple active opponents (squeeze hazard & multiway dilution)
         val multiwayHazard = if (activeOpponentsCount > 1) {
-            (activeOpponentsCount - 1) * 0.015f
+            (activeOpponentsCount - 1) * 0.005f
         } else 0f
 
-        val positionalHazard = getPositionalHazard(position, isPreflop) * 0.5f
+        val positionalHazard = getPositionalHazard(position, isPreflop) * 0.4f
         
         // Stage & Bubble Hazard (Tighter ranges as game progresses, but less so if we are short stacked)
         var stageHazard = if (isPreflop) {
             when (stage) {
-                TournamentStage.EARLY -> {
-                    // Early game: we want to play speculative hands cheaply to felt fish.
-                    0.0f 
-                }
+                TournamentStage.EARLY -> 0.0f 
                 TournamentStage.MIDDLE -> {
-                    // Middle game: fish are gone, ranges are tighter. Marginal hands are penalized.
-                    if (sklanskyGroup >= 6) 0.06f
-                    else if (sklanskyGroup >= 5) 0.03f
+                    if (sklanskyGroup >= 6) 0.02f
+                    else if (sklanskyGroup >= 5) 0.01f
                     else 0.0f
                 }
                 TournamentStage.LATE -> {
-                    // Late/Bubble: survival mode. Very tight calling ranges. 
-                    // High penalty for marginal hands.
                     when {
-                        sklanskyGroup >= 6 -> 0.14f
-                        sklanskyGroup >= 4 -> 0.07f
-                        else -> 0.03f // Even good hands require slightly more equity due to ICM
+                        sklanskyGroup >= 7 -> 0.05f
+                        sklanskyGroup >= 4 -> 0.03f
+                        else -> 0.01f 
                     }
                 }
             }
         } else {
-            // Postflop stage hazard evaluates raw survival pressure
             when (stage) {
                 TournamentStage.EARLY -> 0.0f
-                TournamentStage.MIDDLE -> 0.02f
-                TournamentStage.LATE -> 0.06f 
+                TournamentStage.MIDDLE -> 0.01f
+                TournamentStage.LATE -> 0.03f 
             }
         }
         
         stageHazard *= shortStackFactor
 
         // --- CHEAP FLOP FIX ---
-        // If it's preflop and we can see the flop for 1-2 big blinds (like a limp or min-raise), 
-        // we shouldn't heavily penalize medium hands.
-        if (isPreflop && betToCall > 0f && bigBlind > 0f && betToCall <= bigBlind * 2.1f) {
-            stageHazard = 0.0f // Remove late stage penalty for super cheap calls
-            stageHazard -= 0.03f // Small bonus to encourage seeing cheap flops with marginal hands
+        if (isPreflop && betToCall > 0f && bigBlind > 0f && betToCall <= bigBlind * 2.5f) {
+            stageHazard = 0.0f 
+            stageHazard -= 0.02f 
         }
 
         return basePotOdds + stackRiskMargin + multiwayHazard + positionalHazard + stageHazard
@@ -350,7 +340,7 @@ object AdvisorEngine {
         }
         val betToCall = maxOf(0f, maxOpponentBet - heroBet)
         val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
-        val activePot = potSize + totalOpponentBets + heroBet
+        val activePot = if (potSize + totalOpponentBets + heroBet < betToCall && betToCall > 0) betToCall + (bigBlind * 1.5f) else potSize + totalOpponentBets + heroBet
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
         val isPreflop = board.filterNotNull().isEmpty()
         val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup, bigBlind)
@@ -512,7 +502,7 @@ object AdvisorEngine {
         }
         val betToCall = maxOf(0f, maxOpponentBet - heroBet)
         val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
-        val activePot = potSize + totalOpponentBets + heroBet
+        val activePot = if (potSize + totalOpponentBets + heroBet < betToCall && betToCall > 0) betToCall + (bigBlind * 1.5f) else potSize + totalOpponentBets + heroBet
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
         
         val isPreflop = board.filterNotNull().isEmpty()
@@ -819,7 +809,7 @@ object AdvisorEngine {
         }
         val betToCall = maxOf(0f, maxOpponentBet - heroBet)
         val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
-        val activePot = potSize + totalOpponentBets + heroBet
+        val activePot = if (potSize + totalOpponentBets + heroBet < betToCall && betToCall > 0) betToCall + (bigBlind * 1.5f) else potSize + totalOpponentBets + heroBet
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
         
         val isPreflop = board.filterNotNull().isEmpty()
@@ -1127,20 +1117,22 @@ object AdvisorEngine {
 
             // High pressure or short stack DNA response
             val bigBlinds = if (heroStack > 0 && isBbDisplay) heroStack else heroStack / (bigBlind.coerceAtLeast(1f))
-            if (bigBlinds < 15f && board.filterNotNull().isEmpty()) {
+            if (bigBlinds < 8f && board.filterNotNull().isEmpty()) {
                 // Short stack preflop Push/Fold DNA adjustment
                 val sklansky = getSklanskyGroup(heroCard1, heroCard2)
                 if (sklansky <= 4) {
-                    action = "RAISE" // Recommend raise/push instead of call
+                    action = "ALL-IN" 
                     confidence = 90f
-                    customExplanation = "DNA($dnaProfile): Push/Fold <15bb"
+                    customExplanation = "DNA($dnaProfile): Push/Fold <8bb"
                 } else if (action == "CALL") {
-                    action = "FOLD"
-                    confidence = 85f
-                    customExplanation = "DNA($dnaProfile): Fold <15bb"
-                    BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
+                    if (sklansky >= 6) {
+                        action = "FOLD"
+                        confidence = 85f
+                        customExplanation = "DNA($dnaProfile): Fold <8bb"
+                        BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
+                    }
                 } else if (action == "FOLD") {
-                    customExplanation = "DNA($dnaProfile): Fold <15bb"
+                    customExplanation = "DNA($dnaProfile): Fold <8bb"
                 }
             } else {
                 // Preflop / Postflop adaptive meta game behavior matching DNA profiles:
