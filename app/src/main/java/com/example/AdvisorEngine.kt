@@ -135,9 +135,12 @@ object AdvisorEngine {
     }
 
     private fun getTargetPotOdds(basePotOdds: Float, betToCall: Float, heroStack: Float, activeOpponentsCount: Int, position: TablePosition, isPreflop: Boolean, stage: TournamentStage, sklanskyGroup: Int, bigBlind: Float = 0f): Float {
+        val mRatio = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20f
+        
         val stackRisk = if (heroStack > 0) (betToCall / heroStack).coerceIn(0f, 1f) else 0f
-        // Increase safety margin if we risk a large portion of our stack (up to +15% equity needed)
-        val stackRiskMargin = stackRisk * 0.15f 
+        // Increase safety margin if we risk a large portion of our DEEP stack, but vanish this penalty if we are short-stacked (M < 10)
+        val shortStackFactor = (mRatio / 15f).coerceIn(0.1f, 1.0f)
+        val stackRiskMargin = stackRisk * 0.15f * shortStackFactor
         
         // Penalize for multiple active opponents (squeeze hazard & multiway dilution)
         val multiwayHazard = if (activeOpponentsCount > 1) {
@@ -146,7 +149,7 @@ object AdvisorEngine {
 
         val positionalHazard = getPositionalHazard(position, isPreflop) * 0.5f
         
-        // Stage & Bubble Hazard (Tighter ranges as game progresses)
+        // Stage & Bubble Hazard (Tighter ranges as game progresses, but less so if we are short stacked)
         var stageHazard = if (isPreflop) {
             when (stage) {
                 TournamentStage.EARLY -> {
@@ -177,6 +180,8 @@ object AdvisorEngine {
                 TournamentStage.LATE -> 0.06f 
             }
         }
+        
+        stageHazard *= shortStackFactor
 
         // --- CHEAP FLOP FIX ---
         // If it's preflop and we can see the flop for 1-2 big blinds (like a limp or min-raise), 
@@ -945,8 +950,8 @@ object AdvisorEngine {
         var evL3_5 = totalEvL3_5 / divider
 
         // Global environmental bounds
-        if (mRatio < 12f) {
-            evL2_5 -= 0.12f // Короткий стек не имеет пространства для пассивного разыгрывания
+        if (mRatio < 8f) {
+            evL2_5 -= 0.05f // Короткий стек не имеет пространства для пассивного разыгрывания
         }
         if (position == TablePosition.UTG || position == TablePosition.MP) {
             evL3_5 -= 0.05f // Без позиции блефы менее прибыльны
@@ -1019,11 +1024,11 @@ object AdvisorEngine {
         var explanation = branchSummary
 
         // Специфический пуш-фолд эксплойт на коротких стеках
-        if (mRatio < 12f && isPreflop) {
-            if (sklanskyGroup <= 2 || (finalScore > 0.62f && sklanskyGroup <= 4)) {
+        if (mRatio < 8f && isPreflop) {
+            if (sklanskyGroup <= 4 || (finalScore > 0.60f && sklanskyGroup <= 5)) {
                 finalAction = "ALL-IN"
                 explanation = "ОЛЛ-ИН по короткому стеку префлоп [M=${String.format(Locale.US, "%.1f", mRatio)}]"
-            } else if (finalAction == "CALL") {
+            } else if (finalAction == "CALL" && betToCall > (bigBlind * 2.5f).coerceAtLeast(0f)) {
                 finalAction = "FOLD"
                 explanation = "Пас укороченного стека префлоп"
                 BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD]: Ошибка короткого стека префлоп (M=${mRatio})")

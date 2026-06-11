@@ -386,6 +386,24 @@ class ScreenScanner(
             var scannedPotSize: Float? = null
             
             val fullScanText = result.text.uppercase()
+            
+            // Abort processing immediately if we are viewing our own settings screen or Android launcher
+            if (fullScanText.contains("POKER EQUITY HUD") || fullScanText.contains("ADVISOR ADVANCED FEATURES") || fullScanText.contains("CALIBRATION BOUNDING BOXES")) {
+                scanStatus.value = "Агент-Сторож: Открыты настройки HUD. Автокликер приостановлен."
+                PokerHudSharedState.externalActions.tryEmit(
+                    ExternalAction.UpdateCards(
+                        hero1 = null, hero2 = null, board = emptyList(), opponents = emptyList(),
+                        profileBoxes = null, updateProfileBoxes = false, rawScannerBoxes = null,
+                        potSize = null, heroActionOptions = emptyList(), heroTurn = false,
+                        heroStack = null, heroBet = null, tablePosition = null,
+                        smallBlind = null, bigBlind = null, tournamentStage = null,
+                        isBbDisplay = false
+                    )
+                )
+                image?.close()
+                return true
+            }
+            
             val textUpper = fullScanText
             var isPasswordScreen = false
             if (textUpper.contains("PASSWORD") || textUpper.contains("ПАРОЛЬ") || 
@@ -1128,7 +1146,7 @@ class ScreenScanner(
                 
             val isProfileScreen = fullScanText.contains("VPIP") || fullScanText.contains("PFR") || fullScanText.contains("WTSD") || fullScanText.contains("WSD") || fullScanText.contains("C-BET")
             
-            val hasTableElements = finalH1 != null || finalH2 != null || finalBoard.any { it != null } || finalOpponents.isNotEmpty() || scannedPotSize != null || (actionButtonsMap.isNotEmpty() && !isProfileScreen)
+            val hasTableElements = finalH1 != null || finalH2 != null || finalBoard.any { it != null } || scannedPotSize != null || (actionButtonsMap.isNotEmpty() && !isProfileScreen)
             
             // We only consider lobby transitions valid if we see a trusted marker anywhere on screen, 
             // OR if we already see table elements (so we know we are in the app).
