@@ -594,7 +594,7 @@ class PokerHudService : Service() {
         }
 
         val btnMinimize = Button(this, null, 0, android.R.style.Widget_Button).apply {
-            text = "СКРЫТЬ"
+            text = "HIDE"
             textSize = 6f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF37474F"), 4f)
@@ -608,7 +608,7 @@ class PokerHudService : Service() {
         }
 
         val btnExit = Button(this, null, 0, android.R.style.Widget_Button).apply {
-            text = "ВЫХОД"
+            text = "EXIT"
             textSize = 6f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF1E88E5"), 4f)
@@ -2144,7 +2144,7 @@ class PokerHudService : Service() {
         
         // Advisor Slot
         val txtL1Advisor = TextView(this).apply {
-            text = "🧮 L1: ЖДЕМ..."
+            text = "🧮 L1: WAIT..."
             setTextColor(AndroidColor.parseColor("#FF90CAF9"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -2156,7 +2156,7 @@ class PokerHudService : Service() {
         }
         
         val txtL2Advisor = TextView(this).apply {
-            text = "🖩 L2: ЖДЕМ..."
+            text = "🖩 L2: WAIT..."
             setTextColor(AndroidColor.parseColor("#FFCC80"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -2168,7 +2168,7 @@ class PokerHudService : Service() {
         }
         
         val txtL3Advisor = TextView(this).apply {
-            text = "🦾 L3: ЖДЕМ..."
+            text = "🦾 L3: WAIT..."
             setTextColor(AndroidColor.parseColor("#FF80DEEA"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -2180,7 +2180,7 @@ class PokerHudService : Service() {
         }
 
         val txtL4Advisor = TextView(this).apply {
-            text = "🖐️ L4: ЖДЕМ..."
+            text = "🖐️ L4: WAIT..."
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
