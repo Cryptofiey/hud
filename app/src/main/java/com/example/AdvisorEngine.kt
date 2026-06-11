@@ -283,6 +283,7 @@ object AdvisorEngine {
         bigBlind: Float,
         heroStack: Float,
         lastActions: String = "",
+        heroActionOptions: List<String> = emptyList(),
         isBbDisplay: Boolean = false
     ): Recommendation {
         // Zero cards check
@@ -321,7 +322,19 @@ object AdvisorEngine {
                 maxOpponentBet = pBet
             }
         }
-        val betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        var betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        
+        // --- OCR FIX FOR MISSED BETS ---
+        if (betToCall == 0f && heroActionOptions.isNotEmpty()) {
+            val hasCheck = heroActionOptions.any { it.equals("Check", true) }
+            val hasCall = heroActionOptions.any { it.equals("Call", true) }
+            val hasAllIn = heroActionOptions.any { it.equals("All-in", true) }
+            
+            if (!hasCheck && (hasCall || hasAllIn)) {
+                if (hasAllIn && !hasCall) betToCall = heroStack
+                else betToCall = bigBlind.coerceAtLeast(1f) // Assumed minimal bet
+            }
+        }
         val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
         val activePot = if (potSize + totalOpponentBets + heroBet < betToCall && betToCall > 0) betToCall + (bigBlind * 1.5f) else potSize + totalOpponentBets + heroBet
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
@@ -450,6 +463,7 @@ object AdvisorEngine {
         smallBlind: Float,
         bigBlind: Float,
         heroStack: Float,
+        heroActionOptions: List<String> = emptyList(),
         isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
@@ -483,7 +497,19 @@ object AdvisorEngine {
                 maxOpponentBet = pBet
             }
         }
-        val betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        var betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        
+        // --- OCR FIX FOR MISSED BETS ---
+        if (betToCall == 0f && heroActionOptions.isNotEmpty()) {
+            val hasCheck = heroActionOptions.any { it.equals("Check", true) }
+            val hasCall = heroActionOptions.any { it.equals("Call", true) }
+            val hasAllIn = heroActionOptions.any { it.equals("All-in", true) }
+            
+            if (!hasCheck && (hasCall || hasAllIn)) {
+                if (hasAllIn && !hasCall) betToCall = heroStack
+                else betToCall = bigBlind.coerceAtLeast(1f) // Assumed minimal bet
+            }
+        }
         val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
         val activePot = if (potSize + totalOpponentBets + heroBet < betToCall && betToCall > 0) betToCall + (bigBlind * 1.5f) else potSize + totalOpponentBets + heroBet
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
@@ -757,6 +783,7 @@ object AdvisorEngine {
         bigBlind: Float,
         heroStack: Float,
         lastActions: String = "",
+        heroActionOptions: List<String> = emptyList(),
         isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
@@ -790,7 +817,19 @@ object AdvisorEngine {
                 maxOpponentBet = pBet
             }
         }
-        val betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        var betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        
+        // --- OCR FIX FOR MISSED BETS ---
+        if (betToCall == 0f && heroActionOptions.isNotEmpty()) {
+            val hasCheck = heroActionOptions.any { it.equals("Check", true) }
+            val hasCall = heroActionOptions.any { it.equals("Call", true) }
+            val hasAllIn = heroActionOptions.any { it.equals("All-in", true) }
+            
+            if (!hasCheck && (hasCall || hasAllIn)) {
+                if (hasAllIn && !hasCall) betToCall = heroStack
+                else betToCall = bigBlind.coerceAtLeast(1f) // Assumed minimal bet
+            }
+        }
         val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
         val activePot = if (potSize + totalOpponentBets + heroBet < betToCall && betToCall > 0) betToCall + (bigBlind * 1.5f) else potSize + totalOpponentBets + heroBet
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
@@ -1063,6 +1102,7 @@ object AdvisorEngine {
         bigBlind: Float,
         heroStack: Float,
         lastActions: String = "",
+        heroActionOptions: List<String> = emptyList(),
         isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
@@ -1072,7 +1112,7 @@ object AdvisorEngine {
         // Get L3 advanced recommendation to base our adaptive adjustments upon
         val baseL3 = computeRecommendationAdvanced(
             heroCard1, heroCard2, board, potSize, heroBet,
-            opponents, activeOpponentsCount, simResult, settings, position, stage, smallBlind, bigBlind, heroStack, lastActions
+            opponents, activeOpponentsCount, simResult, settings, position, stage, smallBlind, bigBlind, heroStack, lastActions, heroActionOptions, isBbDisplay
         )
 
         // Find the main active opponent
@@ -1178,9 +1218,25 @@ object AdvisorEngine {
         }
 
         // Global safeguard: never fold if checking is free/possible
-        val betToCall = maxOf(0f, heroBet.let { hb -> 
-            opponents.filter { it.isActive }.maxOfOrNull { opp -> if (settings.usePip) opp.betSize else 0f }?.minus(hb) ?: 0f 
-        })
+        var maxOpponentBet = 0f
+        opponents.filter { it.isActive }.forEach { opp ->
+            val pBet = if (settings.usePip) opp.betSize else 0f
+            if (pBet > maxOpponentBet) maxOpponentBet = pBet
+        }
+        var betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        
+        // --- OCR FIX FOR MISSED BETS ---
+        if (betToCall == 0f && heroActionOptions.isNotEmpty()) {
+            val hasCheck = heroActionOptions.any { it.equals("Check", true) }
+            val hasCall = heroActionOptions.any { it.equals("Call", true) }
+            val hasAllIn = heroActionOptions.any { it.equals("All-in", true) }
+            
+            if (!hasCheck && (hasCall || hasAllIn)) {
+                if (hasAllIn && !hasCall) betToCall = heroStack
+                else betToCall = bigBlind.coerceAtLeast(1f) // Assumed minimal bet
+            }
+        }
+        
         if (betToCall <= 0f && action == "FOLD") {
             action = "CHECK"
             customExplanation = "Check (Free)"

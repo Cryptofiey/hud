@@ -1312,7 +1312,8 @@ class PokerHudService : Service() {
                                 stage = updatedState.stage,
                                 smallBlind = updatedState.smallBlind,
                                 bigBlind = updatedState.bigBlind,
-                                heroStack = updatedState.heroStack
+                                heroStack = updatedState.heroStack,
+                                heroActionOptions = updatedState.heroActionOptions
                             )
 
                             // 2. Advanced Branch
@@ -1337,7 +1338,8 @@ class PokerHudService : Service() {
                                 stage = updatedState.stage,
                                 smallBlind = updatedState.smallBlind,
                                 bigBlind = updatedState.bigBlind,
-                                heroStack = updatedState.heroStack
+                                heroStack = updatedState.heroStack,
+                                heroActionOptions = updatedState.heroActionOptions
                             )
 
                             val l2Recommendation = com.example.AdvisorEngine.computeRecommendationL2(
@@ -1354,7 +1356,8 @@ class PokerHudService : Service() {
                                 stage = updatedState.stage,
                                 smallBlind = updatedState.smallBlind,
                                 bigBlind = updatedState.bigBlind,
-                                heroStack = updatedState.heroStack
+                                heroStack = updatedState.heroStack,
+                                heroActionOptions = updatedState.heroActionOptions
                             )
 
                             val l4Recommendation = com.example.AdvisorEngine.computeRecommendationL4(
@@ -1371,7 +1374,8 @@ class PokerHudService : Service() {
                                 stage = updatedState.stage,
                                 smallBlind = updatedState.smallBlind,
                                 bigBlind = updatedState.bigBlind,
-                                heroStack = updatedState.heroStack
+                                heroStack = updatedState.heroStack,
+                                heroActionOptions = updatedState.heroActionOptions
                             )
 
                             PokerHudSharedState.uiState.update { 
