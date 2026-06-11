@@ -14,6 +14,7 @@ const OpponentSkillFactor = {
 
 export async function runSimulation(iterations, params, opponentsConfig) {
     let rawProfit = 0; // в Больших Блайндах (BB)
+    let stats = { vpip: 0, folds: 0, calls: 0, raises: 0, winsAtShowdown: 0 };
     
     // Распаковка конфигурации оппонентов (например, { vpip: 0.30, types: ["Regular", "Fish"] })
     let oppTypes = opponentsConfig.types || ["Regular"];
@@ -43,24 +44,38 @@ export async function runSimulation(iterations, params, opponentsConfig) {
         let bbAtRisk = potOdds * 10; // Чем выше шансы - тем больше ставка к возврату. Эмуляция риска в ББ
         
         if (decision.action === "FOLD") {
+            stats.folds++;
             // Если бот пасует, он экономит текущую ставку, но теряет вложенные ранее мертвые деньги
             rawProfit -= (bbAtRisk * 0.2); 
         } else {
+            stats.vpip++;
             // Если мы зашли в раздачу (Call / Raise / All-In)
             let isWin = handStrength > oppStrength;
             
             // Если All-In, риск равен всему стеку, если Рейз - риск х3
             let riskMultiplier = 1.0;
             if (decision.action === "ALL-IN") riskMultiplier = stackBB / bbAtRisk;
-            if (decision.action === "RAISE") riskMultiplier = 3.0;
+            if (decision.action === "RAISE") {
+                riskMultiplier = 3.0;
+                stats.raises++;
+            }
+            if (decision.action === "CALL") stats.calls++;
             
             if (isWin) {
+                 stats.winsAtShowdown++;
                  rawProfit += bbAtRisk * riskMultiplier; 
             } else {
                  rawProfit -= bbAtRisk * riskMultiplier;
             }
         }
     }
+    
+    // Вывод развернутой статистики
+    console.log(`\n📊 СТАТИСТИКА СЕССИИ:`);
+    console.log(`🔹 Всего раздач: ${iterations}`);
+    console.log(`🔹 VPIP (Участие в раздачах): ${((stats.vpip / iterations) * 100).toFixed(1)}%`);
+    console.log(`🔹 Fold (Пас): ${((stats.folds / iterations) * 100).toFixed(1)}% | Call: ${((stats.calls / iterations) * 100).toFixed(1)}% | Raise/All-In: ${((stats.raises / iterations) * 100).toFixed(1)}%`);
+    console.log(`🔹 W$SD (Победа на вскрытии): ${stats.vpip > 0 ? ((stats.winsAtShowdown / stats.vpip) * 100).toFixed(1) : 0}%`);
     
     return rawProfit;
 }
