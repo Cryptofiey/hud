@@ -29,15 +29,10 @@ object BotLogSharedState {
     private fun addHistory(tag: String, msg: String) {
         val now = System.currentTimeMillis()
         logsHistory.add(LogEntry(now, tag, msg))
-        // Cleanup logs older than 15 minutes to prevent memory leaks
-        val cutoff = now - 15 * 60 * 1000
-        try {
-            logsHistory.removeAll { it.timestamp < cutoff }
-        } catch (ignored: Exception) {}
-        
-        if (logsHistory.size > 5000) {
+        // Keep full session logs in memory up to 500000 lines to satisfy user request for complete export
+        if (logsHistory.size > 500000) {
             try {
-                logsHistory.subList(0, logsHistory.size - 4500).clear()
+                logsHistory.subList(0, logsHistory.size - 450000).clear()
             } catch (ignored: Exception) {}
         }
     }

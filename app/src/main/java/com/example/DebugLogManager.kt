@@ -288,7 +288,24 @@ object DebugLogManager {
                 zos.write(logsContent.toByteArray())
                 zos.closeEntry()
 
-                // 2. Write screenshots
+                // 2. Write Full Session Logs (from start of app)
+                val sessionLogsContent = getSessionLogs(0L) // 0L means all time history
+                zos.putNextEntry(ZipEntry("session_logs.txt"))
+                zos.write(sessionLogsContent.toByteArray())
+                zos.closeEntry()
+
+                // 3. Write logcat
+                try {
+                    val process = Runtime.getRuntime().exec("logcat -d")
+                    val logcatText = process.inputStream.reader().readText()
+                    zos.putNextEntry(ZipEntry("logcat.txt"))
+                    zos.write(logcatText.toByteArray())
+                    zos.closeEntry()
+                } catch (e: Exception) {
+                    Log.e("DebugLogManager", "Failed to dump logcat", e)
+                }
+
+                // 4. Write screenshots
                 val ssDir = File(context.cacheDir, "bot_screenshots")
                 ssDir.listFiles()?.forEach { file ->
                     zos.putNextEntry(ZipEntry("screenshots/${file.name}"))
