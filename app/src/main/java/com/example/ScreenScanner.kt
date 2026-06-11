@@ -595,7 +595,8 @@ class ScreenScanner(
                                 val isBright = isColorfulButton(cleanBitmap!!, box)
                                 android.util.Log.d("BotActionDetect", "Bottom element: $originalTextUpper | isBright=$isBright")
 
-                                val isSizing = textUpper.contains("MAX") || textUpper.contains("МАКС") || textUpper.contains("POT") || textUpper.contains("ПОТ") || textUpper.contains("ALL") || textUpper.contains("1/2") || textUpper.contains("3/4") || textUpper == "+" || textUpper == "-"
+                                val isAll = textUpper.contains("ALL-IN") || textUpper.contains("ALLIN") || (textUpper.contains("ALL") && !textUpper.contains("CALL")) || textUpper.contains("ОЛЛ") || textUpper.contains("ВЫСТАВИТЬ")
+                                val isSizing = textUpper.contains("MAX") || textUpper.contains("МАКС") || textUpper.contains("POT") || textUpper.contains("ПОТ") || isAll || textUpper.contains("1/2") || textUpper.contains("3/4") || textUpper == "+" || textUpper == "-"
                                 if (isSizing) {
                                     sizingButtonsMap[originalTextUpper] = line.boundingBox ?: box
                                 }

@@ -23,6 +23,7 @@ object RobotPlayer {
     private var lastActionTime = 0L
     private var pendingActionSignature = ""
     private var pendingActionStartTime = 0L
+    @Volatile private var isExecutingTurn = false
     
     init {
         // Background loop for Lobby / Table Buy-in Transition clicks
@@ -121,13 +122,18 @@ object RobotPlayer {
                 val signature = "${heroStr}_${commCardsSize}_${canonicalAction}_${exactOptions}"
                 val now = System.currentTimeMillis()
                 
-                if (lastActedAction == signature && (now - lastActionTime < 4000L)) {
-                    // Already acted for this phase recently
+                if (now - lastActionTime < 3500L) {
+                    // Global cooldown after any action to let UI animations finish and ignore transient OCR distortions
                     return@collectLatest
                 }
                 
-                if (pendingActionSignature == signature && (now - pendingActionStartTime < 4000L)) {
-                    // We are currently waiting to execute this same action, let the existing coroutine finish
+                if (lastActedAction == signature && (now - lastActionTime < 6000L)) {
+                    // Already acted for this exact phase recently
+                    return@collectLatest
+                }
+                
+                if (isExecutingTurn || pendingActionSignature == signature && (now - pendingActionStartTime < 4000L)) {
+                    // We are currently waiting to execute an action, let the existing coroutine finish
                     return@collectLatest
                 }
 
@@ -140,14 +146,16 @@ object RobotPlayer {
                 // Track pending action so we don't start multiple parallel timers for the same action
                 pendingActionSignature = signature
                 pendingActionStartTime = now
+                isExecutingTurn = true
                 
                 Log.d("RobotPlayer", "Scheduling AI Action: $canonicalAction on rectangle $targetRect (sig: $signature)")
                 
                 CoroutineScope(Dispatchers.Default).launch {
-                    delay(calculateHumanDelay(canonicalAction))
-                    
-                    var iterations = 0
-                    var successfulClick = false
+                    try {
+                        delay(calculateHumanDelay(canonicalAction))
+                        
+                        var iterations = 0
+                        var successfulClick = false
                     while (isActive && iterations < 5) {
                         val currentRecText = PokerHudSharedState.uiState.value.let { it.advancedRecommendation ?: it.recommendation }?.action?.uppercase() ?: ""
                         val stillMatching = when (canonicalAction) {
@@ -270,12 +278,17 @@ object RobotPlayer {
                         }
                         
                         delay(2500)
-                        iterations++
+                        
+                        // We achieved a full click sequence. Break immediately to prevent re-evaluating distorted OCR while the slider or animation is active.
+                        break
                     }
                     
                     if (!successfulClick) {
                         // If the loop finished but we never successfully clicked, clear the pending signature to unblock retries
                         pendingActionSignature = ""
+                    }
+                    } finally {
+                        isExecutingTurn = false
                     }
                 }
                 } catch (e: Exception) {
@@ -304,6 +317,10 @@ object RobotPlayer {
         for ((key, rect) in sortedButtons) {
             val upperKey = key.uppercase().replace(" ", "")
             
+            val isAll = upperKey.contains("ALL-IN") || upperKey.contains("ALLIN") || upperKey.contains("ОЛЛ-ИН") || 
+                        (upperKey.contains("ALL") && !upperKey.contains("CALL")) || 
+                        upperKey.contains("ОЛЛ") || upperKey.contains("ВЫСТАВИТЬ")
+
             // Primary direct matches in both English and Russian
             val match = when (canonicalAction) {
                 "FOLD" -> upperKey.contains("FOLD") || upperKey.contains("ФОЛД") || upperKey.contains("PАС") || upperKey.contains("ПАС")
@@ -312,8 +329,8 @@ object RobotPlayer {
                 "BET", "RAISE" -> upperKey.contains("BET") || upperKey.contains("БЕТ") || 
                                   upperKey.contains("RAISE") || upperKey.contains("РЕЙЗ") || 
                                   upperKey.contains("CONFIRM") || upperKey.contains("ПОДТВЕРДИТЬ") ||
-                                  upperKey.contains("ALL-IN") || upperKey.contains("ALLIN") || upperKey.contains("ОЛЛ-ИН") || upperKey.contains("ALL") || upperKey.contains("ОЛЛ") || upperKey.contains("ВЫСТАВИТЬ")
-                "ALL-IN" -> upperKey.contains("ALL-IN") || upperKey.contains("ALLIN") || upperKey.contains("ОЛЛ-ИН") || upperKey.contains("ALL") || upperKey.contains("ОЛЛ") || upperKey.contains("ВЫСТАВИТЬ")
+                                  isAll
+                "ALL-IN" -> isAll
                 else -> false
             }
             if (match) return rect
