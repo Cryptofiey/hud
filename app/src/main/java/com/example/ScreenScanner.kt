@@ -763,13 +763,15 @@ class ScreenScanner(
                     safeText.contains("OF") || safeText.isEmpty()) continue
 
                 // We skip isCardBackground for hole cards because they can be covered by player graphics or shadows.
-                val parsedRanks = findCardsInText(safeText, isHoleCard = true)
-                for ((idx, rank) in parsedRanks.withIndex()) {
+                val parsedRanksRaw = findCardsInText(safeText, isHoleCard = true)
+                for ((idx, rankRaw) in parsedRanksRaw.withIndex()) {
                     // Slicing the bounding box if multiple ranks are merged in a single text block
-                    val sliceWidth = box.width() / parsedRanks.size
+                    val sliceWidth = box.width() / parsedRanksRaw.size
                     val sliceLeft = box.left + (idx * sliceWidth)
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
+                    
+                    val rank = fixConfusedSevens(rankRaw, sliceBox, cleanBitmap!!)
                     
                     val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
                     tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
@@ -1229,6 +1231,42 @@ class ScreenScanner(
     }
 
     // isCardBackground removed because it was aggressively dropping cards with shiny or dark backgrounds
+
+    private fun fixConfusedSevens(rank: Rank, box: android.graphics.Rect, bitmap: Bitmap): Rank {
+        if (rank != Rank.FOUR) return rank
+        try {
+            val isTall = box.height() > box.width() * 1.5f
+            val rankHeight = if (isTall) box.height() * 0.5f else box.height().toFloat()
+            val startX = box.left + (box.width() * 0.1f).toInt()
+            val endX = box.left + (box.width() * 0.40f).toInt()
+            val startY = box.top + (rankHeight * 0.35f).toInt()
+            val endY = box.top + (rankHeight * 0.65f).toInt()
+            var brightCount = 0
+            var totalCount = 0
+            for (x in startX..endX step 2) {
+                for (y in startY..endY step 2) {
+                    if (x < 0 || x >= bitmap.width || y < 0 || y >= bitmap.height) continue
+                    val pixel = bitmap.getPixel(x, y)
+                    val r = android.graphics.Color.red(pixel)
+                    val g = android.graphics.Color.green(pixel)
+                    val b = android.graphics.Color.blue(pixel)
+                    // Hole cards are white text on colored BG. Check for bright white
+                    if (r > 160 && g > 160 && b > 160) {
+                        brightCount++
+                    }
+                    totalCount++
+                }
+            }
+            if (totalCount > 0) {
+                val brightRatio = brightCount.toFloat() / totalCount
+                if (brightRatio < 0.15f) {
+                    // A 4 has vertical/horizontal lines here. A 7 has empty space.
+                    return Rank.SEVEN
+                }
+            }
+        } catch (e: Exception) {}
+        return rank
+    }
 
     private fun findCardsInText(text: String, isHoleCard: Boolean = false): List<Rank> {
         val found = mutableListOf<Rank>()
