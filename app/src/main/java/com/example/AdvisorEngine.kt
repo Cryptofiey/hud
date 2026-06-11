@@ -317,7 +317,7 @@ object AdvisorEngine {
             return Recommendation(
                 action = "FOLD",
                 confidence = 100f,
-                explanation = "Enter Hero hole cards to trigger active advice solver."
+                explanation = "Wait cards."
             )
         }
 
@@ -480,7 +480,7 @@ object AdvisorEngine {
         isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
-            return Recommendation("FOLD", 100f, "Enter cards.")
+            return Recommendation("FOLD", 100f, "Wait cards.")
         }
 
         // 1. Core Source 1: Monte Carlo Simulation win pct (and check fallback to L1 elements)
@@ -787,7 +787,7 @@ object AdvisorEngine {
         isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
-            return Recommendation("FOLD", 100f, "Enter cards.")
+            return Recommendation("FOLD", 100f, "Wait cards.")
         }
 
         // 1. Core Source 1: Monte Carlo Simulation win pct
@@ -893,27 +893,27 @@ object AdvisorEngine {
                 val wsdVal = profileStats.histWsd ?: 50f
 
                 val archetype = when {
-                    vpipVal > 40f && pfrVal < 12f -> "Гиппопотам"
-                    vpipVal > 35f && pfrVal > 25f && postflopDanger > 40f -> "Гепард"
-                    vpipVal < 16f && pfrVal < 12f && showdownResilience < 0.12f -> "Хамелеон"
-                    wtsdVal > 35f && wsdVal < 45f -> "Обезьяна"
-                    else -> "Акула"
+                    vpipVal > 40f && pfrVal < 12f -> "Whale🐋"
+                    vpipVal > 35f && pfrVal > 25f && postflopDanger > 40f -> "Maniac🐆"
+                    vpipVal < 16f && pfrVal < 12f && showdownResilience < 0.12f -> "Nit🦎"
+                    wtsdVal > 35f && wsdVal < 45f -> "Station🐒"
+                    else -> "Reg🦈"
                 }
                 
                 tableArchetype = archetype
 
                 // 5. Pathway Adjustment for THIS specific opponent
                 var oppEvL2_5 = baseL1Score
-                if (archetype == "Гепард") oppEvL2_5 += 0.14f
-                else if (archetype == "Гиппопотам" || archetype == "Обезьяна") oppEvL2_5 -= 0.10f
+                if (archetype == "Maniac🐆") oppEvL2_5 += 0.14f
+                else if (archetype == "Whale🐋" || archetype == "Station🐒") oppEvL2_5 -= 0.10f
 
                 var oppEvL3_0 = baseL1Score + 0.02f
-                if (archetype == "Гиппопотам" || archetype == "Обезьяна") oppEvL3_0 += 0.15f
-                else if (archetype == "Хамелеон") oppEvL3_0 -= 0.06f
+                if (archetype == "Whale🐋" || archetype == "Station🐒") oppEvL3_0 += 0.15f
+                else if (archetype == "Nit🦎") oppEvL3_0 -= 0.06f
 
                 var oppEvL3_5 = baseL1Score - 0.05f
-                if (foldVulnerability > 0.22f || archetype == "Хамелеон") oppEvL3_5 += 0.18f
-                else if (archetype == "Гиппопотам" || archetype == "Обезьяна") oppEvL3_5 -= 0.18f
+                if (foldVulnerability > 0.22f || archetype == "Nit🦎") oppEvL3_5 += 0.18f
+                else if (archetype == "Whale🐋" || archetype == "Station🐒") oppEvL3_5 -= 0.18f
 
                 totalEvL2_5 += oppEvL2_5
                 totalEvL3_0 += oppEvL3_0
@@ -1093,7 +1093,7 @@ object AdvisorEngine {
         isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
-            return Recommendation("FOLD", 100f, "Enter cards.")
+            return Recommendation("FOLD", 100f, "Wait cards.")
         }
 
         // Get L3 advanced recommendation to base our adaptive adjustments upon
@@ -1118,11 +1118,11 @@ object AdvisorEngine {
 
             // Define "Creature's DNA" profile subtypes of active opponent:
             val dnaProfile = when {
-                vpip > 50f && pfr < 10f -> "Гиппопотам" // Super loose-passive whale
-                vpip > 35f && pfr > 25f -> "Гепард" // Aggressive maniac
-                vpip < 16f && pfr < 12f -> "Хамелеон" // Passive Nit
-                wtsd > 35f && wsd < 45f -> "Обезьяна" // Showdown-station
-                else -> "Акула" // Decent regular
+                vpip > 50f && pfr < 10f -> "Whale🐋" // Super loose-passive whale
+                vpip > 35f && pfr > 25f -> "Maniac🐆" // Aggressive maniac
+                vpip < 16f && pfr < 12f -> "Nit🦎" // Passive Nit
+                wtsd > 35f && wsd < 45f -> "Station🐒" // Showdown-station
+                else -> "Reg🦈" // Decent regular
             }
 
             // High pressure or short stack DNA response
@@ -1133,73 +1133,73 @@ object AdvisorEngine {
                 if (sklansky <= 4) {
                     action = "RAISE" // Recommend raise/push instead of call
                     confidence = 90f
-                    customExplanation = "DNA ($dnaProfile): Пуш/Фолд при <15бб"
+                    customExplanation = "DNA($dnaProfile): Push/Fold <15bb"
                 } else if (action == "CALL") {
                     action = "FOLD"
                     confidence = 85f
-                    customExplanation = "DNA ($dnaProfile): Сброс маргинала при <15бб"
+                    customExplanation = "DNA($dnaProfile): Fold <15bb"
                     BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
                 } else if (action == "FOLD") {
-                    customExplanation = "DNA ($dnaProfile): Сброс рук при <15бб"
+                    customExplanation = "DNA($dnaProfile): Fold <15bb"
                 }
             } else {
                 // Preflop / Postflop adaptive meta game behavior matching DNA profiles:
                 when (dnaProfile) {
-                    "Гиппопотам" -> {
+                    "Whale🐋" -> {
                         // Against passive whale, NEVER bluff, only thin value raise/bet
                         if (action == "RAISE" || action == "BET") {
                             confidence = (confidence + 15f).coerceAtMost(98f)
-                            customExplanation = "DNA: Велью-напор против Гиппопотама"
+                            customExplanation = "DNA: Value Push > 🐋"
                         } else if (action == "CALL" && baseL3.confidence < 60f) {
                             action = "FOLD"
                             confidence = 75f
-                            customExplanation = "DNA: Сброс маргинальной руки против Гиппопотама"
+                            customExplanation = "DNA: Fold marginal > 🐋"
                             BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
                         }
                     }
-                    "Гепард" -> {
+                    "Maniac🐆" -> {
                         // cheetah is super aggressive. Let's trap / check-call or let him bluff
                         if (action == "BET" && board.filterNotNull().isNotEmpty()) {
                             action = "CHECK"
                             confidence = 80f
-                            customExplanation = "DNA: Ловушка (чекаем вперед Гепарда)"
+                            customExplanation = "DNA: Trap (check > 🐆)"
                         } else if (action == "CALL") {
                             confidence = (confidence + 10f).coerceAtMost(95f)
-                            customExplanation = "DNA: Взвешенный прием ставки Гепарда"
+                            customExplanation = "DNA: Call 🐆 bet"
                         } else if (action == "FOLD") {
-                            BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: Гепард")
+                            BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: 🐆")
                         }
                     }
-                    "Хамелеон" -> {
+                    "Nit🦎" -> {
                         // Chameleon is tight-passive. Overfold to his bets, steal his blinds.
                         if (action == "RAISE" && baseL3.confidence < 65f) {
                             action = "FOLD"
                             confidence = 90f
-                            customExplanation = "DNA: Падаем под силу Хамелеона"
+                            customExplanation = "DNA: Fold > 🦎"
                             BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
                         } else if (action == "CHECK" && position == TablePosition.BTN) {
                             action = "BET"
                             confidence = 70f
-                            customExplanation = "DNA: Кража пота у Хамелеона"
+                            customExplanation = "DNA: Steal 🦎 pot"
                         }
                     }
-                    "Обезьяна" -> {
+                    "Station🐒" -> {
                         // Showdown station, loves calling. Don't pull big multi-street bluffs.
                         if (action == "BET" && baseL3.confidence < 60f) {
                             action = "CHECK"
                             confidence = 85f
-                            customExplanation = "DNA: Обезьяну не напугать, чек"
+                            customExplanation = "DNA: Check (No bluff > 🐒)"
                         } else {
-                            customExplanation = "DNA: Чистый велью-пуш в Обезьяну"
+                            customExplanation = "DNA: Value Push > 🐒"
                         }
                     }
                     else -> {
-                        customExplanation = "DNA (Акула): Адаптивный сбалансированный эксплойт"
+                        customExplanation = "DNA(🦈): Balanced exploit"
                     }
                 }
             }
         } else {
-            customExplanation = "DNA: Ожидание профиля (Баланс)"
+            customExplanation = "DNA: Wait prof"
         }
 
         // Global safeguard: never fold if checking is free/possible
@@ -1208,7 +1208,7 @@ object AdvisorEngine {
         })
         if (betToCall <= 0f && action == "FOLD") {
             action = "CHECK"
-            customExplanation = "Чек: бесплатно (исправление случайного фолда)"
+            customExplanation = "Check (Free)"
             confidence = 100f
         }
 

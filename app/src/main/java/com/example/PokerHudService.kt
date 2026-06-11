@@ -710,7 +710,7 @@ class PokerHudService : Service() {
         scannerStatusBox = scannerBoxLocal
 
         val scannerTxt = TextView(this).apply {
-            text = "🔍 🔴 Стадия/Борд: Ждем..."
+            text = "🔍 🔴 Stage/Board: Wait..."
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
             textSize = 9f
             typeface = Typeface.DEFAULT_BOLD
@@ -2108,7 +2108,7 @@ class PokerHudService : Service() {
         }
         
         val toggleBtnHorizontal = TextView(this).apply {
-            text = "🔁"
+            text = "🤖"
             textSize = 10f
             setTextColor(AndroidColor.parseColor("#888888"))
             layoutParams = FrameLayout.LayoutParams(dpToPx(16f), dpToPx(16f)).apply {
@@ -2117,54 +2117,18 @@ class PokerHudService : Service() {
                 rightMargin = dpToPx(3f)
             }
             
-            var initialWidth = 0
-            var initialHeight = 0
-            var initialTouchX = 0f
-            var initialTouchY = 0f
-            var isClick = false
+            setOnClickListener {
+                RobotPlayer.isRobotModeEnabled.value = !RobotPlayer.isRobotModeEnabled.value
+            }
 
-            setOnTouchListener { view, event ->
-                when(event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        initialWidth = if (params.width > 0) params.width else frame.width
-                        initialHeight = if (params.height > 0) params.height else frame.height
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
-                        isClick = true
-                        true
+            serviceScope.launch {
+                RobotPlayer.isRobotModeEnabled.collect { active ->
+                    background = createDynamicGlow(active, "#FF00E676")
+                    if (active) {
+                        setTextColor(AndroidColor.WHITE)
+                    } else {
+                        setTextColor(AndroidColor.parseColor("#888888"))
                     }
-                    MotionEvent.ACTION_MOVE -> {
-                        val deltaX = (event.rawX - initialTouchX)
-                        val deltaY = (event.rawY - initialTouchY)
-                        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-                            isClick = false
-                            params.width = Math.max(dpToPx(130f), initialWidth + deltaX.toInt())
-                            params.height = Math.max(dpToPx(150f), initialHeight + deltaY.toInt())
-                            
-                            try {
-                                windowManager?.updateViewLayout(frame, params)
-                            } catch(e: Exception) {}
-                        }
-                        true
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        if (isClick) {
-                            val isVert = PokerHudSharedState.isProbsHudVertical.value
-                            val isMin = PokerHudSharedState.isProbsHudMinimized.value
-                            if (!isVert && !isMin) {
-                                PokerHudSharedState.isProbsHudVertical.value = true
-                                PokerHudSharedState.isProbsHudMinimized.value = false
-                            } else if (isVert && !isMin) {
-                                PokerHudSharedState.isProbsHudVertical.value = false
-                                PokerHudSharedState.isProbsHudMinimized.value = true
-                            } else {
-                                PokerHudSharedState.isProbsHudVertical.value = false
-                                PokerHudSharedState.isProbsHudMinimized.value = false
-                            }
-                        }
-                        true
-                    }
-                    else -> false
                 }
             }
         }
@@ -2289,7 +2253,7 @@ class PokerHudService : Service() {
         }
 
         val txtL5Advisor = TextView(this).apply {
-            text = "🤖 L5: Робот Off"
+            text = "🤖 L5: Robot OFF"
             setTextColor(AndroidColor.parseColor("#FFA7FFEB"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -2401,7 +2365,45 @@ class PokerHudService : Service() {
         val btnBoard = createEmojiButton("📋", PokerHudSharedState.showCommBox, "#FF2ECC71")
         val btnCards = createEmojiButton("🎴", PokerHudSharedState.showHoleBox, "#FFF39C12")
         val btnAdv = createEmojiButton("📊", PokerHudSharedState.showActionAdvisor, "#FF3498DB")
-        val btnScan = createEmojiButton("🔍", PokerHudSharedState.showScannerBoxes, "#FF9B59B6")
+        val btnScan = TextView(this).apply {
+            text = "🔍"
+            textSize = 11f
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(dpToPx(26f), dpToPx(26f)).apply {
+                setMargins(0, dpToPx(3f), 0, dpToPx(3f))
+            }
+            background = createDynamicGlow(true, "#FF9B59B6")
+            setOnClickListener {
+                if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
+                    val originalVisibility = floatingOverlayView?.visibility ?: View.VISIBLE
+                    floatingOverlayView?.visibility = View.INVISIBLE
+                    floatingCommOverlay?.visibility = View.INVISIBLE
+                    floatingHoleOverlay?.visibility = View.INVISIBLE
+                    floatingProbsOverlay?.visibility = View.INVISIBLE
+                    floatingScannerOverlay?.visibility = View.INVISIBLE
+                    
+                    serviceScope.launch {
+                        kotlinx.coroutines.delay(2000)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            floatingOverlayView?.visibility = originalVisibility
+                            floatingCommOverlay?.visibility = if (PokerHudSharedState.showCommBox.value) View.VISIBLE else View.GONE
+                            floatingHoleOverlay?.visibility = if (PokerHudSharedState.showHoleBox.value) View.VISIBLE else View.GONE
+                            floatingProbsOverlay?.visibility = if (PokerHudSharedState.showProbsBox.value) View.VISIBLE else View.GONE
+                            floatingScannerOverlay?.visibility = if (PokerHudSharedState.showScannerBoxes.value) View.VISIBLE else View.GONE
+                        }
+                    }
+
+                    if (screenScanner != null) {
+                        screenScanner?.requestProfileScan = true
+                    } else {
+                        val tempScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode, stopAfterProfileScan = true)
+                        tempScanner.start()
+                    }
+                } else {
+                    android.widget.Toast.makeText(this@PokerHudService, "Enable Screen Projection first", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
         val btnRobot = createEmojiButton("🤖", RobotPlayer.isRobotModeEnabled, "#FF00E676")
 
         emojiContainer.addView(btnBoard)
@@ -2459,7 +2461,7 @@ class PokerHudService : Service() {
                 
                 content.visibility = View.VISIBLE
                 mainVert.visibility = View.VISIBLE
-                toggleBtnHorizontal.visibility = View.GONE
+                toggleBtnHorizontal.visibility = View.VISIBLE
                 miniHandleView.visibility = View.GONE
                 
                 infoRow.visibility = View.GONE
@@ -2646,7 +2648,7 @@ class PokerHudService : Service() {
                         val l3Val = if (state.heroCard1 != null && state.heroCard2 != null && advRec != null) {
                             String.format(Locale.US, "%.0f%%", advRec.confidence)
                         } else if (state.heroCard1 != null && state.heroCard2 != null) {
-                            "Ждем..."
+                            "Wait..."
                         } else {
                             "0.0%"
                         }
@@ -2662,7 +2664,7 @@ class PokerHudService : Service() {
                             txtL1Advisor.text = "🧮 L1: $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)})$exp"
                             setRecommendationColor(txtL1Advisor, rec.action)
                         } else {
-                            txtL1Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🧮 L1: Ждем..." else "🧮 L1: Ждем карты"
+                            txtL1Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🧮 L1: Wait..." else "🧮 L1: Wait cards"
                             txtL1Advisor.setTextColor(AndroidColor.parseColor("#FFFFD54F"))
                         }
 
@@ -2673,7 +2675,7 @@ class PokerHudService : Service() {
                             txtL2Advisor.text = "🖩 L2: $actName (${String.format(Locale.US, "%.0f%%", l2Rec.confidence)})$exp"
                             setRecommendationColor(txtL2Advisor, l2Rec.action)
                         } else {
-                            txtL2Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🖩 L2: Ждем..." else ""
+                            txtL2Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🖩 L2: Wait..." else ""
                             txtL2Advisor.setTextColor(AndroidColor.parseColor("#FFCC80"))
                         }
 
@@ -2684,7 +2686,7 @@ class PokerHudService : Service() {
                             txtL3Advisor.text = "🦾 L3: $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)})$exp"
                             setRecommendationColor(txtL3Advisor, advRec.action)
                         } else {
-                            txtL3Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🦾 L3: Ждем..." else ""
+                            txtL3Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🦾 L3: Wait..." else ""
                             txtL3Advisor.setTextColor(AndroidColor.parseColor("#FF80DEEA"))
                         }
 
@@ -2695,7 +2697,7 @@ class PokerHudService : Service() {
                             txtL4Advisor.text = "🖐️ L4: $actName (${String.format(Locale.US, "%.0f%%", l4Rec.confidence)})$exp"
                             setRecommendationColor(txtL4Advisor, l4Rec.action)
                         } else {
-                            txtL4Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🖐️ L4: Ждем..." else ""
+                            txtL4Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🖐️ L4: Wait..." else ""
                             txtL4Advisor.setTextColor(AndroidColor.parseColor("#FF00FFCC"))
                         }
                     }
@@ -2704,14 +2706,14 @@ class PokerHudService : Service() {
                     if (isRobotActive) {
                         val buttons = RobotPlayer.availableActionButtons
                         if (buttons.isEmpty()) {
-                            txtL5Advisor.text = "🤖 L5: Робот АКТИВЕН (Ожидание)"
+                            txtL5Advisor.text = "🤖 L5: Robot (Wait)"
                         } else {
                             val detectedActions = buttons.keys.joinToString(", ")
-                            txtL5Advisor.text = "🤖 L5: Робот ХОД: $detectedActions"
+                            txtL5Advisor.text = "🤖 L5: Robot ON: $detectedActions"
                         }
                         txtL5Advisor.setTextColor(AndroidColor.parseColor("#FF00E676"))
                     } else {
-                        txtL5Advisor.text = "🤖 L5: Робот ВЫКЛЮЧЕН"
+                        txtL5Advisor.text = "🤖 L5: Robot OFF"
                         txtL5Advisor.setTextColor(AndroidColor.parseColor("#FF90A4AE"))
                     }
 
@@ -2841,15 +2843,7 @@ class PokerHudService : Service() {
     }
 
     private fun translateAction(action: String): String {
-        return when (action.uppercase(Locale.US)) {
-            "FOLD" -> "ФОЛД"
-            "CHECK" -> "ЧЕК"
-            "CALL" -> "КОЛЛ"
-            "RAISE" -> "РЕЙЗ"
-            "ALL-IN" -> "ОЛЛ-ИН"
-            "BET" -> "БЕТ"
-            else -> action
-        }
+        return action.uppercase(Locale.US)
     }
 
     private fun setRecommendationColor(textView: TextView, action: String) {
