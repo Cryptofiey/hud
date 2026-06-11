@@ -136,9 +136,15 @@ object OpponentScanner {
                     val genericLetterCount = textTrimmed.count { it.isLetter() && it.uppercaseChar() !in listOf('K', 'M', 'B') }
                     if (genericLetterCount > 4) continue // More lenient to allow things like "14.2 BBs" or similar anomalies
 
-                    val rawText = textTrimmed.replace(",", "").replace(Regex("[^0-9.]"), "")
+                    val s = textTrimmed.uppercase().replace(",", ".")
+                    val multiplier = when {
+                        s.contains("K") -> 1000f
+                        s.contains("M") -> 1000000f
+                        else -> 1f
+                    }
+                    val rawText = s.replace(Regex("[^0-9.]"), "")
                     if (rawText.isNotEmpty() && rawText.count { it == '.' } <= 1) {
-                        stackValue = rawText.toFloatOrNull() ?: 0f
+                        stackValue = (rawText.toFloatOrNull() ?: 0f) * multiplier
                         chipBox = box
                         break
                     }
@@ -329,9 +335,19 @@ object OpponentScanner {
                 
                 if (textUpper.contains("POT") || textUpper.contains("ПОТ") || !textUpper.any { it.isDigit() }) continue
                 
-                val numStr = textUpper.replace(",", "").replace(Regex("[^0-9.]"), "")
+                // Reject if it contains too many letters (to avoid parsing "LEVEL 6" or chat bubbles as bets)
+                val genericLetterCount = textUpper.count { it.isLetter() && it !in listOf('K', 'M', 'B', 'S', 'C') }
+                if (genericLetterCount > 2 && !textUpper.contains("BB") && !textUpper.contains("ББ")) continue
+                
+                val s = textUpper.replace(",", ".")
+                val multiplier = when {
+                    s.contains("K") -> 1000f
+                    s.contains("M") -> 1000000f
+                    else -> 1f
+                }
+                val numStr = s.replace(Regex("[^0-9.]"), "")
                 if (numStr.isEmpty() || numStr.count { it == '.' } > 1) continue
-                val betVal = numStr.toFloatOrNull() ?: continue
+                val betVal = (numStr.toFloatOrNull() ?: continue) * multiplier
                 if (betVal <= 0f) continue
                 
                 val intersectsPlayer = uniqueCandidates.any { android.graphics.Rect.intersects(it.boundingBox!!, lineBox) }
@@ -342,9 +358,20 @@ object OpponentScanner {
                 if (distToCenterSq < Math.pow(cleanBitmap.width * 0.15, 2.0)) continue
                 
                 val oppBox = opp.boundingBox ?: continue
-                val distSq = Math.pow((lineBox.centerX() - oppBox.centerX()).toDouble(), 2.0) + Math.pow((lineBox.centerY() - oppBox.centerY()).toDouble(), 2.0)
                 
-                if (distSq < minDistSq && distSq < Math.pow(cleanBitmap.width * 0.15, 2.0)) {
+                // Directional check: bets are placed in front of the player (towards the center)
+                val vecPx = lineBox.centerX() - oppBox.centerX()
+                val vecPy = lineBox.centerY() - oppBox.centerY()
+                val vecCx = screenCenterX - oppBox.centerX()
+                val vecCy = screenCenterY - oppBox.centerY()
+                
+                // Dot product > 0 means the angle is < 90 degrees (meaning it's roughly towards the center)
+                val dotProduct = vecPx * vecCx + vecPy * vecCy
+                if (dotProduct <= 0) continue
+                
+                val distSq = Math.pow(vecPx.toDouble(), 2.0) + Math.pow(vecPy.toDouble(), 2.0)
+                
+                if (distSq < minDistSq && distSq < Math.pow(cleanBitmap.width * 0.18, 2.0)) {
                     minDistSq = distSq.toFloat()
                     closestBet = betVal
                 }
