@@ -126,15 +126,15 @@ object OpponentScanner {
                 if (line === nameLine) continue
                 val box = line.boundingBox ?: continue
                 
-                // Stack is usually directly below the name
-                val isBelow = box.top >= nameBox.bottom - (height * 0.015f) && box.top < nameBox.bottom + (height * 0.08f)
-                val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < (width * 0.15f)
+                // Stack is usually directly below the name or within its horizontal region.
+                val isBelow = box.top >= nameBox.bottom - (height * 0.02f) && box.top < nameBox.bottom + (height * 0.12f)
+                val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < (width * 0.18f)
                 
                 if (isBelow && isAlignedHorizontally) {
                     val textTrimmed = line.text.trim()
                     // Reject if it contains generic letters (to avoid parsing chat messages as stack sizes)
                     val genericLetterCount = textTrimmed.count { it.isLetter() && it.uppercaseChar() !in listOf('K', 'M', 'B') }
-                    if (genericLetterCount > 3) continue
+                    if (genericLetterCount > 4) continue // More lenient to allow things like "14.2 BBs" or similar anomalies
 
                     val rawText = textTrimmed.replace(",", "").replace(Regex("[^0-9.]"), "")
                     if (rawText.isNotEmpty() && rawText.count { it == '.' } <= 1) {

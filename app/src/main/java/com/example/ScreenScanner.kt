@@ -1016,8 +1016,9 @@ class ScreenScanner(
                 }
             }
             
+            // The table is usually shifted slightly upwards on mobile to leave room for Hero's UI at the bottom.
             val screenCenterX = cleanBitmap!!.width / 2f
-            val screenCenterY = cleanBitmap!!.height / 2f
+            val screenCenterY = cleanBitmap!!.height * 0.43f
             
             val playersWithAngles = seatedPlayers.map { player ->
                 val box = player.boundingBox!!
