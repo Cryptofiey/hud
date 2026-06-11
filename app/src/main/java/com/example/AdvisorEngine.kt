@@ -133,7 +133,7 @@ object AdvisorEngine {
         }
     }
 
-    private fun getTargetPotOdds(basePotOdds: Float, betToCall: Float, heroStack: Float, activeOpponentsCount: Int, position: TablePosition, isPreflop: Boolean): Float {
+    private fun getTargetPotOdds(basePotOdds: Float, betToCall: Float, heroStack: Float, activeOpponentsCount: Int, position: TablePosition, isPreflop: Boolean, stage: TournamentStage, sklanskyGroup: Int): Float {
         val stackRisk = if (heroStack > 0) (betToCall / heroStack).coerceIn(0f, 1f) else 0f
         // Increase safety margin if we risk a large portion of our stack (up to +15% equity needed)
         val stackRiskMargin = stackRisk * 0.15f 
@@ -144,8 +144,40 @@ object AdvisorEngine {
         } else 0f
 
         val positionalHazard = getPositionalHazard(position, isPreflop)
+        
+        // Stage & Bubble Hazard (Tighter ranges as game progresses)
+        val stageHazard = if (isPreflop) {
+            when (stage) {
+                TournamentStage.EARLY -> {
+                    // Early game: we want to play speculative hands cheaply to felt fish.
+                    0.0f 
+                }
+                TournamentStage.MIDDLE -> {
+                    // Middle game: fish are gone, ranges are tighter. Marginal hands are penalized.
+                    if (sklanskyGroup >= 6) 0.06f
+                    else if (sklanskyGroup >= 5) 0.03f
+                    else 0.0f
+                }
+                TournamentStage.LATE -> {
+                    // Late/Bubble: survival mode. Very tight calling ranges. 
+                    // High penalty for marginal hands.
+                    when {
+                        sklanskyGroup >= 6 -> 0.14f
+                        sklanskyGroup >= 4 -> 0.07f
+                        else -> 0.03f // Even good hands require slightly more equity due to ICM
+                    }
+                }
+            }
+        } else {
+            // Postflop stage hazard evaluates raw survival pressure
+            when (stage) {
+                TournamentStage.EARLY -> 0.0f
+                TournamentStage.MIDDLE -> 0.02f
+                TournamentStage.LATE -> 0.06f 
+            }
+        }
 
-        return basePotOdds + stackRiskMargin + multiwayHazard + positionalHazard
+        return basePotOdds + stackRiskMargin + multiwayHazard + positionalHazard + stageHazard
     }
 
     fun getSklanskyGroup(card1: Card, card2: Card): Int {
@@ -307,7 +339,7 @@ object AdvisorEngine {
         val activePot = potSize + totalOpponentBets + heroBet
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
         val isPreflop = board.filterNotNull().isEmpty()
-        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop)
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup)
 
         // 4. Source 4: Pot Odds & Margin Factor (EV_OddsGap)
         val s4 = if (betToCall > 0f) {
@@ -466,7 +498,7 @@ object AdvisorEngine {
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
         
         val isPreflop = board.filterNotNull().isEmpty()
-        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop)
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup)
 
         // Core Source 4: Margin / Potential Odds Gap
         val s4 = if (betToCall > 0f) {
@@ -752,7 +784,7 @@ object AdvisorEngine {
         val isPreflop = board.filterNotNull().isEmpty()
         val isPostflop = !isPreflop
         val activeOpponentsCount = opponents.count { it.isActive }
-        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop)
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup)
 
         // Core Source 4: Margin / Potential Odds Gap
         val s4 = if (betToCall > 0f) {
