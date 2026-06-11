@@ -273,8 +273,8 @@ class ScreenScanner(
             val prevConfirmed = confirmed[i]
             
             if (best != null) {
-                // If seen twice, or if we have no history to build 2 votes yet
-                if (best.value >= 2 || history.size < 2) {
+                // Confirm the card only if it has been seen at least twice.
+                if (best.value >= 2) {
                     result.add(best.key)
                     confirmed[i] = best.key
                 } else {
@@ -282,7 +282,6 @@ class ScreenScanner(
                         result.add(prevConfirmed)
                     } else {
                         result.add(null)
-                        confirmed[i] = null
                     }
                 }
             } else {
@@ -839,10 +838,9 @@ class ScreenScanner(
                     Triple(Card(finalRank, finalSuit), area, minX)
                 }
                 
-                // Deduplicate consecutive identical cards
-                val deduplicated = clustersWithAreaAndX.filterIndexed { index, item -> 
-                    index == 0 || item.first != clustersWithAreaAndX[index - 1].first
-                }
+                // We do NOT deduplicate identical cards here. If OCR misreads one card to be the same as another,
+                // we keep both physical clusters and let the smoothing/history fix the OCR error over 2-3 frames.
+                val deduplicated = clustersWithAreaAndX
                 
                 
                 // Sort by area descending so real cards beat noise like the timer, then take maxCards
