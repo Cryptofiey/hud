@@ -1441,7 +1441,20 @@ class ScreenScanner(
             3 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB)
             4 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG)
             5 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG, TablePosition.CO)
-            else -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG, TablePosition.MP, TablePosition.CO)
+            6 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG, TablePosition.MP, TablePosition.CO)
+            7 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG, TablePosition.MP, TablePosition.MP, TablePosition.CO)
+            8 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG, TablePosition.UTG, TablePosition.MP, TablePosition.MP, TablePosition.CO)
+            9 -> listOf(TablePosition.BTN, TablePosition.SB, TablePosition.BB, TablePosition.UTG, TablePosition.UTG, TablePosition.MP, TablePosition.MP, TablePosition.CO, TablePosition.CO)
+            else -> List(n) { i ->
+                when (i) {
+                    0 -> TablePosition.BTN
+                    1 -> TablePosition.SB
+                    2 -> TablePosition.BB
+                    n - 1 -> TablePosition.CO
+                    n - 2 -> TablePosition.MP
+                    else -> TablePosition.UTG
+                }
+            }
         }
         
         for (i in 0 until n) {
