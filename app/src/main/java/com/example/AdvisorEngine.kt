@@ -1126,7 +1126,7 @@ object AdvisorEngine {
             }
 
             // High pressure or short stack DNA response
-            val bigBlinds = heroStack / (bigBlind.coerceAtLeast(1f))
+            val bigBlinds = if (heroStack > 0 && isBbDisplay) heroStack else heroStack / (bigBlind.coerceAtLeast(1f))
             if (bigBlinds < 15f && board.filterNotNull().isEmpty()) {
                 // Short stack preflop Push/Fold DNA adjustment
                 val sklansky = getSklanskyGroup(heroCard1, heroCard2)
@@ -1139,11 +1139,8 @@ object AdvisorEngine {
                     confidence = 85f
                     customExplanation = "DNA ($dnaProfile): Сброс маргинала при <15бб"
                     BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
-                } else {
-                    customExplanation = "DNA ($dnaProfile): Сброс рук"
-                    if (action == "FOLD") {
-                        BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
-                    }
+                } else if (action == "FOLD") {
+                    customExplanation = "DNA ($dnaProfile): Сброс рук при <15бб"
                 }
             } else {
                 // Preflop / Postflop adaptive meta game behavior matching DNA profiles:
