@@ -965,6 +965,18 @@ fun SettingsLayout(
                             ) {
                                 Text("ТЕСТ СНИМКА (CAPTURE SNAPSHOT TEST)", fontSize = 9.sp, color = Color.White)
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    val intent = Intent(context, DebugImageActivity::class.java)
+                                    context.startActivity(intent)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                                modifier = Modifier.fillMaxWidth().height(28.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text("ДЕБАГЕР РАСПОЗНАВАНИЯ КАРТ (IMAGE DEBUGGER)", fontSize = 9.sp, color = Color.White)
+                            }
                         }
                     }
 
