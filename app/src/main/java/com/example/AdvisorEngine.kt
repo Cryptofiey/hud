@@ -289,7 +289,7 @@ object AdvisorEngine {
         // Zero cards check
         if (heroCard1 == null || heroCard2 == null) {
             return Recommendation(
-                action = "FOLD",
+                action = "WAIT",
                 confidence = 100f,
                 explanation = "Wait cards."
             )
@@ -467,7 +467,7 @@ object AdvisorEngine {
         isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
-            return Recommendation("FOLD", 100f, "Wait cards.")
+            return Recommendation("WAIT", 100f, "Wait cards.")
         }
 
         // 1. Core Source 1: Monte Carlo Simulation win pct (and check fallback to L1 elements)
@@ -787,7 +787,7 @@ object AdvisorEngine {
         isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
-            return Recommendation("FOLD", 100f, "Wait cards.")
+            return Recommendation("WAIT", 100f, "Wait cards.")
         }
 
         // 1. Core Source 1: Monte Carlo Simulation win pct
@@ -1106,7 +1106,7 @@ object AdvisorEngine {
         isBbDisplay: Boolean = false
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
-            return Recommendation("FOLD", 100f, "Wait cards.")
+            return Recommendation("WAIT", 100f, "Wait cards.")
         }
 
         // Get L3 advanced recommendation to base our adaptive adjustments upon

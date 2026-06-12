@@ -787,7 +787,6 @@ class ScreenScanner(
                     safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
                     safeText.contains("OF") || safeText.isEmpty()) continue
 
-                // Removed isCardBackground to avoid missing shiny/shadowed cards
                 val parsedRanks = findCardsInText(safeText)
                 for ((idx, rank) in parsedRanks.withIndex()) {
                     val sliceWidth = box.width() / parsedRanks.size
@@ -795,9 +794,13 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
-                    val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rank)
-                    val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
-                    tempCommCards.add(Pair(Card(refinedRank, suit), sliceBox))
+                    if (isCardBackground(cleanBitmap!!, sliceBox)) {
+                        val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rank)
+                        val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
+                        tempCommCards.add(Pair(Card(refinedRank, suit), sliceBox))
+                    } else {
+                        android.util.Log.d("CardBgDetect", "Ignoring community element '$rank' due to non-card background.")
+                    }
                 }
             }
             
@@ -828,7 +831,6 @@ class ScreenScanner(
                     safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
                     safeText.contains("OF") || safeText.isEmpty()) continue
 
-                // We skip isCardBackground for hole cards because they can be covered by player graphics or shadows.
                 val parsedRanksRaw = findCardsInText(safeText, isHoleCard = true)
                 for ((idx, rankRaw) in parsedRanksRaw.withIndex()) {
                     // Slicing the bounding box if multiple ranks are merged in a single text block
@@ -837,9 +839,13 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
-                    val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rankRaw)
-                    val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
-                    tempHoleCards.add(Pair(Card(refinedRank, suit), sliceBox))
+                    if (isCardBackground(cleanBitmap!!, sliceBox)) {
+                        val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rankRaw)
+                        val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
+                        tempHoleCards.add(Pair(Card(refinedRank, suit), sliceBox))
+                    } else {
+                        android.util.Log.d("CardBgDetect", "Ignoring hole element '$rankRaw' due to non-card background.")
+                    }
                 }
             }
             
@@ -1300,7 +1306,35 @@ class ScreenScanner(
         return true
     }
 
-    // isCardBackground removed because it was aggressively dropping cards with shiny or dark backgrounds
+    private fun isCardBackground(crop: Bitmap, rect: android.graphics.Rect): Boolean {
+        val left = maxOf(0, rect.left)
+        val right = minOf(crop.width - 1, rect.right)
+        val top = maxOf(0, rect.top)
+        val bottom = minOf(crop.height - 1, rect.bottom)
+        
+        val totalPixels = (right - left + 1) * (bottom - top + 1)
+        if (totalPixels <= 0) return false
+        
+        var brightCount = 0
+        for (x in left..right) {
+            for (y in top..bottom) {
+                val p = crop.getPixel(x, y)
+                val r = android.graphics.Color.red(p)
+                val g = android.graphics.Color.green(p)
+                val b = android.graphics.Color.blue(p)
+                
+                // Bright card background check (95 is perfectly safe for shadows, while rejecting table)
+                if (r > 95 && g > 95 && b > 95) {
+                    brightCount++
+                }
+            }
+        }
+        
+        val ratio = brightCount.toFloat() / totalPixels
+        val isCard = ratio >= 0.35f
+        android.util.Log.d("CardBgDetect", "Box: $rect | Bright=$brightCount Total=$totalPixels Ratio=$ratio | isCard=$isCard")
+        return isCard
+    }
 
     private fun findCardsInText(text: String, isHoleCard: Boolean = false): List<Rank> {
         val found = mutableListOf<Rank>()
@@ -1389,20 +1423,15 @@ class ScreenScanner(
         val rw = rankBox.width()
         val rh = rankBox.height()
 
-        // Scan the region around and to the right/below the rankBox.
-        // Expanding to rankBox.right + 1.20 * rw grabs a wider sample of the clean card background color,
-        // which avoids shadows and symbols near the left margin.
+        // Precise targeted region matching! No neighbor card leakage.
         val left = maxOf(0, rankBox.left)
-        val right = minOf(w - 1, rankBox.right + (rw * 1.20).toInt())
-        
-        // Scan starting from rankBox top, down to 1.6x height below it.
+        val right = minOf(w - 1, rankBox.right + (rw * 0.25f).toInt())
         val top = maxOf(0, rankBox.top)
-        val bottom = minOf(h - 1, rankBox.bottom + (rh * 1.60).toInt())
+        val bottom = minOf(h - 1, rankBox.bottom + (rh * 0.40f).toInt())
         
         var redCount = 0
         var greenCount = 0
         var blueCount = 0
-        var greyCount = 0
         
         for (x in left..right) {
             for (y in top..bottom) {
@@ -1412,47 +1441,34 @@ class ScreenScanner(
                 val g = android.graphics.Color.green(p)
                 val b = android.graphics.Color.blue(p)
                 
-                // 1. Ignore pure white text / symbols & bright borders / glossy light
-                if (r > 195 && g > 195 && b > 195) continue
+                // Active, clean chroma-based thresholds to identify the actual ink colors:
+                // Red color of Hearts:
+                val isRed = (r > g + 25 && r > b + 25 && r > 50 && g < 170 && b < 170)
+                // Green color of Clubs:
+                val isGreen = (g > r + 20 && g > b + 20 && g > 50 && r < 170 && b < 170)
+                // Blue color of Diamonds:
+                val isBlue = (b > r + 25 && b > g + 20 && b > 50 && r < 170 && g < 170)
                 
-                // 2. Ignore purple table background (R and B elevated relative to G)
-                if (r > g + 12 && b > g + 12 && r > 20 && b > 20) continue
-                
-                // 3. Ignore pitch black shadows
-                val max = maxOf(r, g, b)
-                if (max < 16) continue
-                
-                val min = minOf(r, g, b)
-                val chroma = max - min
-                
-                if (chroma > 10 && max > 25) {
-                    if (r == max && r - g > 10 && r - b > 10) {
-                        redCount++
-                    } else if (g == max && g - r > 8 && g - b > 8) {
-                        greenCount++
-                    } else if (b == max && b - r > 10 && b - g > 8) {
-                        blueCount++
-                    } else {
-                        greyCount++
-                    }
-                } else {
-                    if (max > 12) {
-                        greyCount++
-                    }
+                if (isRed) {
+                    redCount++
+                } else if (isGreen) {
+                    greenCount++
+                } else if (isBlue) {
+                    blueCount++
                 }
             }
         }
         
-        android.util.Log.d("SuitDetect", "Box: $rankBox | Left=$left Right=$right Top=$top Bottom=$bottom | R=$redCount G=$greenCount B=$blueCount Grey=$greyCount")
+        android.util.Log.d("SuitDetect", "Box: $rankBox | Left=$left Right=$right Top=$top Bottom=$bottom | R=$redCount G=$greenCount B=$blueCount")
         
         val maxChroma = maxOf(redCount, greenCount, blueCount)
-        if (maxChroma > 15) {
+        if (maxChroma >= 6) { // Sensitivity threshold of 6 pixels of colored ink
             if (redCount == maxChroma) return Suit.HEARTS
             if (greenCount == maxChroma) return Suit.CLUBS
             if (blueCount == maxChroma) return Suit.DIAMONDS
         }
         
-        return Suit.SPADES // Default fallback and Spade detection (grey/neutral card backgrounds)
+        return Suit.SPADES // Default fallback to Spade (black/grey)
     }
 
     private fun detectInkColor(ocrBitmap: Bitmap, rect: android.graphics.Rect): Int {

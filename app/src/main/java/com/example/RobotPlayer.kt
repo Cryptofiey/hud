@@ -92,6 +92,12 @@ object RobotPlayer {
                     return@collectLatest
                 }
 
+                // --- CRITICAL SAFEGUARD: Never act without both hole cards recognized ---
+                if (uiState.heroCard1 == null || uiState.heroCard2 == null) {
+                    Log.w("RobotPlayer", "[L5] Safeguard: Action buttons detected but hole cards are missing. Refusing to act.")
+                    return@collectLatest
+                }
+
                 val advRec = uiState.advancedRecommendation
                 val rec = uiState.recommendation
                 val advisorText = ((advRec ?: rec)?.action ?: "").uppercase()
