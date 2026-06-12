@@ -260,6 +260,14 @@ class ScreenScanner(
         
         val result = mutableListOf<Card?>()
         
+        val nonNullNewCount = newCards.count { it != null }
+        // Fast-track: if we detect exactly a valid poker state (e.g., 2 hole cards, or 3, 4, 5 community cards)
+        // on the latest frame, we can overwrite and confirm them immediately to eliminate start-of-hand/flop latency.
+        // Hole history has expected maxLen = 2, community board history has expected maxLen = 5.
+        val isHole = (windowSize == 5 && maxLen == 2)
+        val isComm = (windowSize == 5 && maxLen == 5)
+        val canFastTrack = (isHole && nonNullNewCount == 2) || (isComm && (nonNullNewCount == 3 || nonNullNewCount == 4 || nonNullNewCount == 5))
+        
         for (i in 0 until maxLen) {
             val cardsAtI = history.mapNotNull { it.getOrNull(i) }
             if (cardsAtI.isEmpty()) {
@@ -267,6 +275,15 @@ class ScreenScanner(
                 confirmed[i] = null
                 continue
             }
+            
+            if (canFastTrack && i < newCards.size && newCards[i] != null) {
+                // Instantly confirm
+                val card = newCards[i]
+                result.add(card)
+                confirmed[i] = card
+                continue
+            }
+            
             val counts = cardsAtI.groupingBy { it }.eachCount()
             val best = counts.maxByOrNull { it.value }
             
@@ -328,12 +345,15 @@ class ScreenScanner(
                 val g = (p shr 8) and 0xFF
                 val b = p and 0xFF
                 
-                var gray = 255 - (r * 0.299 + g * 0.587 + b * 0.114).toInt()
+                val luminance = (r * 0.299 + g * 0.587 + b * 0.114).toInt()
                 
-                if (gray > 140) gray = 255
-                else if (gray < 90) gray = 0
-                
-                pixels[i] = (0xFF shl 24) or (gray shl 16) or (gray shl 8) or gray
+                // Pure white text -> Black, colored Card background or Table background -> White.
+                val color = if (luminance >= 150) {
+                    0xFF000000.toInt()
+                } else {
+                    0xFFFFFFFF.toInt()
+                }
+                pixels[i] = color
             }
             
             bmp.setPixels(pixels, 0, width, left, top, width, height)
@@ -1369,64 +1389,64 @@ class ScreenScanner(
         val w = crop.width
         val h = crop.height
         
-        var rC = 0; var gC = 0; var bC = 0; var blkC = 0
-        
-        // Scan just around the rank and look down below it where the suit symbol is located.
-        // Shrink slightly horizontally to avoid bleeding into adjacent cards if they are tightly clustered.
-        val adjustX = (rankBox.width() * 0.1).toInt()
-        val left = maxOf(0, rankBox.left + adjustX) // Changed from - to + to shrink into center
-        val right = minOf(w - 1, rankBox.right - adjustX)
-        val top = maxOf(0, rankBox.top + (rankBox.height() * 0.35).toInt())
+        // Scan inside the rankBox and in a generous area around/below it to parse plenty of card background pixels.
+        val left = maxOf(0, rankBox.left - (rankBox.width() * 0.1).toInt())
+        val right = minOf(w - 1, rankBox.right + (rankBox.width() * 0.1).toInt())
+        val top = maxOf(0, rankBox.top)
         val bottom = minOf(h - 1, rankBox.bottom + (rankBox.height() * 1.5).toInt())
         
-        for (px in left..right step 2) {
-            for (py in top..bottom step 2) {
-                val p = crop.getPixel(px, py)
+        var redCount = 0
+        var greenCount = 0
+        var blueCount = 0
+        var greyCount = 0
+        
+        for (x in left..right step 2) {
+            for (y in top..bottom step 2) {
+                if (x < 0 || x >= w || y < 0 || y >= h) continue
+                val p = crop.getPixel(x, y)
                 val r = android.graphics.Color.red(p)
                 val g = android.graphics.Color.green(p)
                 val b = android.graphics.Color.blue(p)
                 
-                // Ignore text/icon bright pixels (white background)
-                if (r > 180 && g > 180 && b > 180) continue
-                // Ignore pitch black background shadows
+                // 1. Ignore pure white text / symbols
+                if (r > 190 && g > 190 && b > 190) continue
+                
+                // 2. Ignore purple table background
+                if (r > g + 25 && b > g + 25 && r > 35 && b > 35) continue
+                
+                // 3. Ignore pitch black shadows
                 if (r < 15 && g < 15 && b < 15) continue
                 
                 val max = maxOf(r, g, b)
                 val min = minOf(r, g, b)
-                val saturation = if (max == 0) 0 else (max - min) * 255 / max
+                val sat = if (max == 0) 0 else ((max - min) * 255) / max
                 
-                // We loosen the purple/orange ignoring slightly to ensure we capture actual card colors correctly,
-                // but keep it enough to avoid table background. The table is purple.
-                val isPurple = (r > g + 30 && b > g + 30 && r > 40 && b > 40)
-                val isOrange = (r > g + 20 && g > b + 20 && r > 80 && r - b > 50)
-                
-                if (saturation > 40 && max > 35 && !isPurple && !isOrange) {
+                if (sat > 40 && max > 35) {
                     if (r == max && r - g > 20 && r - b > 20) {
-                        // Additional check to ensure Orange isn't counted as Red Hearts
-                        if (g < max * 0.75f) rC++
+                        redCount++
+                    } else if (g == max && g - r > 15 && g - b > 15) {
+                        greenCount++
+                    } else if (b == max && b - r > 15 && b - g > 15) {
+                        blueCount++
+                    } else {
+                        greyCount++
                     }
-                    else if (g == max && g - r > 20 && g - b > 20) gC++
-                    else if (b == max && b - r > 20 && b - g > 20) bC++
-                } else if (max < 100 && saturation < 45 && !isPurple && !isOrange) {
-                    blkC++
+                } else if (max > 15 && max < 160 && sat <= 40) {
+                    greyCount++
                 }
             }
         }
         
-        val totalChroma = rC + gC + bC
-        val dominantChroma = maxOf(rC, gC, bC)
+        android.util.Log.d("SuitDetect", "Box: $rankBox | R=$redCount G=$greenCount B=$blueCount Grey=$greyCount")
         
-        // Only classify as a colored suit (Red/Green/Blue) if its dominant color is a strong signal, 
-        // significantly higher than blkC or an absolute large amount.
-        if (totalChroma >= 5 && dominantChroma > blkC * 0.4f) {
-            if (rC > gC && rC > bC) return Suit.HEARTS
-            if (gC > rC && gC > bC) return Suit.CLUBS
-            if (bC > rC && bC > gC) return Suit.DIAMONDS
+        val maxChroma = maxOf(redCount, greenCount, blueCount)
+        if (maxChroma > 8) {
+            if (redCount == maxChroma) return Suit.HEARTS
+            if (greenCount == maxChroma) return Suit.CLUBS
+            if (blueCount == maxChroma) return Suit.DIAMONDS
         }
         
-        if (totalChroma + blkC < 2) return null
-        
-        return Suit.SPADES
+        return Suit.SPADES // Default fallback and Spade detection (grey/neutral card backgrounds)
     }
 
     private fun parseCleanValue(str: String): Float? {
