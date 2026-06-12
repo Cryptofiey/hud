@@ -59,6 +59,8 @@ import java.util.Locale
 import android.media.projection.MediaProjectionManager
 import androidx.activity.result.contract.ActivityResultContracts
 import android.app.Activity.RESULT_OK
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.app.Application
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -1222,6 +1224,248 @@ fun SettingsLayout(
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             }
+
+            if (tabIndex == 1) {
+                // --- TAB 1: Opponents Management & Hand History Import ---
+                val savedPlayersList = remember(uiState) { pokerViewModel.getSavedPlayerNamesList() }
+                var searchQuery by remember { mutableStateOf("") }
+                var expandedPlayerNickname by remember { mutableStateOf<String?>(null) }
+                
+                val filePickerLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.GetContent()
+                ) { uri: Uri? ->
+                    uri?.let {
+                        try {
+                            context.contentResolver.openInputStream(it)?.use { stream ->
+                                val count = pokerViewModel.importHandHistory(stream)
+                                Toast.makeText(context, "Импортировано $count раздач! Данные игроков успешно обновлены.", Toast.LENGTH_LONG).show()
+                            }
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error importing hand history", e)
+                            Toast.makeText(context, "Ошибка импорта: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Explanatory card
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF0F0F0F))
+                            .border(BorderStroke(1.dp, Color(0xFF1E88E5)), RoundedCornerShape(8.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "🗄️ База данных рук и оппонентов",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                            Text(
+                                text = "CoinPoker сохраняет историю раздач в текстовые файлы. Запросите архив рук на почту в клиенте CoinPoker или найдите файлы на устройстве, а затем импортируйте их здесь. Бот автоматически рассчитает VPIP, PFR, AF и Шоудаун по тысячам сыгранных рук для всех ваших оппонентов, избавляя вас от необходимости калибровать каждого в ручном режиме!",
+                                color = Color.LightGray,
+                                fontSize = 9.sp,
+                                lineHeight = 13.sp
+                            )
+                            
+                            Spacer(modifier = Modifier.height(4.dp))
+                            
+                            Button(
+                                onClick = {
+                                    filePickerLauncher.launch("text/plain")
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.fillMaxWidth().height(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Hand History Import icon",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "ИМПОРТИРОВАТЬ ИСТОРИЮ РУК (TXT)",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+
+                    // Opponents DB Section
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF0F0F0F))
+                            .border(BorderStroke(1.dp, Color(0xFF1E88E5)), RoundedCornerShape(8.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "👥 Профили игроков (${savedPlayersList.size})",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            )
+                            
+                            // Search bar
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = { Text("Поиск игрока...", color = Color.Gray, fontSize = 9.sp) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = "Search icon",
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedContainerColor = Color(0xFF161616),
+                                    unfocusedContainerColor = Color(0xFF161616),
+                                    focusedBorderColor = Color(0xFF1E88E5),
+                                    unfocusedBorderColor = Color(0x33FFFFFF)
+                                ),
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
+                                modifier = Modifier.fillMaxWidth().height(44.dp),
+                                shape = RoundedCornerShape(6.dp),
+                                singleLine = true
+                            )
+
+                            val filteredPlayers = savedPlayersList.filter {
+                                it.contains(searchQuery, ignoreCase = true)
+                            }
+
+                            if (filteredPlayers.isEmpty()) {
+                                Text(
+                                    text = "Игроков не найдено",
+                                    color = Color.Gray,
+                                    fontSize = 9.sp,
+                                    modifier = Modifier.padding(vertical = 12.dp)
+                                )
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    filteredPlayers.forEach { name ->
+                                        val stats = remember(name, uiState) { pokerViewModel.getApplication<Application>().let { PreferencesManager(it).loadPlayerStats(name) } }
+                                        val isExpanded = expandedPlayerNickname == name
+                                        
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color(0xFF161616))
+                                                .border(BorderStroke(1.dp, if (isExpanded) Color(0xFF1E88E5) else Color(0x1AFFFFFF)), RoundedCornerShape(6.dp))
+                                                .clickable { expandedPlayerNickname = if (isExpanded) null else name }
+                                                .padding(10.dp)
+                                        ) {
+                                            Column {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column {
+                                                        Text(
+                                                            text = name,
+                                                            color = Color.White,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 10.sp
+                                                        )
+                                                        Text(
+                                                            text = "Сыграно рук: ${stats.handsPlayed}",
+                                                            color = Color.Gray,
+                                                            fontSize = 8.sp
+                                                        )
+                                                    }
+                                                    
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "VPIP: ${stats.vpip.toInt()}% | PFR: ${stats.pfr.toInt()}%",
+                                                            color = Color(0xFF00FFCC),
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                        Icon(
+                                                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                            contentDescription = "Expand details",
+                                                            tint = Color.Gray,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                }
+                                                
+                                                if (isExpanded) {
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    HorizontalDivider(color = Color(0x1AFFFFFF))
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    
+                                                    // Grid of detailed stats
+                                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                        DetailStatRow("Агрессия (AF):", String.format(Locale.US, "%.2f", stats.aggressionFactor))
+                                                        DetailStatRow("Шоудауны (WTSD/WSD):", "${stats.showdownWins}/${stats.showdownTotal} (${stats.showdownWinPct.toInt()}%)")
+                                                        DetailStatRow("Fold to 3Bet Count:", "${stats.foldTo3betCount}")
+                                                        
+                                                        // Historical Scanned Info if present
+                                                        if (stats.histVpip != null) {
+                                                            Spacer(modifier = Modifier.height(4.dp))
+                                                            Text("Данные сканирования профиля:", color = Color(0xFF1E88E5), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                                            DetailStatRow("Scanned VPIP/PFR:", "${stats.histVpip.toInt()}% / ${stats.histPfr?.toInt()}%")
+                                                            stats.hist3Bet?.let { DetailStatRow("Scanned 3Bet / Fold to 3B:", "${it.toInt()}% / ${stats.histFoldTo3Bet?.toInt()}%") }
+                                                            stats.histCBet?.let { DetailStatRow("Scanned CBet / Fold to CB:", "${it.toInt()}% / ${stats.histFoldToCBet?.toInt()}%") }
+                                                            stats.histWtsd?.let { DetailStatRow("Scanned WTSD/WSD:", "${it.toInt()}% / ${stats.histWsd?.toInt()}%") }
+                                                        }
+                                                    }
+                                                    
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.End
+                                                    ) {
+                                                        Button(
+                                                            onClick = {
+                                                                val emptyProfile = PlayerStats(nickname = name)
+                                                                pokerViewModel.getApplication<Application>().let { PreferencesManager(it).savePlayerStats(emptyProfile) }
+                                                                pokerViewModel.resetAll() // Force re-sync with UI State
+                                                                Toast.makeText(context, "Статистика игрока $name сброшена.", Toast.LENGTH_SHORT).show()
+                                                            },
+                                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F)),
+                                                            modifier = Modifier.height(24.dp),
+                                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                                            shape = RoundedCornerShape(4.dp)
+                                                        ) {
+                                                            Text("ОЧИСТИТЬ СТАТИСТИКУ", fontSize = 8.sp, color = Color.White)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+            }
         }
 
         // --- D. GIGANTIC RED FLOATING PLAY BUTTON AT BOTTOM CENTER (Screenshot 2 style) ---
@@ -2051,4 +2295,16 @@ fun CardPickerDialog(
             }
         }
     )
+}
+
+@Composable
+private fun DetailStatRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = label, color = Color.Gray, fontSize = 8.sp)
+        Text(text = value, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+    }
 }

@@ -514,4 +514,21 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
 
         return null // No free slots
     }
+
+    fun importHandHistory(inputStream: java.io.InputStream): Int {
+        val count = HandHistoryParser.parseHandHistory(inputStream, prefsManager)
+        if (count > 0) {
+            // Re-sync all current opponents' stats with the newly imported counts
+            _uiState.update { state ->
+                state.copy(
+                    opponents = state.opponents.map { opp ->
+                        val loadedStats = prefsManager.loadPlayerStats(opp.nickname)
+                        opp.copy(stats = loadedStats)
+                    }
+                )
+            }
+            triggerAutoCalculation()
+        }
+        return count
+    }
 }
