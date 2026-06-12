@@ -346,6 +346,7 @@ class ScreenScanner(
 
     private suspend fun processLatestImage(): Boolean {
         var image: Image? = null
+        var ocrBitmap: Bitmap? = null
         try {
             image = imageReader?.acquireLatestImage()
 
@@ -403,12 +404,12 @@ class ScreenScanner(
             val currentState = PokerHudSharedState.uiState.value
 
             // 1. RUN FULL SCREEN OCR
-            val ocrBitmap = cleanBitmap!!.copy(Bitmap.Config.ARGB_8888, true)
-            applyCardThresholding(ocrBitmap, holeRect, commRect)
+            ocrBitmap = cleanBitmap!!.copy(Bitmap.Config.ARGB_8888, true)
+            applyCardThresholding(ocrBitmap!!, holeRect, commRect)
             
-            val inputImage = InputImage.fromBitmap(ocrBitmap, 0)
+            val inputImage = InputImage.fromBitmap(ocrBitmap!!, 0)
             val result = recognizer.process(inputImage).await()
-            ocrBitmap.recycle()
+            // We do NOT recycle ocrBitmap immediately as we will use it for pixel-level rank checks.
 
             // 2. EXTRACT CARDS BY BOUNDING BOX INTERSECT
             val tempCommCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
@@ -788,8 +789,9 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
+                    val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rank)
                     val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
-                    tempCommCards.add(Pair(Card(rank, suit), sliceBox))
+                    tempCommCards.add(Pair(Card(refinedRank, suit), sliceBox))
                 }
             }
             
@@ -829,10 +831,9 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
-                    val rank = rankRaw
-                    
+                    val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rankRaw)
                     val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
-                    tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
+                    tempHoleCards.add(Pair(Card(refinedRank, suit), sliceBox))
                 }
             }
             
@@ -1282,6 +1283,7 @@ class ScreenScanner(
             android.util.Log.e("ScreenScanner", "Process Error", e)
             scanStatus.value = "Scan Error: ${e.message}"
         } finally {
+            try { ocrBitmap?.recycle() } catch(ignored: Exception) {}
             try { image?.close() } catch(ignored: Exception) {}
         }
         return true
@@ -1374,11 +1376,14 @@ class ScreenScanner(
         val h = crop.height
         
         // Scan around/below the rank, shrinking horizontally to prevent bleeding colors from adjacent cards.
-        val adjustX = (rankBox.width() * 0.15).toInt()
+        // Shrink the search window horizontally tightly directly under the rank.
+        val adjustX = (rankBox.width() * 0.28).toInt()
         val left = maxOf(0, rankBox.left + adjustX)
         val right = minOf(w - 1, rankBox.right - adjustX)
-        val top = maxOf(0, rankBox.top + (rankBox.height() * 0.25).toInt())
-        val bottom = minOf(h - 1, rankBox.bottom + (rankBox.height() * 1.4).toInt())
+        
+        // Scan starting just below the rank character, up to one character height down (where the suit is located).
+        val top = maxOf(0, rankBox.bottom + (rankBox.height() * 0.05).toInt())
+        val bottom = minOf(h - 1, rankBox.bottom + (rankBox.height() * 1.15).toInt())
         
         var redCount = 0
         var greenCount = 0
@@ -1407,11 +1412,11 @@ class ScreenScanner(
                 val sat = if (max == 0) 0 else ((max - min) * 255) / max
                 
                 if (sat > 40 && max > 35) {
-                    if (r == max && r - g > 20 && r - b > 20) {
+                    if (r == max && r - g > 25 && r - b > 25) {
                         redCount++
-                    } else if (g == max && g - r > 15 && g - b > 15) {
+                    } else if (g == max && g - r > 20 && g - b > 20) {
                         greenCount++
-                    } else if (b == max && b - r > 15 && b - g > 15) {
+                    } else if (b == max && b - r > 20 && b - g > 20) {
                         blueCount++
                     } else {
                         greyCount++
@@ -1432,6 +1437,118 @@ class ScreenScanner(
         }
         
         return Suit.SPADES // Default fallback and Spade detection (grey/neutral card backgrounds)
+    }
+
+    private fun detectInkColor(ocrBitmap: Bitmap, rect: android.graphics.Rect): Int {
+        val corners = listOf(
+            Pair(0.05f, 0.05f),
+            Pair(0.95f, 0.05f),
+            Pair(0.05f, 0.95f),
+            Pair(0.95f, 0.95f)
+        )
+        var whiteCount = 0
+        var blackCount = 0
+        for ((rx, ry) in corners) {
+            val px = rect.left + (rect.width() * rx).toInt()
+            val py = rect.top + (rect.height() * ry).toInt()
+            if (px in 0 until ocrBitmap.width && py in 0 until ocrBitmap.height) {
+                val color = ocrBitmap.getPixel(px, py)
+                if (color == 0xFFFFFFFF.toInt()) whiteCount++
+                else if (color == 0xFF000000.toInt()) blackCount++
+            }
+        }
+        return if (whiteCount >= blackCount) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+    }
+
+    private fun getInkRatioAt(ocrBitmap: Bitmap, rect: android.graphics.Rect, rx: Float, ry: Float, inkColor: Int, searchRadius: Int = 1): Float {
+        val cx = rect.left + (rect.width() * rx).toInt()
+        val cy = rect.top + (rect.height() * ry).toInt()
+        var inkCount = 0
+        var totalCount = 0
+        for (dx in -searchRadius..searchRadius) {
+            for (dy in -searchRadius..searchRadius) {
+                val px = cx + dx
+                val py = cy + dy
+                if (px in 0 until ocrBitmap.width && py in 0 until ocrBitmap.height) {
+                    val color = ocrBitmap.getPixel(px, py)
+                    if (color == inkColor) {
+                        inkCount++
+                    }
+                    totalCount++
+                }
+            }
+        }
+        return if (totalCount == 0) 0f else inkCount.toFloat() / totalCount
+    }
+
+    private fun refineRankWithPixelCheck(ocrBitmap: Bitmap?, rect: android.graphics.Rect, parsedRank: Rank): Rank {
+        if (ocrBitmap == null) return parsedRank
+        
+        // Safety checks for coordinates and size
+        if (rect.left < 0 || rect.top < 0 || rect.right > ocrBitmap.width || rect.bottom > ocrBitmap.height || rect.width() <= 0 || rect.height() <= 0) {
+            return parsedRank
+        }
+
+        val inkColor = detectInkColor(ocrBitmap, rect)
+
+        fun getRatio(rx: Float, ry: Float, radius: Int = 1): Float {
+            return getInkRatioAt(ocrBitmap, rect, rx, ry, inkColor, radius)
+        }
+
+        return when (parsedRank) {
+            Rank.THREE, Rank.EIGHT -> {
+                // Verify 3 vs 8
+                val midLeft = getRatio(0.20f, 0.50f, radius = 1)
+                android.util.Log.d("RankRefiner", "3 vs 8 check for rect $rect: midLeft=$midLeft")
+                if (midLeft > 0.35f) {
+                    Rank.EIGHT
+                } else {
+                    Rank.THREE
+                }
+            }
+            Rank.FIVE, Rank.SIX -> {
+                // Verify 5 vs 6
+                val bottomLeft = getRatio(0.20f, 0.65f, radius = 1)
+                android.util.Log.d("RankRefiner", "5 vs 6 check: bottomLeft=$bottomLeft")
+                if (bottomLeft > 0.35f) {
+                    Rank.SIX
+                } else {
+                    Rank.FIVE
+                }
+            }
+            Rank.NINE -> {
+                // Verify 9 vs 6
+                val topRight = getRatio(0.80f, 0.30f, radius = 1)
+                val bottomLeft = getRatio(0.20f, 0.70f, radius = 1)
+                android.util.Log.d("RankRefiner", "9 vs 6 check: topRight=$topRight, bottomLeft=$bottomLeft")
+                if (bottomLeft > topRight + 0.15f) {
+                    Rank.SIX
+                } else {
+                    Rank.NINE
+                }
+            }
+            Rank.SEVEN, Rank.TWO -> {
+                // Verify 7 vs 2
+                val bottomLeft = getRatio(0.22f, 0.85f, radius = 1)
+                android.util.Log.d("RankRefiner", "7 vs 2 check: bottomLeft=$bottomLeft")
+                if (bottomLeft > 0.35f) {
+                    Rank.TWO
+                } else {
+                    Rank.SEVEN
+                }
+            }
+            Rank.ACE, Rank.FOUR -> {
+                // Verify Ace vs 4
+                val topCenter = getRatio(0.50f, 0.15f, radius = 1)
+                android.util.Log.d("RankRefiner", "A vs 4 check: topCenter=$topCenter")
+                if (topCenter > 0.35f) {
+                    Rank.ACE
+                } else {
+                    Rank.FOUR
+                }
+            }
+            else -> parsedRank
+        }
     }
 
     private fun parseCleanValue(str: String): Float? {
