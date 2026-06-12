@@ -866,64 +866,27 @@ class ScreenScanner(
                 val resultList = MutableList<Card?>(maxCards) { null }
                 if (cards.isEmpty()) return resultList
                 
-                // Group detections by their X center
-                val sorted = cards.sortedBy { it.second.centerX() }
-                val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
+                // Group detections by their physical geometric slots (bins) within the region.
+                // This guarantees that adjacent symbols are NEVER grouped as the same card,
+                // while correctly merging the top and bottom symbols of a SINGLE card.
+                val slotWidth = regionRect.width().toFloat() / maxCards
+                val slots = Array<MutableList<Pair<Card, android.graphics.Rect>>>(maxCards) { mutableListOf() }
                 
-                // Dynamic threshold based on board/hand width. A single card width is ~0.20 of 5-card board or ~0.50 of 2-card hand.
-                // We use 16% of board width for community cards, 32% of hand width for hole cards,
-                // which perfectly groups left/right elements of the same card while strictly separating neighbors.
-                val clusterThreshold = if (maxCards == 5) {
-                    regionRect.width() * 0.16f
-                } else {
-                    regionRect.width() * 0.32f
+                for (elem in cards) {
+                    val relativeX = elem.second.centerX() - regionRect.left
+                    val slotIndex = (relativeX / slotWidth).toInt().coerceIn(0, maxCards - 1)
+                    slots[slotIndex].add(elem)
                 }
                 
-                for (elem in sorted) {
-                    if (clusters.isEmpty()) {
-                        clusters.add(mutableListOf(elem))
-                    } else {
-                        val lastCluster = clusters.last()
-                        val lastCx = lastCluster.map { it.second.centerX() }.average()
-                        
-                        if (elem.second.centerX() - lastCx < clusterThreshold) {
-                            lastCluster.add(elem)
-                        } else {
-                            clusters.add(mutableListOf(elem))
-                        }
+                for (i in 0 until maxCards) {
+                    val cluster = slots[i]
+                    if (cluster.isNotEmpty()) {
+                        // On CoinPoker, the large rank character is at the top-left (low Y / 'top').
+                        // By sorting by Y coordinate ascending, we prioritize the upright top-left rank detection.
+                        val sortedClusterByTop = cluster.sortedBy { it.second.top }
+                        val primaryCard = sortedClusterByTop.first().first
+                        resultList[i] = primaryCard
                     }
-                }
-                
-                // Compute the total bounding box area for each cluster to distinguish real cards from tiny noise
-                val clustersWithAreaAndX = clusters.map { cluster ->
-                    val area = cluster.sumOf { it.second.width() * it.second.height() }
-                    val minX = cluster.minOf { it.second.centerX() }
-                    
-                    // On CoinPoker, the large rank character is at the top-left (low Y / 'top'),
-                    // while the small, 180-degree-rotated key index is at the bottom-right (high Y / 'top').
-                    // By sorting by Y coordinate ascending, we prioritize the upright top-left rank detection.
-                    val sortedClusterByTop = cluster.sortedBy { it.second.top }
-                    val primaryCard = sortedClusterByTop.first().first
-                    val finalRank = primaryCard.rank
-                    val finalSuit = primaryCard.suit
-                    
-                    Triple(Card(finalRank, finalSuit), area, minX)
-                }
-                
-                // We do NOT deduplicate identical cards here. If OCR misreads one card to be the same as another,
-                // we keep both physical clusters and let the smoothing/history fix the OCR error over 2-3 frames.
-                val deduplicated = clustersWithAreaAndX
-                
-                
-                // Sort by area descending so real cards beat noise like the timer, then take maxCards
-                // Then sort them back by X coordinate so they are in left-to-right order
-                val topCards = deduplicated.sortedByDescending { it.second }
-                    .take(maxCards)
-                    .sortedBy { it.third }
-                    .map { it.first }
-                
-                for (i in 0 until topCards.size) {
-                    resultList[i] = topCards[i]
                 }
                 
                 return resultList
