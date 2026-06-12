@@ -307,6 +307,39 @@ class ScreenScanner(
         }
     }
 
+    private fun applyCardThresholding(bmp: Bitmap, vararg rects: android.graphics.Rect?) {
+        for (rect in rects) {
+            if (rect == null) continue
+            val left = maxOf(0, rect.left)
+            val top = maxOf(0, rect.top)
+            val right = minOf(bmp.width, rect.right)
+            val bottom = minOf(bmp.height, rect.bottom)
+            
+            val width = right - left
+            val height = bottom - top
+            if (width <= 0 || height <= 0) continue
+            
+            val pixels = IntArray(width * height)
+            bmp.getPixels(pixels, 0, width, left, top, width, height)
+            
+            for (i in pixels.indices) {
+                val p = pixels[i]
+                val r = (p shr 16) and 0xFF
+                val g = (p shr 8) and 0xFF
+                val b = p and 0xFF
+                
+                var gray = 255 - (r * 0.299 + g * 0.587 + b * 0.114).toInt()
+                
+                if (gray > 140) gray = 255
+                else if (gray < 90) gray = 0
+                
+                pixels[i] = (0xFF shl 24) or (gray shl 16) or (gray shl 8) or gray
+            }
+            
+            bmp.setPixels(pixels, 0, width, left, top, width, height)
+        }
+    }
+
     private suspend fun processLatestImage(): Boolean {
         var image: Image? = null
         try {
@@ -366,8 +399,12 @@ class ScreenScanner(
             val currentState = PokerHudSharedState.uiState.value
 
             // 1. RUN FULL SCREEN OCR
-            val inputImage = InputImage.fromBitmap(cleanBitmap!!, 0)
+            val ocrBitmap = cleanBitmap!!.copy(Bitmap.Config.ARGB_8888, true)
+            applyCardThresholding(ocrBitmap, holeRect, commRect)
+            
+            val inputImage = InputImage.fromBitmap(ocrBitmap, 0)
             val result = recognizer.process(inputImage).await()
+            ocrBitmap.recycle()
 
             // 2. EXTRACT CARDS BY BOUNDING BOX INTERSECT
             val tempCommCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
@@ -788,7 +825,7 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
-                    val rank = fixConfusedSevens(rankRaw, sliceBox, cleanBitmap!!)
+                    val rank = rankRaw
                     
                     val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
                     tempHoleCards.add(Pair(Card(rank, suit), sliceBox))
@@ -1247,42 +1284,6 @@ class ScreenScanner(
     }
 
     // isCardBackground removed because it was aggressively dropping cards with shiny or dark backgrounds
-
-    private fun fixConfusedSevens(rank: Rank, box: android.graphics.Rect, bitmap: Bitmap): Rank {
-        if (rank != Rank.FOUR) return rank
-        try {
-            val isTall = box.height() > box.width() * 1.5f
-            val rankHeight = if (isTall) box.height() * 0.5f else box.height().toFloat()
-            val startX = box.left + (box.width() * 0.1f).toInt()
-            val endX = box.left + (box.width() * 0.40f).toInt()
-            val startY = box.top + (rankHeight * 0.35f).toInt()
-            val endY = box.top + (rankHeight * 0.65f).toInt()
-            var brightCount = 0
-            var totalCount = 0
-            for (x in startX..endX step 2) {
-                for (y in startY..endY step 2) {
-                    if (x < 0 || x >= bitmap.width || y < 0 || y >= bitmap.height) continue
-                    val pixel = bitmap.getPixel(x, y)
-                    val r = android.graphics.Color.red(pixel)
-                    val g = android.graphics.Color.green(pixel)
-                    val b = android.graphics.Color.blue(pixel)
-                    // Hole cards are white text on colored BG. Check for bright white
-                    if (r > 160 && g > 160 && b > 160) {
-                        brightCount++
-                    }
-                    totalCount++
-                }
-            }
-            if (totalCount > 0) {
-                val brightRatio = brightCount.toFloat() / totalCount
-                if (brightRatio < 0.15f) {
-                    // A 4 has vertical/horizontal lines here. A 7 has empty space.
-                    return Rank.SEVEN
-                }
-            }
-        } catch (e: Exception) {}
-        return rank
-    }
 
     private fun findCardsInText(text: String, isHoleCard: Boolean = false): List<Rank> {
         val found = mutableListOf<Rank>()
