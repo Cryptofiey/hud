@@ -1395,19 +1395,21 @@ class ScreenScanner(
     private fun robustDetectSuit(crop: Bitmap, rankBox: android.graphics.Rect): Suit? {
         val w = crop.width
         val h = crop.height
-        
-        val rw = rankBox.width()
-        val rh = rankBox.height()
 
-        // Precise targeted region matching! No neighbor card leakage.
-        val left = maxOf(0, rankBox.left)
-        val right = minOf(w - 1, rankBox.right + (rw * 0.25f).toInt())
-        val top = maxOf(0, rankBox.top)
-        val bottom = minOf(h - 1, rankBox.bottom + (rh * 0.40f).toInt())
+        // Expand the search area to make sure we hit the card background
+        // We use a decent expansion on all sides to gather enough background pixels.
+        val expandX = maxOf(10, (rankBox.width() * 0.75f).toInt())
+        val expandY = maxOf(10, (rankBox.height() * 0.75f).toInt())
+
+        val left = maxOf(0, rankBox.left - expandX)
+        val right = minOf(w - 1, rankBox.right + expandX)
+        val top = maxOf(0, rankBox.top - expandY)
+        val bottom = minOf(h - 1, rankBox.bottom + expandY)
         
-        var redCount = 0
-        var greenCount = 0
-        var blueCount = 0
+        var totalRed = 0L
+        var totalGreen = 0L
+        var totalBlue = 0L
+        var count = 0
         
         for (x in left..right) {
             for (y in top..bottom) {
@@ -1417,32 +1419,38 @@ class ScreenScanner(
                 val g = android.graphics.Color.green(p)
                 val b = android.graphics.Color.blue(p)
                 
-                // Active, clean chroma-based thresholds to identify the actual ink colors:
-                // Red color of Hearts:
-                val isRed = (r > g + 25 && r > b + 25 && r > 50 && g < 170 && b < 170)
-                // Green color of Clubs:
-                val isGreen = (g > r + 20 && g > b + 20 && g > 50 && r < 170 && b < 170)
-                // Blue color of Diamonds:
-                val isBlue = (b > r + 25 && b > g + 20 && b > 50 && r < 170 && g < 170)
+                // Skip bright white text pixels and nearly black shadow/border pixels.
+                // Suit background is typically a mid-to-dark color but not absolute black or absolute white.
+                if (r > 180 && g > 180 && b > 180) continue
+                if (r < 20 && g < 20 && b < 20) continue
                 
-                if (isRed) {
-                    redCount++
-                } else if (isGreen) {
-                    greenCount++
-                } else if (isBlue) {
-                    blueCount++
-                }
+                totalRed += r
+                totalGreen += g
+                totalBlue += b
+                count++
             }
         }
         
-        android.util.Log.d("SuitDetect", "Box: $rankBox | Left=$left Right=$right Top=$top Bottom=$bottom | R=$redCount G=$greenCount B=$blueCount")
+        if (count == 0) return Suit.SPADES
         
-        val maxChroma = maxOf(redCount, greenCount, blueCount)
-        if (maxChroma >= 6) { // Sensitivity threshold of 6 pixels of colored ink
-            if (redCount == maxChroma) return Suit.HEARTS
-            if (greenCount == maxChroma) return Suit.CLUBS
-            if (blueCount == maxChroma) return Suit.DIAMONDS
+        val avgR = (totalRed / count).toInt()
+        val avgG = (totalGreen / count).toInt()
+        val avgB = (totalBlue / count).toInt()
+        
+        android.util.Log.d("SuitDetect", "Box: $rankBox | AvgColor=($avgR, $avgG, $avgB) Count=$count")
+        
+        val maxColor = maxOf(avgR, avgG, avgB)
+        val minColor = minOf(avgR, avgG, avgB)
+        val chroma = maxColor - minColor
+        
+        // If the color is essentially gray/black with very little saturation, it's Spades
+        if (chroma < 15 || (maxColor < 60 && chroma < 25)) {
+            return Suit.SPADES
         }
+        
+        if (maxColor == avgR) return Suit.HEARTS
+        if (maxColor == avgG) return Suit.CLUBS
+        if (maxColor == avgB) return Suit.DIAMONDS
         
         return Suit.SPADES // Default fallback to Spade (black/grey)
     }
