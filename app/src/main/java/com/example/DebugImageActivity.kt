@@ -57,13 +57,9 @@ fun DebugScreen() {
     var resultBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var debugLog by remember { mutableStateOf("Select a cropped card image to start auto-tuning.") }
     
-    val ranks = listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2")
-    var expectedRank by remember { mutableStateOf(ranks[0]) }
-    var expandedRank by remember { mutableStateOf(false) }
-
-    val suits = listOf("Spades", "Hearts", "Diamonds", "Clubs")
-    var expectedSuit by remember { mutableStateOf(suits[0]) }
-    var expandedSuit by remember { mutableStateOf(false) }
+    val tuneTargets = listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2", "Spades", "Hearts", "Diamonds", "Clubs")
+    var expectedTarget by remember { mutableStateOf(tuneTargets[0]) }
+    var expandedTarget by remember { mutableStateOf(false) }
     
     val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
         selectedImageUri = uri
@@ -93,30 +89,15 @@ fun DebugScreen() {
         Spacer(Modifier.height(8.dp))
         
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Rank Dropdown
             Box(modifier = Modifier.weight(1f)) {
-                Button(onClick = { expandedRank = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Rank: $expectedRank")
+                Button(onClick = { expandedTarget = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Target: $expectedTarget")
                 }
-                DropdownMenu(expanded = expandedRank, onDismissRequest = { expandedRank = false }) {
-                    ranks.forEach { r ->
-                        DropdownMenuItem(text = { Text(r) }, onClick = { 
-                            expectedRank = r
-                            expandedRank = false 
-                        })
-                    }
-                }
-            }
-            // Suit Dropdown
-            Box(modifier = Modifier.weight(1f)) {
-                Button(onClick = { expandedSuit = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Suit: $expectedSuit")
-                }
-                DropdownMenu(expanded = expandedSuit, onDismissRequest = { expandedSuit = false }) {
-                    suits.forEach { s ->
-                        DropdownMenuItem(text = { Text(s) }, onClick = { 
-                            expectedSuit = s
-                            expandedSuit = false 
+                DropdownMenu(expanded = expandedTarget, onDismissRequest = { expandedTarget = false }) {
+                    tuneTargets.forEach { t ->
+                        DropdownMenuItem(text = { Text(t) }, onClick = { 
+                            expectedTarget = t
+                            expandedTarget = false 
                         })
                     }
                 }
@@ -134,7 +115,7 @@ fun DebugScreen() {
                     if (loadedBitmap != null) {
                         debugLog = "Tuning started...\nTrying various brightness/contrast thresholds."
                         coroutineScope.launch {
-                            tuneCardRecognition(loadedBitmap!!, expectedRank, expectedSuit) { processedBmp, log ->
+                            tuneCardRecognition(loadedBitmap!!, expectedTarget) { processedBmp, log ->
                                 resultBitmap = processedBmp
                                 debugLog = log
                             }
@@ -178,8 +159,7 @@ fun DebugScreen() {
 
 private suspend fun tuneCardRecognition(
     originalBitmap: Bitmap, 
-    expectedRank: String, 
-    expectedSuit: String, 
+    expectedTarget: String, 
     onProgress: (Bitmap, String) -> Unit
 ) {
     withContext(Dispatchers.Default) {
@@ -189,6 +169,8 @@ private suspend fun tuneCardRecognition(
         val thresholds = listOf(130, 150, 170, 180, 195, 210)
         var successBitmap: Bitmap? = null
         var foundMatches = 0
+        
+        val isSuitTarget = expectedTarget in listOf("Spades", "Hearts", "Diamonds", "Clubs")
         
         for (thresh in thresholds) {
             val testBmp = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
@@ -255,14 +237,19 @@ private suspend fun tuneCardRecognition(
                 
                 logBuilder.appendLine("Trying threshold $thresh: Detect Suit=$detectedSuit, OCR Text='$ocrTextFull'")
                 
-                if (ocrTextFull.contains(expectedRank) && detectedSuit == expectedSuit) {
-                    logBuilder.appendLine(">>> SUCCESS! Rank $expectedRank and Suit $expectedSuit found at Threshold $thresh.")
+                var success = false
+                if (isSuitTarget) {
+                    if (detectedSuit == expectedTarget) success = true
+                } else {
+                    // Try to match rank
+                    if (ocrTextFull.contains(expectedTarget)) success = true
+                }
+                
+                if (success) {
+                    logBuilder.appendLine(">>> SUCCESS! Target $expectedTarget matched at Threshold $thresh.")
                     successBitmap = testBmp
                     foundMatches++
                     break // Optional: we can stop on first success
-                } else if (ocrTextFull.contains(expectedRank)) {
-                    logBuilder.appendLine(">>> Rank matched but Suit mismatched (Expected $expectedSuit but got $detectedSuit).")
-                    if (successBitmap == null) successBitmap = testBmp
                 }
                 
                 withContext(Dispatchers.Main) {
@@ -275,8 +262,7 @@ private suspend fun tuneCardRecognition(
         
         logBuilder.appendLine("--- Auto-Tune Complete ---")
         if (foundMatches == 0) {
-            logBuilder.appendLine("Could not find exact match for $expectedRank of $expectedSuit.")
-            logBuilder.appendLine("Try manually tweaking the replacements in ScreenScanner or uploading a clearer crop.")
+            logBuilder.appendLine("Could not find match for $expectedTarget.")
         }
         
         withContext(Dispatchers.Main) {
