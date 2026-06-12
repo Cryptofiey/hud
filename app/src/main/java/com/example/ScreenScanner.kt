@@ -260,27 +260,11 @@ class ScreenScanner(
         
         val result = mutableListOf<Card?>()
         
-        val nonNullNewCount = newCards.count { it != null }
-        // Fast-track: if we detect exactly a valid poker state (e.g., 2 hole cards, or 3, 4, 5 community cards)
-        // on the latest frame, we can overwrite and confirm them immediately to eliminate start-of-hand/flop latency.
-        // Hole history has expected maxLen = 2, community board history has expected maxLen = 5.
-        val isHole = (windowSize == 5 && maxLen == 2)
-        val isComm = (windowSize == 5 && maxLen == 5)
-        val canFastTrack = (isHole && nonNullNewCount == 2) || (isComm && (nonNullNewCount == 3 || nonNullNewCount == 4 || nonNullNewCount == 5))
-        
         for (i in 0 until maxLen) {
             val cardsAtI = history.mapNotNull { it.getOrNull(i) }
             if (cardsAtI.isEmpty()) {
                 result.add(null)
                 confirmed[i] = null
-                continue
-            }
-            
-            if (canFastTrack && i < newCards.size && newCards[i] != null) {
-                // Instantly confirm
-                val card = newCards[i]
-                result.add(card)
-                confirmed[i] = card
                 continue
             }
             
@@ -1389,11 +1373,12 @@ class ScreenScanner(
         val w = crop.width
         val h = crop.height
         
-        // Scan inside the rankBox and in a generous area around/below it to parse plenty of card background pixels.
-        val left = maxOf(0, rankBox.left - (rankBox.width() * 0.1).toInt())
-        val right = minOf(w - 1, rankBox.right + (rankBox.width() * 0.1).toInt())
-        val top = maxOf(0, rankBox.top)
-        val bottom = minOf(h - 1, rankBox.bottom + (rankBox.height() * 1.5).toInt())
+        // Scan around/below the rank, shrinking horizontally to prevent bleeding colors from adjacent cards.
+        val adjustX = (rankBox.width() * 0.15).toInt()
+        val left = maxOf(0, rankBox.left + adjustX)
+        val right = minOf(w - 1, rankBox.right - adjustX)
+        val top = maxOf(0, rankBox.top + (rankBox.height() * 0.25).toInt())
+        val bottom = minOf(h - 1, rankBox.bottom + (rankBox.height() * 1.4).toInt())
         
         var redCount = 0
         var greenCount = 0
