@@ -1375,62 +1375,70 @@ class ScreenScanner(
         val w = crop.width
         val h = crop.height
         
-        // Scan around/below the rank, shrinking horizontally to prevent bleeding colors from adjacent cards.
-        // Shrink the search window horizontally tightly directly under the rank.
-        val adjustX = (rankBox.width() * 0.28).toInt()
-        val left = maxOf(0, rankBox.left + adjustX)
-        val right = minOf(w - 1, rankBox.right - adjustX)
+        val rw = rankBox.width()
+        val rh = rankBox.height()
+
+        // Scan the region around and below the rankBox.
+        // rw * 0.05 on the left prevents scanning outside on the left.
+        // rw * 0.40 on the right generously scans the card body to the right of the rank.
+        val left = maxOf(0, rankBox.left + (rw * 0.05).toInt())
+        val right = minOf(w - 1, rankBox.right + (rw * 0.40).toInt())
         
-        // Scan starting just below the rank character, up to one character height down (where the suit is located).
-        val top = maxOf(0, rankBox.bottom + (rankBox.height() * 0.05).toInt())
-        val bottom = minOf(h - 1, rankBox.bottom + (rankBox.height() * 1.15).toInt())
+        // Scan starting slightly below the top of the rankBox, down to 1.6x height below it.
+        // This covers the background beside and below the rank, and around/behind the suit icon.
+        val top = maxOf(0, rankBox.top + (rh * 0.05).toInt())
+        val bottom = minOf(h - 1, rankBox.bottom + (rh * 1.60).toInt())
         
         var redCount = 0
         var greenCount = 0
         var blueCount = 0
         var greyCount = 0
         
-        for (x in left..right step 2) {
-            for (y in top..bottom step 2) {
+        for (x in left..right step 1) {
+            for (y in top..bottom step 1) {
                 if (x < 0 || x >= w || y < 0 || y >= h) continue
                 val p = crop.getPixel(x, y)
                 val r = android.graphics.Color.red(p)
                 val g = android.graphics.Color.green(p)
                 val b = android.graphics.Color.blue(p)
                 
-                // 1. Ignore pure white text / symbols
-                if (r > 190 && g > 190 && b > 190) continue
-                
-                // 2. Ignore purple table background
-                if (r > g + 25 && b > g + 25 && r > 35 && b > 35) continue
-                
-                // 3. Ignore pitch black shadows
-                if (r < 15 && g < 15 && b < 15) continue
+                // 1. Ignore pure white text / symbols & bright borders / glossy light
+                if (r > 195 && g > 195 && b > 195) continue
                 
                 val max = maxOf(r, g, b)
-                val min = minOf(r, g, b)
-                val sat = if (max == 0) 0 else ((max - min) * 255) / max
+                if (max > 225) continue
                 
-                if (sat > 40 && max > 35) {
-                    if (r == max && r - g > 25 && r - b > 25) {
+                // 2. Ignore purple table background (R and B elevated relative to G)
+                if (r > g + 12 && b > g + 12 && r > 20 && b > 20) continue
+                
+                // 3. Ignore pitch black shadows
+                if (max < 16) continue
+                
+                val min = minOf(r, g, b)
+                val chroma = max - min
+                
+                if (chroma > 12 && max > 25) {
+                    if (r == max && r - g > 12 && r - b > 12) {
                         redCount++
-                    } else if (g == max && g - r > 20 && g - b > 20) {
+                    } else if (g == max && g - r > 10 && g - b > 10) {
                         greenCount++
-                    } else if (b == max && b - r > 20 && b - g > 20) {
+                    } else if (b == max && b - r > 12 && b - g > 10) {
                         blueCount++
                     } else {
                         greyCount++
                     }
-                } else if (max > 15 && max < 160 && sat <= 40) {
-                    greyCount++
+                } else {
+                    if (max > 12) {
+                        greyCount++
+                    }
                 }
             }
         }
         
-        android.util.Log.d("SuitDetect", "Box: $rankBox | R=$redCount G=$greenCount B=$blueCount Grey=$greyCount")
+        android.util.Log.d("SuitDetect", "Box: $rankBox | Left=$left Right=$right Top=$top Bottom=$bottom | R=$redCount G=$greenCount B=$blueCount Grey=$greyCount")
         
         val maxChroma = maxOf(redCount, greenCount, blueCount)
-        if (maxChroma > 8) {
+        if (maxChroma > 15) {
             if (redCount == maxChroma) return Suit.HEARTS
             if (greenCount == maxChroma) return Suit.CLUBS
             if (blueCount == maxChroma) return Suit.DIAMONDS
