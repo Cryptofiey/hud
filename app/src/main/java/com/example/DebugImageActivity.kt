@@ -56,6 +56,7 @@ fun DebugScreen() {
     var loadedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var resultBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var debugLog by remember { mutableStateOf("Select a cropped card image to start auto-tuning.") }
+    var optimalThreshold by remember { mutableStateOf<Int?>(null) }
     
     val tuneTargets = listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2", "Spades", "Hearts", "Diamonds", "Clubs")
     var expectedTarget by remember { mutableStateOf(tuneTargets[0]) }
@@ -114,10 +115,12 @@ fun DebugScreen() {
                 onClick = {
                     if (loadedBitmap != null) {
                         debugLog = "Tuning started...\nTrying various brightness/contrast thresholds."
+                        optimalThreshold = null
                         coroutineScope.launch {
-                            tuneCardRecognition(loadedBitmap!!, expectedTarget) { processedBmp, log ->
+                            tuneCardRecognition(loadedBitmap!!, expectedTarget) { processedBmp, log, bestThresh ->
                                 resultBitmap = processedBmp
                                 debugLog = log
+                                if (bestThresh != null) optimalThreshold = bestThresh
                             }
                         }
                     }
@@ -131,6 +134,23 @@ fun DebugScreen() {
         }
         
         Spacer(Modifier.height(8.dp))
+        
+        if (optimalThreshold != null) {
+            Button(
+                onClick = {
+                    optimalThreshold?.let { thresh ->
+                        PreferencesManager(context).saveOcrThreshold(thresh)
+                        ScannerConfig.ocrThreshold = thresh
+                        debugLog += "\n✔️ Threshold $thresh saved as default!"
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5))
+            ) {
+                Text("Save Threshold $optimalThreshold as Default")
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         
         if (resultBitmap != null) {
             Image(
@@ -160,15 +180,16 @@ fun DebugScreen() {
 private suspend fun tuneCardRecognition(
     originalBitmap: Bitmap, 
     expectedTarget: String, 
-    onProgress: (Bitmap, String) -> Unit
+    onProgress: (Bitmap, String, Int?) -> Unit
 ) {
     withContext(Dispatchers.Default) {
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         val logBuilder = StringBuilder()
         
-        val thresholds = listOf(130, 150, 170, 180, 195, 210)
+        val thresholds = listOf(130, 150, 170, 180, 195, 210, 220, 230)
         var successBitmap: Bitmap? = null
         var foundMatches = 0
+        var optimalThresh: Int? = null
         
         val isSuitTarget = expectedTarget in listOf("Spades", "Hearts", "Diamonds", "Clubs")
         
@@ -249,11 +270,12 @@ private suspend fun tuneCardRecognition(
                     logBuilder.appendLine(">>> SUCCESS! Target $expectedTarget matched at Threshold $thresh.")
                     successBitmap = testBmp
                     foundMatches++
+                    optimalThresh = thresh
                     break // Optional: we can stop on first success
                 }
                 
                 withContext(Dispatchers.Main) {
-                    onProgress(testBmp, logBuilder.toString())
+                    onProgress(testBmp, logBuilder.toString(), null)
                 }
             } catch (e: Exception) {
                 logBuilder.appendLine("Error at thresh $thresh: ${e.message}")
@@ -266,7 +288,7 @@ private suspend fun tuneCardRecognition(
         }
         
         withContext(Dispatchers.Main) {
-            onProgress(successBitmap ?: originalBitmap, logBuilder.toString())
+            onProgress(successBitmap ?: originalBitmap, logBuilder.toString(), optimalThresh)
         }
     }
 }

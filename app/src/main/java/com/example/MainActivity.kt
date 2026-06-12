@@ -69,6 +69,7 @@ object ScannerConfig {
     var pendingProjectionResultCode: Int = 0
     val isProjectionGranted = MutableStateFlow(false)
     var activeProjection: android.media.projection.MediaProjection? = null
+    var ocrThreshold: Int = 195 // Default value, will be overwritten by load
 }
 
 fun Context.findActivity(): Activity? {
@@ -121,6 +122,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        ScannerConfig.ocrThreshold = PreferencesManager(this).loadOcrThreshold()
         
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->

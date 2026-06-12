@@ -329,9 +329,10 @@ class ScreenScanner(
                 val g = (p shr 8) and 0xFF
                 val b = p and 0xFF
                 
+                val threshold = ScannerConfig.ocrThreshold
                 // If it's very bright white (as rank text and suit symbols on CoinPoker are solid white),
                 // it should be black text for OCR. Anything else is card/table background and should be white.
-                val color = if (r > 195 && g > 195 && b > 195) {
+                val color = if (r > threshold && g > threshold && b > threshold) {
                     0xFF000000.toInt() // Black text
                 } else {
                     0xFFFFFFFF.toInt() // White background

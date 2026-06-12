@@ -1263,6 +1263,14 @@ class PreferencesManager(context: Context) {
             apply()
         }
     }
+    
+    fun saveOcrThreshold(threshold: Int) {
+        prefs.edit().putInt("scanner_ocr_threshold", threshold).apply()
+    }
+    
+    fun loadOcrThreshold(): Int {
+        return prefs.getInt("scanner_ocr_threshold", 195)
+    }
 
     // Loads general simulation & advisor configurations
     fun loadAdvisorSettings(): AdvisorSettings {
