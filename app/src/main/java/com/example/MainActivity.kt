@@ -504,7 +504,7 @@ fun SettingsLayout(
                 onClick = { onTabChecked(1) },
                 text = {
                     Text(
-                        text = "Visualization of calculations",
+                        text = "Opponents & Hand DB",
                         fontWeight = if (tabIndex == 1) FontWeight.Bold else FontWeight.Normal,
                         fontSize = 9.sp,
                         color = if (tabIndex == 1) Color.White else Color(0x99FFFFFF)
