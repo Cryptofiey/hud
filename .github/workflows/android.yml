@@ -1,0 +1,57 @@
+name: Fast Build APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Restore Debug Keystore
+        run: |
+          if [ -f debug.keystore.base64 ]; then
+            tr -d '\r\n[:space:]' < debug.keystore.base64 | base64 -d > debug.keystore || tr -d '\r\n[:space:]' < debug.keystore.base64 | base64 --decode > debug.keystore || true
+          fi
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: false
+
+      - name: Build APK
+        run: gradle assembleRelease --build-cache --parallel --no-daemon -Porg.gradle.caching=true
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: poker-equity-hud-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create GitHub Release (For Obtainium/GitHub Store)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "Update v1.0.${{ github.run_number }}"
+          files: app/build/outputs/apk/release/*.apk
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
