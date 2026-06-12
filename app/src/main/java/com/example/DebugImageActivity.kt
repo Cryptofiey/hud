@@ -10,7 +10,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -50,8 +53,17 @@ fun DebugScreen() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var loadedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var resultBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var debugLog by remember { mutableStateOf("Select an image to start debugging") }
+    var debugLog by remember { mutableStateOf("Select a cropped card image to start auto-tuning.") }
+    
+    val ranks = listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2")
+    var expectedRank by remember { mutableStateOf(ranks[0]) }
+    var expandedRank by remember { mutableStateOf(false) }
+
+    val suits = listOf("Spades", "Hearts", "Diamonds", "Clubs")
+    var expectedSuit by remember { mutableStateOf(suits[0]) }
+    var expandedSuit by remember { mutableStateOf(false) }
     
     val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
         selectedImageUri = uri
@@ -63,11 +75,9 @@ fun DebugScreen() {
                     stream?.close()
                     
                     if (bitmap != null) {
-                        debugLog = "Image loaded: ${bitmap.width}x${bitmap.height}\nRunning ML Kit..."
-                        runCardRecognition(bitmap) { processedBmp, log ->
-                            resultBitmap = processedBmp
-                            debugLog += "\n$log"
-                        }
+                        loadedBitmap = bitmap
+                        resultBitmap = bitmap
+                        debugLog = "Image loaded: ${bitmap.width}x${bitmap.height}\nTap 'Auto-Tune' to find optimal OCR parameters."
                     } else {
                         debugLog = "Failed to decode image."
                     }
@@ -79,11 +89,66 @@ fun DebugScreen() {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Poker Card OCR Debugger", style = MaterialTheme.typography.titleLarge)
+        Text("Poker Card OCR Auto-Tuner", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
-        Button(onClick = { launcher.launch("image/*") }) {
-            Text("Select Screenshot")
+        
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Rank Dropdown
+            Box(modifier = Modifier.weight(1f)) {
+                Button(onClick = { expandedRank = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Rank: $expectedRank")
+                }
+                DropdownMenu(expanded = expandedRank, onDismissRequest = { expandedRank = false }) {
+                    ranks.forEach { r ->
+                        DropdownMenuItem(text = { Text(r) }, onClick = { 
+                            expectedRank = r
+                            expandedRank = false 
+                        })
+                    }
+                }
+            }
+            // Suit Dropdown
+            Box(modifier = Modifier.weight(1f)) {
+                Button(onClick = { expandedSuit = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Suit: $expectedSuit")
+                }
+                DropdownMenu(expanded = expandedSuit, onDismissRequest = { expandedSuit = false }) {
+                    suits.forEach { s ->
+                        DropdownMenuItem(text = { Text(s) }, onClick = { 
+                            expectedSuit = s
+                            expandedSuit = false 
+                        })
+                    }
+                }
+            }
         }
+        
+        Spacer(Modifier.height(8.dp))
+        
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { launcher.launch("image/*") }, modifier = Modifier.weight(1f)) {
+                Text("Select Crop")
+            }
+            Button(
+                onClick = {
+                    if (loadedBitmap != null) {
+                        debugLog = "Tuning started...\nTrying various brightness/contrast thresholds."
+                        coroutineScope.launch {
+                            tuneCardRecognition(loadedBitmap!!, expectedRank, expectedSuit) { processedBmp, log ->
+                                resultBitmap = processedBmp
+                                debugLog = log
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                enabled = loadedBitmap != null
+            ) {
+                Text("Auto-Tune")
+            }
+        }
+        
         Spacer(Modifier.height(8.dp))
         
         if (resultBitmap != null) {
@@ -92,67 +157,131 @@ fun DebugScreen() {
                 contentDescription = "Debug Result",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .height(200.dp)
                     .background(Color.DarkGray)
             )
         } else {
-            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(Color.DarkGray))
+            Box(modifier = Modifier.fillMaxWidth().height(200.dp).background(Color.DarkGray))
         }
         
         Spacer(Modifier.height(8.dp))
-        Text(debugLog, style = MaterialTheme.typography.bodySmall, modifier = Modifier.height(150.dp))
+        Text(
+            text = debugLog, 
+            style = MaterialTheme.typography.bodySmall, 
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+        )
     }
 }
 
-private suspend fun runCardRecognition(bitmap: Bitmap, onResult: (Bitmap, String) -> Unit) {
+private suspend fun tuneCardRecognition(
+    originalBitmap: Bitmap, 
+    expectedRank: String, 
+    expectedSuit: String, 
+    onProgress: (Bitmap, String) -> Unit
+) {
     withContext(Dispatchers.Default) {
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        val image = InputImage.fromBitmap(bitmap, 0)
-        
         val logBuilder = StringBuilder()
         
-        try {
-            val result = recognizer.process(image).await()
+        val thresholds = listOf(130, 150, 170, 180, 195, 210)
+        var successBitmap: Bitmap? = null
+        var foundMatches = 0
+        
+        for (thresh in thresholds) {
+            val testBmp = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+            val pixels = IntArray(testBmp.width * testBmp.height)
+            testBmp.getPixels(pixels, 0, testBmp.width, 0, 0, testBmp.width, testBmp.height)
             
-            // Draw on a copy of bitmap
-            val outBmp = bitmap.copy(Bitmap.Config.ARGB_8888, true)
-            val canvas = Canvas(outBmp)
-            val paintBox = Paint().apply {
-                color = android.graphics.Color.RED
-                style = Paint.Style.STROKE
-                strokeWidth = 3f
-            }
-            val paintText = Paint().apply {
-                color = android.graphics.Color.GREEN
-                textSize = 34f
-                style = Paint.Style.FILL
-            }
-
-            logBuilder.appendLine("Found ${result.textBlocks.size} text blocks.")
+            var redInk = 0
+            var greenInk = 0
+            var blueInk = 0
             
-            for (block in result.textBlocks) {
-                for (line in block.lines) {
-                    for (element in line.elements) {
-                        val text = element.text.trim()
-                        val box = element.boundingBox
-                        if (box != null && text.isNotEmpty()) {
-                            canvas.drawRect(box, paintBox)
-                            canvas.drawText(text, box.left.toFloat(), (box.bottom + 30).toFloat(), paintText)
-                            
-                            // Log finding
-                            logBuilder.appendLine("'$text' at [${box.left},${box.top}] W:${box.width()} H:${box.height()}")
+            // Loop 1: Apply standard threshold and ink count
+            for (i in pixels.indices) {
+                val p = pixels[i]
+                val r = android.graphics.Color.red(p)
+                val g = android.graphics.Color.green(p)
+                val b = android.graphics.Color.blue(p)
+                
+                // Color profiling based on robustDetectSuit logic
+                val isRed = (r > g + 25 && r > b + 25 && r > 50 && g < 170 && b < 170)
+                val isGreen = (g > r + 20 && g > b + 20 && g > 50 && r < 170 && b < 170)
+                val isBlue = (b > r + 25 && b > g + 20 && b > 50 && r < 170 && g < 170)
+                
+                if (isRed) redInk++
+                else if (isGreen) greenInk++
+                else if (isBlue) blueInk++
+                
+                // OCR Threshold mapping
+                if (r > thresh && g > thresh && b > thresh) {
+                    pixels[i] = android.graphics.Color.BLACK // Light backgrounds -> BLACK text
+                } else {
+                    pixels[i] = android.graphics.Color.WHITE // Dark inks/shadows -> WHITE background
+                }
+            }
+            testBmp.setPixels(pixels, 0, testBmp.width, 0, 0, testBmp.width, testBmp.height)
+            
+            // Determine suit
+            val maxChroma = maxOf(redInk, greenInk, blueInk)
+            val detectedSuit = if (maxChroma >= 5) {
+                if (redInk == maxChroma) "Hearts"
+                else if (greenInk == maxChroma) "Clubs"
+                else if (blueInk == maxChroma) "Diamonds"
+                else "Spades"
+            } else {
+                "Spades"
+            }
+            
+            try {
+                // Run OCR
+                val image = InputImage.fromBitmap(testBmp, 0)
+                val result = recognizer.process(image).await()
+                
+                var ocrTextFull = ""
+                for (block in result.textBlocks) {
+                    for (line in block.lines) {
+                        for (element in line.elements) {
+                            var text = element.text.trim().uppercase(java.util.Locale.US)
+                            // Replacements
+                            text = text.replace("&", "8").replace("$", "8").replace("@", "Q").replace("%", "8").replace("?", "7").replace("!", "1")
+                            text = text.replace("O", "Q").replace("0", "Q").replace("D", "Q") // common Q failures
+                            ocrTextFull += text + " "
                         }
                     }
                 }
+                
+                logBuilder.appendLine("Trying threshold $thresh: Detect Suit=$detectedSuit, OCR Text='$ocrTextFull'")
+                
+                if (ocrTextFull.contains(expectedRank) && detectedSuit == expectedSuit) {
+                    logBuilder.appendLine(">>> SUCCESS! Rank $expectedRank and Suit $expectedSuit found at Threshold $thresh.")
+                    successBitmap = testBmp
+                    foundMatches++
+                    break // Optional: we can stop on first success
+                } else if (ocrTextFull.contains(expectedRank)) {
+                    logBuilder.appendLine(">>> Rank matched but Suit mismatched (Expected $expectedSuit but got $detectedSuit).")
+                    if (successBitmap == null) successBitmap = testBmp
+                }
+                
+                withContext(Dispatchers.Main) {
+                    onProgress(testBmp, logBuilder.toString())
+                }
+            } catch (e: Exception) {
+                logBuilder.appendLine("Error at thresh $thresh: ${e.message}")
             }
-            
-            withContext(Dispatchers.Main) {
-                onResult(outBmp, logBuilder.toString())
-            }
-        } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                onResult(bitmap, "ML Kit Error: ${e.message}")
-            }
+        }
+        
+        logBuilder.appendLine("--- Auto-Tune Complete ---")
+        if (foundMatches == 0) {
+            logBuilder.appendLine("Could not find exact match for $expectedRank of $expectedSuit.")
+            logBuilder.appendLine("Try manually tweaking the replacements in ScreenScanner or uploading a clearer crop.")
+        }
+        
+        withContext(Dispatchers.Main) {
+            onProgress(successBitmap ?: originalBitmap, logBuilder.toString())
         }
     }
 }
+
