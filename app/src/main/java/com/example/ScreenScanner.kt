@@ -400,23 +400,35 @@ class ScreenScanner(
             val holeRect = rects.second
             val hudRects = rects.third
             
-            val expandedCommRect = if (commRect.width() > 20) {
+            val activeCommRect = if (commRect.width() > 20) {
+                // Buffer zones inside the frame window
+                val bufferX = (commRect.width() * 0.05f).toInt()
+                val bufferY = (commRect.height() * 0.05f).toInt()
+                // Right side exclusion for the drag/close symbols (approx 15% of width or minimum 50px)
+                val rightExclusion = maxOf((commRect.width() * 0.15f).toInt(), 50)
+                
                 android.graphics.Rect(
-                    commRect.left - (commRect.width() * 0.5f).toInt(),
-                    commRect.top - (commRect.height() * 0.5f).toInt(),
-                    commRect.right + (commRect.width() * 0.5f).toInt(),
-                    commRect.bottom + (commRect.height() * 0.5f).toInt()
+                    commRect.left + bufferX,
+                    commRect.top + bufferY,
+                    commRect.right - rightExclusion,
+                    commRect.bottom - bufferY
                 )
             } else {
                 commRect
             }
             
-            val expandedHoleRect = if (holeRect.width() > 20) {
+            val activeHoleRect = if (holeRect.width() > 20) {
+                // Buffer zones inside the frame window
+                val bufferX = (holeRect.width() * 0.05f).toInt()
+                val bufferY = (holeRect.height() * 0.05f).toInt()
+                // Right side exclusion for the drag/close symbols
+                val rightExclusion = maxOf((holeRect.width() * 0.15f).toInt(), 50)
+                
                 android.graphics.Rect(
-                    holeRect.left - (holeRect.width() * 1.5f).toInt(),
-                    holeRect.top - (holeRect.height() * 0.8f).toInt(),
-                    holeRect.right + (holeRect.width() * 1.5f).toInt(),
-                    holeRect.bottom + (holeRect.height() * 0.8f).toInt()
+                    holeRect.left + bufferX,
+                    holeRect.top + bufferY,
+                    holeRect.right - rightExclusion,
+                    holeRect.bottom - bufferY
                 )
             } else {
                 holeRect
@@ -426,7 +438,7 @@ class ScreenScanner(
 
             // 1. RUN FULL SCREEN OCR
             ocrBitmap = cleanBitmap!!.copy(Bitmap.Config.ARGB_8888, true)
-            applyCardThresholding(ocrBitmap!!, expandedHoleRect, expandedCommRect)
+            applyCardThresholding(ocrBitmap!!, activeHoleRect, activeCommRect)
             
             val inputImage = InputImage.fromBitmap(ocrBitmap!!, 0)
             val result = recognizer.process(inputImage).await()
@@ -642,9 +654,9 @@ class ScreenScanner(
                         val cx = box.centerX()
                         val cy = box.centerY()
                         
-                        if (commRect.width() > 20 && expandedCommRect.contains(cx, cy)) {
+                        if (commRect.width() > 20 && activeCommRect.contains(cx, cy)) {
                             commElements.add(element)
-                        } else if (holeRect.width() > 20 && expandedHoleRect.contains(cx, cy)) {
+                        } else if (holeRect.width() > 20 && activeHoleRect.contains(cx, cy)) {
                             holeElements.add(element)
                         }
                         
