@@ -329,13 +329,12 @@ class ScreenScanner(
                 val g = (p shr 8) and 0xFF
                 val b = p and 0xFF
                 
-                val luminance = (r * 0.299 + g * 0.587 + b * 0.114).toInt()
-                
-                // Pure white text -> Black, colored Card background or Table background -> White.
-                val color = if (luminance >= 150) {
-                    0xFF000000.toInt()
+                // If it's very bright white (as rank text and suit symbols on CoinPoker are solid white),
+                // it should be black text for OCR. Anything else is card/table background and should be white.
+                val color = if (r > 195 && g > 195 && b > 195) {
+                    0xFF000000.toInt() // Black text
                 } else {
-                    0xFFFFFFFF.toInt()
+                    0xFFFFFFFF.toInt() // White background
                 }
                 pixels[i] = color
             }
@@ -401,11 +400,33 @@ class ScreenScanner(
             val holeRect = rects.second
             val hudRects = rects.third
             
+            val expandedCommRect = if (commRect.width() > 20) {
+                android.graphics.Rect(
+                    commRect.left - (commRect.width() * 0.5f).toInt(),
+                    commRect.top - (commRect.height() * 0.5f).toInt(),
+                    commRect.right + (commRect.width() * 0.5f).toInt(),
+                    commRect.bottom + (commRect.height() * 0.5f).toInt()
+                )
+            } else {
+                commRect
+            }
+            
+            val expandedHoleRect = if (holeRect.width() > 20) {
+                android.graphics.Rect(
+                    holeRect.left - (holeRect.width() * 1.5f).toInt(),
+                    holeRect.top - (holeRect.height() * 0.8f).toInt(),
+                    holeRect.right + (holeRect.width() * 1.5f).toInt(),
+                    holeRect.bottom + (holeRect.height() * 0.8f).toInt()
+                )
+            } else {
+                holeRect
+            }
+            
             val currentState = PokerHudSharedState.uiState.value
 
             // 1. RUN FULL SCREEN OCR
             ocrBitmap = cleanBitmap!!.copy(Bitmap.Config.ARGB_8888, true)
-            applyCardThresholding(ocrBitmap!!, holeRect, commRect)
+            applyCardThresholding(ocrBitmap!!, expandedHoleRect, expandedCommRect)
             
             val inputImage = InputImage.fromBitmap(ocrBitmap!!, 0)
             val result = recognizer.process(inputImage).await()
@@ -621,21 +642,6 @@ class ScreenScanner(
                         val cx = box.centerX()
                         val cy = box.centerY()
                         
-                        // Generous expansion to allow the user to place frames roughly, not pixel-perfect.
-                        val expandedCommRect = android.graphics.Rect(
-                            commRect.left - commRect.width() / 2,
-                            commRect.top - commRect.height() / 2,
-                            commRect.right + commRect.width() / 2,
-                            commRect.bottom + commRect.height() / 2
-                        )
-                        
-                        val expandedHoleRect = android.graphics.Rect(
-                            holeRect.left - holeRect.width() / 2,
-                            holeRect.top - holeRect.height() / 2,
-                            holeRect.right + holeRect.width(), // generously biased to the right for 2nd card
-                            holeRect.bottom + holeRect.height() / 2
-                        )
-                        
                         if (commRect.width() > 20 && expandedCommRect.contains(cx, cy)) {
                             commElements.add(element)
                         } else if (holeRect.width() > 20 && expandedHoleRect.contains(cx, cy)) {
@@ -845,18 +851,21 @@ class ScreenScanner(
                 val sorted = cards.sortedBy { it.second.centerX() }
                 val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
                 
+                // Dynamic threshold based on board/hand width. A single card width is ~0.20 of 5-card board or ~0.50 of 2-card hand.
+                // We use 16% of board width for community cards, 32% of hand width for hole cards,
+                // which perfectly groups left/right elements of the same card while strictly separating neighbors.
+                val clusterThreshold = if (maxCards == 5) {
+                    regionRect.width() * 0.16f
+                } else {
+                    regionRect.width() * 0.32f
+                }
+                
                 for (elem in sorted) {
                     if (clusters.isEmpty()) {
                         clusters.add(mutableListOf(elem))
                     } else {
                         val lastCluster = clusters.last()
                         val lastCx = lastCluster.map { it.second.centerX() }.average()
-                        val avgWidth = lastCluster.map { it.second.width() }.average().toFloat()
-                        val avgHeight = lastCluster.map { it.second.height() }.average().toFloat()
-                        
-                        // Use a tighter threshold to group same-card detections 
-                        // while keeping strictly separate cards separated.
-                        val clusterThreshold = maxOf(avgWidth * 0.4f, regionRect.width() * 0.08f, 15f)
                         
                         if (elem.second.centerX() - lastCx < clusterThreshold) {
                             lastCluster.add(elem)
@@ -871,11 +880,13 @@ class ScreenScanner(
                     val area = cluster.sumOf { it.second.width() * it.second.height() }
                     val minX = cluster.minOf { it.second.centerX() }
                     
-                    val ranks = cluster.map { it.first.rank }
-                    val finalRank = ranks.groupBy { it }.maxByOrNull { it.value.size }!!.key
-                    
-                    val suits = cluster.map { it.first.suit }
-                    val finalSuit = suits.groupBy { it }.maxByOrNull { it.value.size }!!.key
+                    // On CoinPoker, the large rank character is at the top-left (low Y / 'top'),
+                    // while the small, 180-degree-rotated key index is at the bottom-right (high Y / 'top').
+                    // By sorting by Y coordinate ascending, we prioritize the upright top-left rank detection.
+                    val sortedClusterByTop = cluster.sortedBy { it.second.top }
+                    val primaryCard = sortedClusterByTop.first().first
+                    val finalRank = primaryCard.rank
+                    val finalSuit = primaryCard.suit
                     
                     Triple(Card(finalRank, finalSuit), area, minX)
                 }
@@ -1378,15 +1389,14 @@ class ScreenScanner(
         val rw = rankBox.width()
         val rh = rankBox.height()
 
-        // Scan the region around and below the rankBox.
-        // rw * 0.05 on the left prevents scanning outside on the left.
-        // rw * 0.40 on the right generously scans the card body to the right of the rank.
-        val left = maxOf(0, rankBox.left + (rw * 0.05).toInt())
-        val right = minOf(w - 1, rankBox.right + (rw * 0.40).toInt())
+        // Scan the region around and to the right/below the rankBox.
+        // Expanding to rankBox.right + 1.20 * rw grabs a wider sample of the clean card background color,
+        // which avoids shadows and symbols near the left margin.
+        val left = maxOf(0, rankBox.left)
+        val right = minOf(w - 1, rankBox.right + (rw * 1.20).toInt())
         
-        // Scan starting slightly below the top of the rankBox, down to 1.6x height below it.
-        // This covers the background beside and below the rank, and around/behind the suit icon.
-        val top = maxOf(0, rankBox.top + (rh * 0.05).toInt())
+        // Scan starting from rankBox top, down to 1.6x height below it.
+        val top = maxOf(0, rankBox.top)
         val bottom = minOf(h - 1, rankBox.bottom + (rh * 1.60).toInt())
         
         var redCount = 0
@@ -1394,8 +1404,8 @@ class ScreenScanner(
         var blueCount = 0
         var greyCount = 0
         
-        for (x in left..right step 1) {
-            for (y in top..bottom step 1) {
+        for (x in left..right) {
+            for (y in top..bottom) {
                 if (x < 0 || x >= w || y < 0 || y >= h) continue
                 val p = crop.getPixel(x, y)
                 val r = android.graphics.Color.red(p)
@@ -1405,24 +1415,22 @@ class ScreenScanner(
                 // 1. Ignore pure white text / symbols & bright borders / glossy light
                 if (r > 195 && g > 195 && b > 195) continue
                 
-                val max = maxOf(r, g, b)
-                if (max > 225) continue
-                
                 // 2. Ignore purple table background (R and B elevated relative to G)
                 if (r > g + 12 && b > g + 12 && r > 20 && b > 20) continue
                 
                 // 3. Ignore pitch black shadows
+                val max = maxOf(r, g, b)
                 if (max < 16) continue
                 
                 val min = minOf(r, g, b)
                 val chroma = max - min
                 
-                if (chroma > 12 && max > 25) {
-                    if (r == max && r - g > 12 && r - b > 12) {
+                if (chroma > 10 && max > 25) {
+                    if (r == max && r - g > 10 && r - b > 10) {
                         redCount++
-                    } else if (g == max && g - r > 10 && g - b > 10) {
+                    } else if (g == max && g - r > 8 && g - b > 8) {
                         greenCount++
-                    } else if (b == max && b - r > 12 && b - g > 10) {
+                    } else if (b == max && b - r > 10 && b - g > 8) {
                         blueCount++
                     } else {
                         greyCount++
