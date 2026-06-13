@@ -1347,75 +1347,111 @@ class PokerHudService : Service() {
                             // Reduced sim size for persistent HUD for battery/thermal/memory safety
                             val simSize = 1200 
                             
-                            // 1. Original Branch
-                            val result = com.example.SimulationEngine.runHoldemSimulation(
+                            // Precalculate maps for 1..5 opponents in parallel
+                            val multiSims = com.example.SimulationEngine.runMultiOpponentSimulation(
                                 heroCard1 = updatedState.heroCard1,
                                 heroCard2 = updatedState.heroCard2,
                                 opponents = updatedState.opponents,
                                 board = updatedState.board,
                                 simulations = simSize
                             )
-                            val recommendation = com.example.AdvisorEngine.computeRecommendation(
-                                heroCard1 = updatedState.heroCard1,
-                                heroCard2 = updatedState.heroCard2,
-                                board = updatedState.board,
-                                potSize = updatedState.potSize,
-                                heroBet = updatedState.heroBet,
-                                opponents = updatedState.opponents,
-                                activeOpponentsCount = updatedState.opponents.count { it.isActive },
-                                simResult = result,
-                                settings = updatedState.settings,
-                                position = updatedState.position,
-                                stage = updatedState.stage,
-                                smallBlind = updatedState.smallBlind,
-                                bigBlind = updatedState.bigBlind,
-                                heroStack = updatedState.heroStack,
-                                heroActionOptions = updatedState.heroActionOptions
-                            )
 
-                            // 2. Advanced Branch
-                            val advResult = com.example.SimulationEngine.runHoldemSimulationAdvanced(
+                            val multiAdvSims = com.example.SimulationEngine.runMultiOpponentSimulationAdvanced(
                                 heroCard1 = updatedState.heroCard1,
                                 heroCard2 = updatedState.heroCard2,
                                 opponents = updatedState.opponents,
                                 board = updatedState.board,
                                 simulations = simSize
                             )
-                            val advRecommendation = com.example.AdvisorEngine.computeRecommendationAdvanced(
-                                heroCard1 = updatedState.heroCard1,
-                                heroCard2 = updatedState.heroCard2,
-                                board = updatedState.board,
-                                potSize = updatedState.potSize,
-                                heroBet = updatedState.heroBet,
-                                opponents = updatedState.opponents,
-                                activeOpponentsCount = updatedState.opponents.count { it.isActive },
-                                simResult = advResult,
-                                settings = updatedState.settings,
-                                position = updatedState.position,
-                                stage = updatedState.stage,
-                                smallBlind = updatedState.smallBlind,
-                                bigBlind = updatedState.bigBlind,
-                                heroStack = updatedState.heroStack,
-                                heroActionOptions = updatedState.heroActionOptions
-                            )
 
-                            val l2Recommendation = com.example.AdvisorEngine.computeRecommendationL2(
-                                heroCard1 = updatedState.heroCard1,
-                                heroCard2 = updatedState.heroCard2,
-                                board = updatedState.board,
-                                potSize = updatedState.potSize,
-                                heroBet = updatedState.heroBet,
-                                opponents = updatedState.opponents,
-                                activeOpponentsCount = updatedState.opponents.count { it.isActive },
-                                simResult = advResult,
-                                settings = updatedState.settings,
-                                position = updatedState.position,
-                                stage = updatedState.stage,
-                                smallBlind = updatedState.smallBlind,
-                                bigBlind = updatedState.bigBlind,
-                                heroStack = updatedState.heroStack,
-                                heroActionOptions = updatedState.heroActionOptions
-                            )
+                            val multiL1 = mutableMapOf<Int, com.example.Recommendation>()
+                            val multiL2 = mutableMapOf<Int, com.example.Recommendation>()
+                            val multiAdv = mutableMapOf<Int, com.example.Recommendation>()
+
+                            for (n in 1..5) {
+                                val subset = com.example.SimulationEngine.getOpponentSubsetForN(updatedState.opponents, n)
+                                
+                                val recL1 = com.example.AdvisorEngine.computeRecommendation(
+                                    heroCard1 = updatedState.heroCard1,
+                                    heroCard2 = updatedState.heroCard2,
+                                    board = updatedState.board,
+                                    potSize = updatedState.potSize,
+                                    heroBet = updatedState.heroBet,
+                                    opponents = subset,
+                                    activeOpponentsCount = n,
+                                    simResult = multiSims[n],
+                                    settings = updatedState.settings,
+                                    position = updatedState.position,
+                                    stage = updatedState.stage,
+                                    smallBlind = updatedState.smallBlind,
+                                    bigBlind = updatedState.bigBlind,
+                                    heroStack = updatedState.heroStack,
+                                    heroActionOptions = updatedState.heroActionOptions
+                                )
+                                multiL1[n] = recL1
+
+                                val recL2 = com.example.AdvisorEngine.computeRecommendationL2(
+                                    heroCard1 = updatedState.heroCard1,
+                                    heroCard2 = updatedState.heroCard2,
+                                    board = updatedState.board,
+                                    potSize = updatedState.potSize,
+                                    heroBet = updatedState.heroBet,
+                                    opponents = subset,
+                                    activeOpponentsCount = n,
+                                    simResult = multiSims[n],
+                                    settings = updatedState.settings,
+                                    position = updatedState.position,
+                                    stage = updatedState.stage,
+                                    smallBlind = updatedState.smallBlind,
+                                    bigBlind = updatedState.bigBlind,
+                                    heroStack = updatedState.heroStack,
+                                    heroActionOptions = updatedState.heroActionOptions
+                                )
+                                multiL2[n] = recL2
+
+                                val recAdv = com.example.AdvisorEngine.computeRecommendationAdvanced(
+                                    heroCard1 = updatedState.heroCard1,
+                                    heroCard2 = updatedState.heroCard2,
+                                    board = updatedState.board,
+                                    potSize = updatedState.potSize,
+                                    heroBet = updatedState.heroBet,
+                                    opponents = subset,
+                                    activeOpponentsCount = n,
+                                    simResult = multiAdvSims[n],
+                                    settings = updatedState.settings,
+                                    position = updatedState.position,
+                                    stage = updatedState.stage,
+                                    smallBlind = updatedState.smallBlind,
+                                    bigBlind = updatedState.bigBlind,
+                                    heroStack = updatedState.heroStack,
+                                    heroActionOptions = updatedState.heroActionOptions
+                                )
+                                multiAdv[n] = recAdv
+                            }
+
+                            // Pick the target branch corresponding to the actual active count + potential pending behind us
+                            val actualActiveCount = updatedState.opponents.count { it.isActive }
+                            val isPreflop = updatedState.board.filterNotNull().isEmpty()
+                            val pendingBehind = if (isPreflop) {
+                                when (updatedState.position) {
+                                    com.example.TablePosition.UTG -> 5
+                                    com.example.TablePosition.MP -> 4
+                                    com.example.TablePosition.CO -> 3
+                                    com.example.TablePosition.BTN -> 2
+                                    com.example.TablePosition.SB -> 1
+                                    com.example.TablePosition.BB -> 0
+                                }
+                            } else {
+                                0
+                            }
+                            // Effective opponent count is the actual active players plus those who can still act after us
+                            val decisionOpponentCount = maxOf(actualActiveCount, pendingBehind).coerceIn(1, 5)
+
+                            val result = multiSims[decisionOpponentCount]
+                            val advResult = multiAdvSims[decisionOpponentCount]
+                            val recommendation = multiL1[decisionOpponentCount]
+                            val l2Recommendation = multiL2[decisionOpponentCount]
+                            val advRecommendation = multiAdv[decisionOpponentCount]
 
                             val l4Recommendation = com.example.AdvisorEngine.computeRecommendationL4(
                                 heroCard1 = updatedState.heroCard1,
@@ -1424,7 +1460,7 @@ class PokerHudService : Service() {
                                 potSize = updatedState.potSize,
                                 heroBet = updatedState.heroBet,
                                 opponents = updatedState.opponents,
-                                activeOpponentsCount = updatedState.opponents.count { it.isActive },
+                                activeOpponentsCount = decisionOpponentCount,
                                 simResult = advResult,
                                 settings = updatedState.settings,
                                 position = updatedState.position,
@@ -1442,7 +1478,12 @@ class PokerHudService : Service() {
                                     advancedSimulationResult = advResult,
                                     l2Recommendation = l2Recommendation,
                                     advancedRecommendation = advRecommendation,
-                                    l4Recommendation = l4Recommendation
+                                    l4Recommendation = l4Recommendation,
+                                    multiL1Recs = multiL1,
+                                    multiL2Recs = multiL2,
+                                    multiAdvRecs = multiAdv,
+                                    multiSimResults = multiSims,
+                                    multiAdvSimResults = multiAdvSims
                                 )
                             }
                         } catch (e: Exception) {

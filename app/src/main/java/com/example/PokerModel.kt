@@ -5,6 +5,11 @@ import java.util.Locale
 import kotlin.random.Random as KotlinRandom
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 
 enum class Rank(val value: Int, val symbol: String) {
     TWO(2, "2"), THREE(3, "3"), FOUR(4, "4"), FIVE(5, "5"),
@@ -230,6 +235,61 @@ object SimulationEngine {
         pairs.sortedBy { (r1, r2, suited) ->
             AdvisorEngine.getSklanskyGroup(Card(r1, Suit.SPADES), Card(r2, if (suited) Suit.SPADES else Suit.HEARTS))
         }.map { Pair(it.first, it.second) }
+    }
+
+    fun getOpponentSubsetForN(allOpponents: List<OpponentState>, n: Int): List<OpponentState> {
+        val activeOpps = allOpponents.filter { it.isActive }
+        val result = mutableListOf<OpponentState>()
+        result.addAll(activeOpps.take(n))
+        while (result.size < n) {
+            val id = result.size + 1
+            result.add(OpponentState(id = id, isActive = true, isRandom = true, nickname = "Opponent $id"))
+        }
+        return result
+    }
+
+    suspend fun runMultiOpponentSimulation(
+        heroCard1: Card?,
+        heroCard2: Card?,
+        opponents: List<OpponentState>,
+        board: List<Card?>,
+        simulations: Int = 1200
+    ): Map<Int, SimulationResult> {
+        val results = mutableMapOf<Int, SimulationResult>()
+        coroutineScope {
+            val deferreds = (1..5).map { n ->
+                n to async(Dispatchers.Default) {
+                    val subset = getOpponentSubsetForN(opponents, n)
+                    runHoldemSimulation(heroCard1, heroCard2, subset, board, simulations)
+                }
+            }
+            deferreds.forEach { (n, job) ->
+                results[n] = job.await()
+            }
+        }
+        return results
+    }
+
+    suspend fun runMultiOpponentSimulationAdvanced(
+        heroCard1: Card?,
+        heroCard2: Card?,
+        opponents: List<OpponentState>,
+        board: List<Card?>,
+        simulations: Int = 1200
+    ): Map<Int, SimulationResult> {
+        val results = mutableMapOf<Int, SimulationResult>()
+        coroutineScope {
+            val deferreds = (1..5).map { n ->
+                n to async(Dispatchers.Default) {
+                    val subset = getOpponentSubsetForN(opponents, n)
+                    runHoldemSimulationAdvanced(heroCard1, heroCard2, subset, board, simulations)
+                }
+            }
+            deferreds.forEach { (n, job) ->
+                results[n] = job.await()
+            }
+        }
+        return results
     }
 
     suspend fun runHoldemSimulation(
