@@ -30,8 +30,8 @@ object OpponentScanner {
         if (upper.length < 2 || upper.length > 20) return false
         if (name.trim().split(Regex("\\s+")).size > 2) return false // Names usually are 1-2 words max
         
-        // Ensure it doesn't have too many weird symbols
-        val validCharCount = name.count { it.isLetterOrDigit() || it == '-' || it == '_' || it == ' ' }
+        // Ensure it doesn't have too many weird symbols (allow periods for truncated names like "Name...")
+        val validCharCount = name.count { it.isLetterOrDigit() || it == '-' || it == '_' || it == ' ' || it == '.' }
         if (validCharCount < name.length * 0.6) return false
         
         // Skip action keywords and internal UI text
@@ -395,8 +395,14 @@ object OpponentScanner {
                     // So VPIP box is vertically ABOVE the oppBox (between top - 2.5*height and top).
                     // And horizontally on the right side of the avatar (around right half of oppBox or slightly outside).
                     
-                    val isAbove = lineBox.bottom <= oppBox.top + (oppBox.height() * 0.2f) && lineBox.top >= oppBox.top - (oppBox.height() * 3.0f)
-                    val isRightSide = lineBox.centerX() > oppBox.centerX() && lineBox.left <= oppBox.right + (oppBox.width() * 0.5f)
+                    // Robust y-bounds based on screen height to handle cases where the stack box wasn't parsed (which shrinks oppBox)
+                    // and lenient horizontal checks to support both active (highlighted) and folded (non-highlighted) players.
+                    val minTopY = oppBox.top - (height * 0.12f)
+                    val maxBottomY = oppBox.top + (height * 0.04f)
+                    val isAbove = lineBox.top >= minTopY && lineBox.bottom <= maxBottomY
+                    
+                    val isRightSide = lineBox.centerX() > oppBox.centerX() - (oppBox.width() * 0.35f) && 
+                                      lineBox.left <= oppBox.right + (oppBox.width() * 0.6f)
                     
                     if (isAbove && isRightSide) {
                         val text = line.text.trim()
