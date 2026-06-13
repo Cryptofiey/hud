@@ -18,7 +18,10 @@ object OpponentScanner {
         var consecutiveHits: Int = 1,
         var isMature: Boolean = false,
         var pendingNickname: String = "",
-        var pendingNicknameCount: Int = 0
+        var pendingNicknameCount: Int = 0,
+        var lastKnownStackSize: Float = 100f,
+        var lastKnownBetSize: Float = 0f,
+        var lastKnownActive: Boolean = true
     )
 
     private val trackedAnchors = mutableListOf<TrackedAnchor>()
@@ -70,6 +73,9 @@ object OpponentScanner {
     }
 
     fun scan(result: Text, cleanBitmap: Bitmap, hudRects: List<Rect> = listOf(), commRect: Rect? = null, holeRect: Rect? = null): List<OpponentState> {
+        if (PokerHudSharedState.appScreenContext.value != AppScreenState.COINPOKER_TABLE) {
+            return emptyList()
+        }
         val candidates = mutableListOf<OpponentState>()
         
         // Filter out text that intersects with HUD rectangles, break down into lines to prevent grouping issues
@@ -284,25 +290,38 @@ object OpponentScanner {
                         anchor.pendingNicknameCount = 0
                     }
                     
+                    // Save last known values
+                    if (bestCandidate.stackSize > 0f) {
+                        anchor.lastKnownStackSize = bestCandidate.stackSize
+                    }
+                    anchor.lastKnownBetSize = bestCandidate.betSize
+                    anchor.lastKnownActive = bestCandidate.isActive
+                    
                     if (anchor.consecutiveHits >= 3) {
                         anchor.isMature = true
-                        finalOpponents.add(bestCandidate.copy(nickname = anchor.nickname, boundingBox = anchor.boundingBox))
+                        val usedStackSize = if (bestCandidate.stackSize > 0f) bestCandidate.stackSize else anchor.lastKnownStackSize
+                        finalOpponents.add(bestCandidate.copy(
+                            nickname = anchor.nickname, 
+                            boundingBox = anchor.boundingBox,
+                            stackSize = usedStackSize
+                        ))
                     }
                 } else {
                     anchor.consecutiveMisses++
                     
-                    if (anchor.consecutiveMisses > 25) {
+                    if (anchor.consecutiveMisses > 8) { // Clean up empty positions faster (reduced from 25 to 8)
                         iterator.remove() // Player left, or we missed them too many times
                     } else if (anchor.isMature) {
                         // Remember them for a few frames only if they were confirmed
                         finalOpponents.add(OpponentState(
                             id = 0,
                             nickname = anchor.nickname,
-                            stackSize = 0f,
-                            isActive = true,
+                            stackSize = anchor.lastKnownStackSize,
+                            isActive = anchor.lastKnownActive,
                             isRandom = true,
                             currentAction = "NONE",
-                            boundingBox = anchor.boundingBox
+                            boundingBox = anchor.boundingBox,
+                            betSize = anchor.lastKnownBetSize
                         ))
                     }
                 }
@@ -310,10 +329,15 @@ object OpponentScanner {
 
             for (candidate in uniqueCandidates) {
                 if (candidate !in matchedCandidates) {
-                    val newAnchor = TrackedAnchor(candidate.boundingBox!!, candidate.nickname, 0, 1, false)
+                    val newAnchor = TrackedAnchor(
+                        candidate.boundingBox!!, 
+                        candidate.nickname, 
+                        0, 1, false,
+                        lastKnownStackSize = if (candidate.stackSize > 0f) candidate.stackSize else 100f,
+                        lastKnownBetSize = candidate.betSize,
+                        lastKnownActive = candidate.isActive
+                    )
                     trackedAnchors.add(newAnchor)
-                    // We DO NOT add them to finalOpponents immediately on first sighting.
-                    // They'll be added on frame 3 to prevent flickering ghosts.
                 }
             }
         }

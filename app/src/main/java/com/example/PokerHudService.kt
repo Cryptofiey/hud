@@ -70,6 +70,58 @@ enum class AppScreenState {
     COINPOKER_UNKNOWN
 }
 
+object ValueStabilizer {
+    private val counts = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val candidates = java.util.concurrent.ConcurrentHashMap<String, Float>()
+    private val confirmedValues = java.util.concurrent.ConcurrentHashMap<String, Float>()
+    
+    fun clear() {
+        counts.clear()
+        candidates.clear()
+        confirmedValues.clear()
+    }
+    
+    fun stabilize(key: String, newVal: Float?, currentVal: Float, forceUpdate: Boolean = false): Float {
+        if (newVal == null) return currentVal
+        if (forceUpdate) {
+            confirmedValues[key] = newVal
+            counts[key] = 0
+            return newVal
+        }
+        
+        val confirmed = confirmedValues[key] ?: currentVal
+        
+        val diff = kotlin.math.abs(newVal - confirmed)
+        val isSame = diff < 0.1f || (confirmed > 0f && (diff / confirmed) < 0.015f)
+        
+        if (isSame) {
+            counts[key] = 0
+            confirmedValues[key] = confirmed
+            return confirmed
+        }
+        
+        val pendingCandidate = candidates[key] ?: 0f
+        val candidateDiff = kotlin.math.abs(newVal - pendingCandidate)
+        val matchesCandidate = candidateDiff < 0.1f || (pendingCandidate > 0f && (candidateDiff / pendingCandidate) < 0.015f)
+        
+        if (matchesCandidate) {
+            val c = (counts[key] ?: 0) + 1
+            counts[key] = c
+            if (c >= 2) {
+                confirmedValues[key] = newVal
+                counts[key] = 0
+                return newVal
+            } else {
+                return confirmed
+            }
+        } else {
+            candidates[key] = newVal
+            counts[key] = 1
+            return confirmed
+        }
+    }
+}
+
 object PokerHudSharedState {
     val isHudOverlayRunning = MutableStateFlow(false)
     val appScreenContext = MutableStateFlow(AppScreenState.APP_UNKNOWN)
@@ -1214,6 +1266,11 @@ class PokerHudService : Service() {
                         }
                     }
 
+                    val forceReset = (action.hero1 != currentState.heroCard1 || action.hero2 != currentState.heroCard2) && action.hero1 != null
+                    if (forceReset) {
+                        ValueStabilizer.clear()
+                    }
+
                     // Dynamically map opponents with real-time up-to-date stats
                     val finalOpponentsList = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         val sourceList = if (action.opponents.isNotEmpty()) action.opponents else currentState.opponents
@@ -1224,9 +1281,24 @@ class PokerHudService : Service() {
                             val dbStats = prefs.loadPlayerStats(opp.nickname)
                             val isStillFolded = foldedPlayersThisHand.contains(opp.nickname)
                             val updatedOpp = if (isStillFolded) opp.copy(isActive = false, currentAction = "FOLD") else opp
-                            if (updatedOpp.stats == dbStats) updatedOpp else updatedOpp.copy(stats = dbStats)
+                            
+                            val prevOpp = currentState.opponents.firstOrNull { it.nickname == opp.nickname }
+                            val prevStack = prevOpp?.stackSize ?: opp.stackSize
+                            val prevBet = prevOpp?.betSize ?: opp.betSize
+                            
+                            val stabStack = ValueStabilizer.stabilize("opp_stack_${opp.nickname}", opp.stackSize, prevStack, forceReset)
+                            val stabBet = ValueStabilizer.stabilize("opp_bet_${opp.nickname}", opp.betSize, prevBet, forceReset)
+                            
+                            val finalOpp = updatedOpp.copy(stackSize = stabStack, betSize = stabBet)
+                            if (finalOpp.stats == dbStats) finalOpp else finalOpp.copy(stats = dbStats)
                         }
                     }
+
+                    val stabilizedPot = ValueStabilizer.stabilize("pot_size", action.potSize, currentState.potSize, forceReset)
+                    val stabilizedHeroStack = ValueStabilizer.stabilize("hero_stack", action.heroStack, currentState.heroStack, forceReset)
+                    val stabilizedHeroBet = ValueStabilizer.stabilize("hero_bet", action.heroBet, currentState.heroBet, forceReset)
+                    val stabilizedSB = ValueStabilizer.stabilize("small_blind", action.smallBlind, currentState.smallBlind, forceReset)
+                    val stabilizedBB = ValueStabilizer.stabilize("big_blind", action.bigBlind, currentState.bigBlind, forceReset)
 
                     val updatedState = currentState.copy(
                         heroCard1 = action.hero1,
@@ -1235,14 +1307,14 @@ class PokerHudService : Service() {
                         opponents = finalOpponentsList,
                         profileBoxes = if (action.updateProfileBoxes) action.profileBoxes else currentState.profileBoxes,
                         rawScannerBoxes = action.rawScannerBoxes,
-                        potSize = action.potSize ?: currentState.potSize,
+                        potSize = stabilizedPot,
                         heroActionOptions = action.heroActionOptions,
                         heroTurn = action.heroTurn,
-                        heroStack = action.heroStack ?: currentState.heroStack,
-                        heroBet = action.heroBet ?: currentState.heroBet,
+                        heroStack = stabilizedHeroStack,
+                        heroBet = stabilizedHeroBet,
                         position = action.tablePosition ?: currentState.position,
-                        smallBlind = action.smallBlind ?: currentState.smallBlind,
-                        bigBlind = action.bigBlind ?: currentState.bigBlind,
+                        smallBlind = stabilizedSB,
+                        bigBlind = stabilizedBB,
                         stage = action.tournamentStage ?: currentState.stage,
                         isBbDisplay = action.isBbDisplay
                     )
