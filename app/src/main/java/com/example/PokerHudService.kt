@@ -1324,10 +1324,22 @@ class PokerHudService : Service() {
                                 board = updatedState.board,
                                 simulations = simSize
                             )
-                            val advRecommendation = com.example.Recommendation(
-                                action = "WAIT",
-                                confidence = 0f,
-                                explanation = "L3 Disabled (INSPECTION L1/L2 MODE)"
+                            val advRecommendation = com.example.AdvisorEngine.computeRecommendationAdvanced(
+                                heroCard1 = updatedState.heroCard1,
+                                heroCard2 = updatedState.heroCard2,
+                                board = updatedState.board,
+                                potSize = updatedState.potSize,
+                                heroBet = updatedState.heroBet,
+                                opponents = updatedState.opponents,
+                                activeOpponentsCount = updatedState.opponents.count { it.isActive },
+                                simResult = advResult,
+                                settings = updatedState.settings,
+                                position = updatedState.position,
+                                stage = updatedState.stage,
+                                smallBlind = updatedState.smallBlind,
+                                bigBlind = updatedState.bigBlind,
+                                heroStack = updatedState.heroStack,
+                                heroActionOptions = updatedState.heroActionOptions
                             )
 
                             val l2Recommendation = com.example.AdvisorEngine.computeRecommendationL2(
@@ -1348,10 +1360,22 @@ class PokerHudService : Service() {
                                 heroActionOptions = updatedState.heroActionOptions
                             )
 
-                            val l4Recommendation = com.example.Recommendation(
-                                action = "WAIT",
-                                confidence = 0f,
-                                explanation = "L4 Disabled (INSPECTION L1/L2 MODE)"
+                            val l4Recommendation = com.example.AdvisorEngine.computeRecommendationL4(
+                                heroCard1 = updatedState.heroCard1,
+                                heroCard2 = updatedState.heroCard2,
+                                board = updatedState.board,
+                                potSize = updatedState.potSize,
+                                heroBet = updatedState.heroBet,
+                                opponents = updatedState.opponents,
+                                activeOpponentsCount = updatedState.opponents.count { it.isActive },
+                                simResult = advResult,
+                                settings = updatedState.settings,
+                                position = updatedState.position,
+                                stage = updatedState.stage,
+                                smallBlind = updatedState.smallBlind,
+                                bigBlind = updatedState.bigBlind,
+                                heroStack = updatedState.heroStack,
+                                heroActionOptions = updatedState.heroActionOptions
                             )
 
                             PokerHudSharedState.uiState.update { 
@@ -2027,8 +2051,9 @@ class PokerHudService : Service() {
         }
         
         val toggleBtnHorizontal = TextView(this).apply {
-            text = "🤖"
-            textSize = 10f
+            text = "↕️"
+            textSize = 12f
+            gravity = Gravity.CENTER
             setTextColor(AndroidColor.parseColor("#888888"))
             layoutParams = FrameLayout.LayoutParams(dpToPx(16f), dpToPx(16f)).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
@@ -2037,18 +2062,7 @@ class PokerHudService : Service() {
             }
             
             setOnClickListener {
-                RobotPlayer.isRobotModeEnabled.value = !RobotPlayer.isRobotModeEnabled.value
-            }
-
-            serviceScope.launch {
-                RobotPlayer.isRobotModeEnabled.collect { active ->
-                    background = createDynamicGlow(active, "#FF00E676")
-                    if (active) {
-                        setTextColor(AndroidColor.WHITE)
-                    } else {
-                        setTextColor(AndroidColor.parseColor("#888888"))
-                    }
-                }
+                PokerHudSharedState.isProbsHudVertical.value = true
             }
         }
         

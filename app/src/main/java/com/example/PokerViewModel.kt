@@ -397,10 +397,22 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     simulations = simSize
                 )
 
-                val advRecommendation = Recommendation(
-                    action = "WAIT",
-                    confidence = 0f,
-                    explanation = "L3 Disabled (INSPECTION MODE)"
+                val advRecommendation = AdvisorEngine.computeRecommendationAdvanced(
+                    heroCard1 = state.heroCard1,
+                    heroCard2 = state.heroCard2,
+                    board = state.board,
+                    potSize = state.potSize,
+                    heroBet = state.heroBet,
+                    opponents = state.opponents,
+                    activeOpponentsCount = state.opponents.count { it.isActive },
+                    simResult = advResult,
+                    settings = state.settings,
+                    position = state.position,
+                    stage = state.stage,
+                    smallBlind = state.smallBlind,
+                    bigBlind = state.bigBlind,
+                    heroStack = state.heroStack,
+                    isBbDisplay = state.isBbDisplay
                 )
 
                 val l2Recommendation = AdvisorEngine.computeRecommendationL2(
@@ -421,10 +433,22 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     isBbDisplay = state.isBbDisplay
                 )
 
-                val l4Recommendation = Recommendation(
-                    action = "WAIT",
-                    confidence = 0f,
-                    explanation = "L4 Disabled (INSPECTION MODE)"
+                val l4Recommendation = AdvisorEngine.computeRecommendationL4(
+                    heroCard1 = state.heroCard1,
+                    heroCard2 = state.heroCard2,
+                    board = state.board,
+                    potSize = state.potSize,
+                    heroBet = state.heroBet,
+                    opponents = state.opponents,
+                    activeOpponentsCount = state.opponents.count { it.isActive },
+                    simResult = advResult,
+                    settings = state.settings,
+                    position = state.position,
+                    stage = state.stage,
+                    smallBlind = state.smallBlind,
+                    bigBlind = state.bigBlind,
+                    heroStack = state.heroStack,
+                    isBbDisplay = state.isBbDisplay
                 )
 
                 withContext(Dispatchers.Main) {
