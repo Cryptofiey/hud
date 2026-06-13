@@ -807,13 +807,9 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
-                    if (isCardBackground(cleanBitmap!!, sliceBox)) {
-                        val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rank)
-                        val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
-                        tempCommCards.add(Pair(Card(refinedRank, suit), sliceBox))
-                    } else {
-                        android.util.Log.d("CardBgDetect", "Ignoring community element '$rank' due to non-card background.")
-                    }
+                    val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rank)
+                    val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
+                    tempCommCards.add(Pair(Card(refinedRank, suit), sliceBox))
                 }
             }
             
@@ -852,13 +848,9 @@ class ScreenScanner(
                     val sliceRight = sliceLeft + sliceWidth
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
-                    if (isCardBackground(cleanBitmap!!, sliceBox)) {
-                        val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rankRaw)
-                        val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
-                        tempHoleCards.add(Pair(Card(refinedRank, suit), sliceBox))
-                    } else {
-                        android.util.Log.d("CardBgDetect", "Ignoring hole element '$rankRaw' due to non-card background.")
-                    }
+                    val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rankRaw)
+                    val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
+                    tempHoleCards.add(Pair(Card(refinedRank, suit), sliceBox))
                 }
             }
             
@@ -866,27 +858,52 @@ class ScreenScanner(
                 val resultList = MutableList<Card?>(maxCards) { null }
                 if (cards.isEmpty()) return resultList
                 
-                // Group detections by their physical geometric slots (bins) within the region.
-                // This guarantees that adjacent symbols are NEVER grouped as the same card,
-                // while correctly merging the top and bottom symbols of a SINGLE card.
-                val slotWidth = regionRect.width().toFloat() / maxCards
-                val slots = Array<MutableList<Pair<Card, android.graphics.Rect>>>(maxCards) { mutableListOf() }
+                // Group detections by their X center
+                val sorted = cards.sortedBy { it.second.centerX() }
+                val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
                 
-                for (elem in cards) {
-                    val relativeX = elem.second.centerX() - regionRect.left
-                    val slotIndex = (relativeX / slotWidth).toInt().coerceIn(0, maxCards - 1)
-                    slots[slotIndex].add(elem)
+                // Dynamic threshold based on region width. A single card width is ~0.20 of 5-card board or ~0.50 of 2-card hand.
+                // We use 12% of board region for community cards, 25% for hole cards.
+                // This strictly separates neighboring cards but perfectly groups symbols within the SAME card.
+                val clusterThreshold = if (maxCards == 5) {
+                    regionRect.width() * 0.12f
+                } else {
+                    regionRect.width() * 0.25f
                 }
                 
-                for (i in 0 until maxCards) {
-                    val cluster = slots[i]
-                    if (cluster.isNotEmpty()) {
-                        // On CoinPoker, the large rank character is at the top-left (low Y / 'top').
-                        // By sorting by Y coordinate ascending, we prioritize the upright top-left rank detection.
-                        val sortedClusterByTop = cluster.sortedBy { it.second.top }
-                        val primaryCard = sortedClusterByTop.first().first
-                        resultList[i] = primaryCard
+                for (elem in sorted) {
+                    if (clusters.isEmpty()) {
+                        clusters.add(mutableListOf(elem))
+                    } else {
+                        val lastCluster = clusters.last()
+                        val lastCx = lastCluster.map { it.second.centerX() }.average()
+                        
+                        // If horizontal distance is small, they are the same card (e.g. top rank and bottom rank symbols)
+                        if (elem.second.centerX() - lastCx < clusterThreshold) {
+                            lastCluster.add(elem)
+                        } else {
+                            clusters.add(mutableListOf(elem))
+                        }
                     }
+                }
+                
+                // Resolve each cluster (preferring the topmost upright symbol like CoinPoker does)
+                val resolvedCards = clusters.map { cluster ->
+                    val sortedClusterByTop = cluster.sortedBy { it.second.top }
+                    val primaryCard = sortedClusterByTop.first().first
+                    val minX = cluster.minOf { it.second.centerX() }
+                    val area = cluster.sumOf { it.second.width() * it.second.height() }
+                    Triple(primaryCard, minX, area)
+                }
+                
+                // Sort by area to keep main cards if there is noise, then resort by X for left-to-right ordering
+                val topCards = resolvedCards.sortedByDescending { it.third }
+                    .take(maxCards)
+                    .sortedBy { it.second }
+                    .map { it.first }
+                
+                for (i in 0 until topCards.size) {
+                    resultList[i] = topCards[i]
                 }
                 
                 return resultList
@@ -1282,36 +1299,6 @@ class ScreenScanner(
         return true
     }
 
-    private fun isCardBackground(crop: Bitmap, rect: android.graphics.Rect): Boolean {
-        val left = maxOf(0, rect.left)
-        val right = minOf(crop.width - 1, rect.right)
-        val top = maxOf(0, rect.top)
-        val bottom = minOf(crop.height - 1, rect.bottom)
-        
-        val totalPixels = (right - left + 1) * (bottom - top + 1)
-        if (totalPixels <= 0) return false
-        
-        var brightCount = 0
-        for (x in left..right) {
-            for (y in top..bottom) {
-                val p = crop.getPixel(x, y)
-                val r = android.graphics.Color.red(p)
-                val g = android.graphics.Color.green(p)
-                val b = android.graphics.Color.blue(p)
-                
-                // Bright card background check (95 is perfectly safe for shadows, while rejecting table)
-                if (r > 95 && g > 95 && b > 95) {
-                    brightCount++
-                }
-            }
-        }
-        
-        val ratio = brightCount.toFloat() / totalPixels
-        val isCard = ratio >= 0.35f
-        android.util.Log.d("CardBgDetect", "Box: $rect | Bright=$brightCount Total=$totalPixels Ratio=$ratio | isCard=$isCard")
-        return isCard
-    }
-
     private fun findCardsInText(text: String, isHoleCard: Boolean = false): List<Rank> {
         val found = mutableListOf<Rank>()
         // Pre-replace common OCR symbol mistakes before stripping
@@ -1379,10 +1366,14 @@ class ScreenScanner(
                 if (c in validSuitsOrNoise) {
                     i++
                 } else {
-                    // Invalid character encountered in this block.
-                    // To prevent random letters in words from being parsed as cards,
-                    // we invalidate the ENTIRE block.
-                    return emptyList()
+                    if (isHoleCard) {
+                        i++ // Tolerate OCR noise in hole cards region
+                    } else {
+                        // Invalid character encountered in this block.
+                        // To prevent random letters in words from being parsed as cards,
+                        // we invalidate the ENTIRE block.
+                        return emptyList()
+                    }
                 }
             }
         }
