@@ -798,7 +798,8 @@ class ScreenScanner(
                     safeText.contains("KIND") || safeText.contains("HOUSE") ||
                     safeText.contains("POT") || safeText.contains("BB") ||
                     safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
-                    safeText.contains("OF") || safeText.isEmpty()) continue
+                    safeText.contains("OF") || safeText.isEmpty() ||
+                    safeText.matches(Regex(".*\\d+[.,]\\d+.*"))) continue
 
                 val parsedRanks = findCardsInText(safeText)
                 for ((idx, rank) in parsedRanks.withIndex()) {
@@ -838,7 +839,8 @@ class ScreenScanner(
                     safeText.contains("KIND") || safeText.contains("HOUSE") ||
                     safeText.contains("POT") || safeText.contains("BB") ||
                     safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
-                    safeText.contains("OF") || safeText.isEmpty()) continue
+                    safeText.contains("OF") || safeText.isEmpty() ||
+                    safeText.matches(Regex(".*\\d+[.,]\\d+.*"))) continue
 
                 val parsedRanksRaw = findCardsInText(safeText, isHoleCard = true)
                 for ((idx, rankRaw) in parsedRanksRaw.withIndex()) {
@@ -862,13 +864,13 @@ class ScreenScanner(
                 val sorted = cards.sortedBy { it.second.centerX() }
                 val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
                 
-                // Dynamic threshold based on region width. A single card width is ~0.20 of 5-card board or ~0.50 of 2-card hand.
-                // We use 12% of board region for community cards, 25% for hole cards.
-                // This strictly separates neighboring cards but perfectly groups symbols within the SAME card.
+                // Dynamic threshold based on region width. A single card width is ~0.20 of 5-card board.
+                // To group the '1' and '0' of a '10' together but keep separate cards distinct, 
+                // we should use a very tight threshold like 3%.
                 val clusterThreshold = if (maxCards == 5) {
-                    regionRect.width() * 0.08f
+                    regionRect.width() * 0.03f
                 } else {
-                    regionRect.width() * 0.18f
+                    regionRect.width() * 0.08f
                 }
                 
                 for (elem in sorted) {
@@ -1387,14 +1389,12 @@ class ScreenScanner(
         val w = crop.width
         val h = crop.height
 
-        // Expand the search area to make sure we hit the card background
-        // CRITICAL FOR HOLE CARDS: Do not expand much to the right, as the left hole card
-        // is overlapped by the right hole card. The safest area to sample color is 
-        // to the left and directly below the rank text.
-        val expandLeft = maxOf(10, (rankBox.width() * 0.5f).toInt())
-        val expandRight = maxOf(5, (rankBox.width() * 0.2f).toInt()) // Restrict right expansion!
-        val expandTop = maxOf(5, (rankBox.height() * 0.2f).toInt())
-        val expandBottom = maxOf(15, (rankBox.height() * 1.5f).toInt()) // Expand more downwards towards the suit symbol
+        // Expand the search area slightly to hit the card background.
+        // Avoid excessive expansion to prevent hitting the table felt or avatar glow.
+        val expandLeft = maxOf(4, (rankBox.width() * 0.2f).toInt())
+        val expandRight = maxOf(4, (rankBox.width() * 0.2f).toInt())
+        val expandTop = maxOf(4, (rankBox.height() * 0.2f).toInt())
+        val expandBottom = maxOf(4, (rankBox.height() * 0.3f).toInt())
 
         val left = maxOf(0, rankBox.left - expandLeft)
         val right = minOf(w - 1, rankBox.right + expandRight)
@@ -1418,9 +1418,8 @@ class ScreenScanner(
                 // Suit background is typically a mid-to-dark color but not absolute black or absolute white.
                 if (r > 180 && g > 180 && b > 180) continue
                 
-                // We must NOT discard black pixels, because Spades are black!
-                // Instead, just avoid completely black screen-off pixels if any, 
-                // but dark pixels (e.g. 5, 5, 5) are very valid for Spades.
+                // We must NOT discard black pixels completely because Spades are black/gray.
+                // But skip absolute #000000 to avoid screen letterboxing or borders
                 if (r == 0 && g == 0 && b == 0) continue
                 
                 totalRed += r
@@ -1443,7 +1442,7 @@ class ScreenScanner(
         val chroma = maxColor - minColor
         
         // If the color is essentially gray/black with very little saturation, it's Spades
-        if (chroma < 15 || (maxColor < 60 && chroma < 25)) {
+        if (chroma < 20 || (maxColor < 60 && chroma < 30)) {
             return Suit.SPADES
         }
         
