@@ -170,6 +170,28 @@ class ScannerBoxesView(context: Context) : View(context) {
                         } else {
                             canvas.drawRect(actualBox, inactiveBoxPaint)
                         }
+
+                        // Draw VPIP Box overlay
+                        val vpipBox = opp.sessionVpipBox
+                        if (vpipBox != null) {
+                            val vpipActualBox = Rect(
+                                vpipBox.left + offsetX.toInt() - viewOffsetX,
+                                vpipBox.top + offsetY.toInt() - viewOffsetY,
+                                vpipBox.right + offsetX.toInt() - viewOffsetX,
+                                vpipBox.bottom + offsetY.toInt() - viewOffsetY
+                            )
+                            val vpipPaint = Paint().apply {
+                                color = android.graphics.Color.YELLOW
+                                style = Paint.Style.STROKE
+                                strokeWidth = 3f
+                            }
+                            canvas.drawRect(vpipActualBox, vpipPaint)
+                            val vpipFill = Paint().apply {
+                                color = android.graphics.Color.parseColor("#44FFFF00") // yellow semi transparent
+                                style = Paint.Style.FILL
+                            }
+                            canvas.drawRect(vpipActualBox, vpipFill)
+                        }
                     }
                 }
             }
