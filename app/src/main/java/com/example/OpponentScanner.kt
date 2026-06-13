@@ -384,26 +384,34 @@ object OpponentScanner {
             var detectedVpip: Float? = null
             var vpipBox: Rect? = null
             
-            for (line in linesList) {
-                val lineBox = line.boundingBox ?: continue
-                val oppBox = opp.boundingBox ?: continue
-                
-                // The VPIP window is directly to the right of the player avatar/box
-                val isRight = lineBox.left >= oppBox.right - (width * 0.05f) && lineBox.left <= oppBox.right + (width * 0.15f)
-                val isVerticallyAligned = lineBox.centerY() >= oppBox.top && lineBox.centerY() <= oppBox.bottom
-                
-                if (isRight && isVerticallyAligned) {
-                    val text = line.text.trim()
+            val oppBox = opp.boundingBox
+            if (oppBox != null) {
+                for (line in linesList) {
+                    val lineBox = line.boundingBox ?: continue
                     
-                    // Most VPIP on screen looks like a number or XX/YY or 50/100 (16). Wait, "50/100 (16)" was in the user's previous example.
-                    // Let's parse the first number.
-                    val parts = text.split("/", " ", "(", ")", "-").filter { it.isNotEmpty() }
-                    if (parts.isNotEmpty()) {
-                        val num = parts[0].replace(Regex("[^0-9]"), "").toFloatOrNull()
-                        if (num != null && num in 0f..100f) {
-                            detectedVpip = num
-                            vpipBox = lineBox
-                            break
+                    // The VPIP window "91" is located to the right side of the avatar, above the name/stack plate.
+                    // oppBox is the union of name and stack text. The avatar is directly above oppBox.
+                    // The name box is often wider than the avatar.
+                    // So VPIP box is vertically ABOVE the oppBox (between top - 2.5*height and top).
+                    // And horizontally on the right side of the avatar (around right half of oppBox or slightly outside).
+                    
+                    val isAbove = lineBox.bottom <= oppBox.top + (oppBox.height() * 0.2f) && lineBox.top >= oppBox.top - (oppBox.height() * 3.0f)
+                    val isRightSide = lineBox.centerX() > oppBox.centerX() && lineBox.left <= oppBox.right + (oppBox.width() * 0.5f)
+                    
+                    if (isAbove && isRightSide) {
+                        val text = line.text.trim()
+                        
+                        // Most VIP looks like a simple 1-3 digit number (e.g., "91" or "100" or "0").
+                        // Make sure it doesn't contain "$", "BB", letters, etc., to avoid confusing it with blind indicators or bets (though bets are usually below).
+                        val numStr = text.replace(Regex("[^0-9]"), "")
+                        if (numStr.isNotEmpty() && numStr.length <= 3 && !text.contains("BB", ignoreCase = true) && !text.contains("$")) {
+                            val num = numStr.toFloatOrNull()
+                            // VPIP is 0..100.
+                            if (num != null && num in 0f..100f) {
+                                detectedVpip = num
+                                vpipBox = lineBox
+                                break
+                            }
                         }
                     }
                 }
