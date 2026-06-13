@@ -2034,6 +2034,8 @@ class PokerHudService : Service() {
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
             setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
         }
+
+        var onResizeCallback: ((Boolean) -> Unit)? = null
         
         val toggleBtnHorizontal = TextView(this).apply {
             text = "↕️"
@@ -2074,6 +2076,9 @@ class PokerHudService : Service() {
                         try {
                             windowManager?.updateViewLayout(frame, params)
                         } catch (ignored: Exception) {}
+                        
+                        val isWideNow = !isVert && (params.width > dpToPx(220f))
+                        onResizeCallback?.invoke(isWideNow)
                         true
                     }
                     MotionEvent.ACTION_UP -> {
@@ -2136,8 +2141,6 @@ class PokerHudService : Service() {
         infoRow.addView(txtHandRankStrength)
         infoRow.addView(txtSklan)
         
-        mainVert.addView(infoRow)
-        
         // Equalizer View Integration
         val equalizer = EqualizerView(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
@@ -2147,9 +2150,8 @@ class PokerHudService : Service() {
                 rightMargin = dpToPx(4f)
             }
         }
-        mainVert.addView(equalizer)
         
-        // Divider before Advisor Slot
+        // Divider before Advisor Slot (acts as Horizontal or Vertical divider dynamically)
         val advDivider = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
                 topMargin = dpToPx(2f)
@@ -2159,7 +2161,6 @@ class PokerHudService : Service() {
             }
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
         }
-        mainVert.addView(advDivider)
         
         // Advisor Slot
         val txtL1Advisor = TextView(this).apply {
@@ -2237,8 +2238,152 @@ class PokerHudService : Service() {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         scrollAdvisor.addView(advVert)
-        
-        mainVert.addView(scrollAdvisor)
+
+        // CREATE NEW ADAPTIVE TWO-COLUMN FLOW WRAPPER
+        val leftGroup = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        val rightGroup = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        val flowContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+
+        leftGroup.addView(infoRow)
+        leftGroup.addView(equalizer)
+
+        rightGroup.addView(scrollAdvisor)
+
+        flowContainer.addView(leftGroup)
+        flowContainer.addView(advDivider)
+        flowContainer.addView(rightGroup)
+
+        mainVert.addView(flowContainer)
+
+        var actionAdvisorScaleLocal = 1.0f
+
+        fun updateFlowLayout(isWide: Boolean) {
+            val isAdvVisible = PokerHudSharedState.showActionAdvisor.value
+            
+            if (isWide) {
+                flowContainer.orientation = LinearLayout.HORIZONTAL
+                leftGroup.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f)
+                rightGroup.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.1f)
+                
+                advDivider.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
+                advDivider.layoutParams = LinearLayout.LayoutParams(dpToPx(1f), LinearLayout.LayoutParams.MATCH_PARENT).apply {
+                    leftMargin = dpToPx(4f)
+                    rightMargin = dpToPx(4f)
+                    topMargin = dpToPx(2f)
+                    bottomMargin = dpToPx(2f)
+                }
+                
+                rightGroup.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
+                
+                // Fine-tune paddings / margins for compact wide fit
+                infoRow.setPadding(dpToPx(4f), dpToPx(1f), dpToPx(4f), dpToPx(1f))
+                (infoRow.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    bottomMargin = dpToPx(2f)
+                    infoRow.layoutParams = this
+                }
+                
+                equalizer.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(18f)).apply {
+                    topMargin = dpToPx(2f)
+                    bottomMargin = 0
+                    leftMargin = 0
+                    rightMargin = dpToPx(2f)
+                }
+                
+                // Adjust text sizes / margins slightly snugger for the side-by-side view
+                (txtCardsBoard.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(0.5f)
+                    txtCardsBoard.layoutParams = this
+                }
+                (txtHandRankStrength.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(0.5f)
+                    txtHandRankStrength.layoutParams = this
+                }
+                (txtSklan.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(0.5f)
+                    txtSklan.layoutParams = this
+                }
+                
+                for (tv in listOf(txtL1Advisor, txtL2Advisor, txtL3Advisor, txtL4Advisor, txtL5Advisor)) {
+                    (tv.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                        bottomMargin = dpToPx(0.5f)
+                        tv.layoutParams = this
+                    }
+                }
+                val compactSize = 7.2f * actionAdvisorScaleLocal
+                txtL1Advisor.textSize = compactSize
+                txtL2Advisor.textSize = compactSize
+                txtL3Advisor.textSize = compactSize
+                txtL4Advisor.textSize = compactSize
+                txtL5Advisor.textSize = compactSize
+                
+            } else {
+                flowContainer.orientation = LinearLayout.VERTICAL
+                leftGroup.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                rightGroup.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                rightGroup.visibility = View.VISIBLE
+                
+                advDivider.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
+                advDivider.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1.0f)).apply {
+                    topMargin = dpToPx(3f)
+                    bottomMargin = dpToPx(3f)
+                    leftMargin = 0
+                    rightMargin = dpToPx(4f)
+                }
+                
+                // Standard default snug padding
+                infoRow.setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+                (infoRow.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    bottomMargin = dpToPx(4f)
+                    infoRow.layoutParams = this
+                }
+                
+                equalizer.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
+                    topMargin = dpToPx(2f)
+                    bottomMargin = dpToPx(2f)
+                    leftMargin = 0
+                    rightMargin = dpToPx(4f)
+                }
+                
+                (txtCardsBoard.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(1.5f)
+                    txtCardsBoard.layoutParams = this
+                }
+                (txtHandRankStrength.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(1.5f)
+                    txtHandRankStrength.layoutParams = this
+                }
+                (txtSklan.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(1.5f)
+                    txtSklan.layoutParams = this
+                }
+                
+                for (tv in listOf(txtL1Advisor, txtL2Advisor, txtL3Advisor, txtL4Advisor, txtL5Advisor)) {
+                    (tv.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                        bottomMargin = dpToPx(1.5f)
+                        tv.layoutParams = this
+                    }
+                }
+                val standardSize = 8.0f * actionAdvisorScaleLocal
+                txtL1Advisor.textSize = standardSize
+                txtL2Advisor.textSize = standardSize
+                txtL3Advisor.textSize = standardSize
+                txtL4Advisor.textSize = standardSize
+                txtL5Advisor.textSize = standardSize
+            }
+        }
+
+        onResizeCallback = { isWide ->
+            updateFlowLayout(isWide)
+        }
 
         // Vertical specific layouts
         val vertToolbar = LinearLayout(this).apply {
@@ -2438,8 +2583,15 @@ class PokerHudService : Service() {
                 }
             } else {
                 val isAdvVisible = PokerHudSharedState.showActionAdvisor.value
-                params.width = dpToPx(160f)
-                params.height = if (isAdvVisible) dpToPx(210f) else dpToPx(110f)
+                val isWide = params.width > dpToPx(220f)
+                
+                if (!isWide) {
+                    params.width = dpToPx(160f)
+                    params.height = if (isAdvVisible) dpToPx(210f) else dpToPx(110f)
+                }
+                
+                updateFlowLayout(isWide)
+                
                 if (params.x < 0) {
                     params.x = dpToPx(100f)
                 }
@@ -2462,17 +2614,7 @@ class PokerHudService : Service() {
                 emojiContainer.visibility = View.GONE
                 
                 infoRow.visibility = View.VISIBLE
-                
-                advDivider.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
-                scrollAdvisor.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
-                
                 equalizer.isVertical = false
-                equalizer.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
-                    topMargin = dpToPx(2f)
-                    bottomMargin = dpToPx(2f)
-                    leftMargin = 0
-                    rightMargin = dpToPx(4f)
-                }
             }
             
             try {
@@ -2788,11 +2930,14 @@ class PokerHudService : Service() {
         }
         serviceScope.launch(probsJob!!) {
             PokerHudSharedState.actionAdvisorScale.collect { scale -> 
-                txtL1Advisor.textSize = 8f * scale
-                txtL2Advisor.textSize = 8f * scale
-                txtL3Advisor.textSize = 8f * scale
-                txtL4Advisor.textSize = 8f * scale
-                txtL5Advisor.textSize = 8f * scale
+                actionAdvisorScaleLocal = scale
+                val isWide = params.width > dpToPx(220f)
+                val baseSize = if (isWide) 7.2f else 8.0f
+                txtL1Advisor.textSize = baseSize * scale
+                txtL2Advisor.textSize = baseSize * scale
+                txtL3Advisor.textSize = baseSize * scale
+                txtL4Advisor.textSize = baseSize * scale
+                txtL5Advisor.textSize = baseSize * scale
             }
         }
         // serviceScope.launch(probsJob!!) {

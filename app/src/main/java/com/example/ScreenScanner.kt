@@ -248,8 +248,10 @@ class ScreenScanner(
             history.removeAt(0)
         }
         
-        // If last 4 frames were completely empty, reset history
-        if (history.size >= 4 && history.takeLast(4).all { list -> list.all { it == null } }) {
+        // Dynamically clear history: allow longer decay for player hole cards (20 frames) 
+        // compared to community board cards (8 frames) to prevent premature state clearing.
+        val clearThreshold = if (history === holeHistory) 20 else 8
+        if (history.size >= clearThreshold && history.takeLast(clearThreshold).all { list -> list.all { it == null } }) {
             history.clear()
             confirmed.clear()
             return emptyList()
