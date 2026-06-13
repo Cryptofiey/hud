@@ -1397,14 +1397,18 @@ class ScreenScanner(
         val h = crop.height
 
         // Expand the search area to make sure we hit the card background
-        // We use a decent expansion on all sides to gather enough background pixels.
-        val expandX = maxOf(10, (rankBox.width() * 0.75f).toInt())
-        val expandY = maxOf(10, (rankBox.height() * 0.75f).toInt())
+        // CRITICAL FOR HOLE CARDS: Do not expand much to the right, as the left hole card
+        // is overlapped by the right hole card. The safest area to sample color is 
+        // to the left and directly below the rank text.
+        val expandLeft = maxOf(10, (rankBox.width() * 0.5f).toInt())
+        val expandRight = maxOf(5, (rankBox.width() * 0.2f).toInt()) // Restrict right expansion!
+        val expandTop = maxOf(5, (rankBox.height() * 0.2f).toInt())
+        val expandBottom = maxOf(15, (rankBox.height() * 1.5f).toInt()) // Expand more downwards towards the suit symbol
 
-        val left = maxOf(0, rankBox.left - expandX)
-        val right = minOf(w - 1, rankBox.right + expandX)
-        val top = maxOf(0, rankBox.top - expandY)
-        val bottom = minOf(h - 1, rankBox.bottom + expandY)
+        val left = maxOf(0, rankBox.left - expandLeft)
+        val right = minOf(w - 1, rankBox.right + expandRight)
+        val top = maxOf(0, rankBox.top - expandTop)
+        val bottom = minOf(h - 1, rankBox.bottom + expandBottom)
         
         var totalRed = 0L
         var totalGreen = 0L
