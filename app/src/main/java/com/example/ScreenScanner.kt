@@ -900,13 +900,13 @@ class ScreenScanner(
                 val sorted = cards.sortedBy { it.second.centerX() }
                 val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
                 
-                // Dynamic threshold based on region width. A single card width is ~0.20 of 5-card board.
-                // To group slices of OCR artifacts from a single text block together, we use 10% for board.
-                // This keeps physical cards (spaced ~20% apart) distinct, while merging segments of the same card.
+                // Dynamic threshold based on region width. A single card width is ~0.18-0.20 of 5-card board.
+                // We use 14% for board and 24% for hole cards to merge multiple scans of the same card
+                // (which can be spaced up to 13% apart horizontally), completely avoiding duplicate cards.
                 val clusterThreshold = if (maxCards == 5) {
-                    regionRect.width() * 0.10f
+                    regionRect.width() * 0.14f
                 } else {
-                    regionRect.width() * 0.20f
+                    regionRect.width() * 0.24f
                 }
                 
                 for (elem in sorted) {
@@ -994,18 +994,22 @@ class ScreenScanner(
                 }
             }
 
-            // Board never shrinks during a hand. If we saw N cards, and now see fewer (but >0), keep N cards if possible.
-            // If it drops to 0, getSmoothedCards will eventually clear it (after 2 empty frames).
-            val currentCommCount = currentState.board.count { it != null }
-            val smoothedCommCount = smoothedComm.count { it != null }
+            // Board never shrinks, but to prevent feedback loops keeping invalid/false extra cards forever,
+            // we let the temporal smoothedComm rot out invalid cards naturally.
+            val finalComm = smoothedComm
             
-            var finalComm = smoothedComm
-            if (smoothedCommCount in 1 until currentCommCount) {
-                finalComm = currentState.board
+            var finalH1 = smoothedHole.getOrNull(0) ?: smoothedHole.firstOrNull() ?: null
+            var finalH2 = smoothedHole.getOrNull(1) ?: smoothedHole.drop(1).firstOrNull() ?: null
+            
+            // Fallback: if we had player hole cards and they vanished but the board is active (non-empty),
+            // preserve them to prevent temporary camera/occlusion drops from clearing the player's hand.
+            val lastH1 = currentState.heroCard1
+            val lastH2 = currentState.heroCard2
+            val boardCount = finalComm.count { it != null }
+            if (finalH1 == null && finalH2 == null && lastH1 != null && lastH2 != null && boardCount > 0) {
+                finalH1 = lastH1
+                finalH2 = lastH2
             }
-            
-            val finalH1 = smoothedHole.getOrNull(0) ?: smoothedHole.firstOrNull() ?: null
-            val finalH2 = smoothedHole.getOrNull(1) ?: smoothedHole.drop(1).firstOrNull() ?: null
             
             val finalBoard = List(5) { i ->
                 finalComm.getOrNull(i)
