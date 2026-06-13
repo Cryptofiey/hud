@@ -476,8 +476,11 @@ class PokerHudService : Service() {
 
     private fun showFloatingOverlay() {
         if (isOverlayShowing) return
-
-        val params = WindowManager.LayoutParams(
+        isOverlayShowing = true
+        floatingOverlayView = null
+        
+        // 5. OBSERVE LIVE RECALCULATED STATE COUPLING FROM MAIN APP VIEWMODEL
+        /*
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -980,6 +983,7 @@ class PokerHudService : Service() {
             Log.e("PokerHudService", "Failed to add floating overlay view: ${e.message}", e)
             stopSelf()
         }
+        */
 
         // 5. OBSERVE LIVE RECALCULATED STATE COUPLING FROM MAIN APP VIEWMODEL
         serviceScope.launch {
@@ -1066,26 +1070,7 @@ class PokerHudService : Service() {
             }
         }
 
-        serviceScope.launch {
-            PokerHudSharedState.hudScale.collect { scale ->
-                expanded.pivotX = 0f
-                expanded.pivotY = 0f
-                expanded.scaleX = scale
-                expanded.scaleY = scale
-
-                mini.pivotX = 0f
-                mini.pivotY = 0f
-                mini.scaleX = scale
-                mini.scaleY = scale
-            }
-        }
-
-        serviceScope.launch {
-            PokerHudSharedState.hudOpacity.collect { opacity ->
-                expanded.alpha = opacity
-                mini.alpha = opacity
-            }
-        }
+        // Removed hudScale and hudOpacity listeners for deleted controller UI
 
         serviceScope.launch {
             PokerHudSharedState.isGameMode.collect { gameMode ->
@@ -2080,8 +2065,12 @@ class PokerHudService : Service() {
                     MotionEvent.ACTION_MOVE -> {
                         val deltaX = (event.rawX - initialTouchX).toInt()
                         val deltaY = (event.rawY - initialTouchY).toInt()
-                        params.width = Math.max(dpToPx(120f), initialWidth + deltaX)
-                        params.height = Math.max(dpToPx(100f), initialHeight + deltaY)
+                        val isVert = PokerHudSharedState.isProbsHudVertical.value
+                        val minWidth = if (isVert) dpToPx(55f) else dpToPx(160f)
+                        val minHeight = if (isVert) dpToPx(100f) else dpToPx(100f)
+                        
+                        params.width = Math.max(minWidth, initialWidth + deltaX)
+                        params.height = Math.max(minHeight, initialHeight + deltaY)
                         try {
                             windowManager?.updateViewLayout(frame, params)
                         } catch (ignored: Exception) {}
@@ -2092,8 +2081,8 @@ class PokerHudService : Service() {
                         val distanceX = Math.abs(event.rawX - initialTouchX)
                         val distanceY = Math.abs(event.rawY - initialTouchY)
                         if (duration < 250 && distanceX < 12 && distanceY < 12) {
-                            // It's a tap - switch to vertical
-                            PokerHudSharedState.isProbsHudVertical.value = true
+                            val isVert = PokerHudSharedState.isProbsHudVertical.value
+                            PokerHudSharedState.isProbsHudVertical.value = !isVert
                         }
                         true
                     }
