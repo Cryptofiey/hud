@@ -331,7 +331,7 @@ class ScreenScanner(
                 val b = p and 0xFF
                 
                 // Folded cards are darker grey. Lower the threshold for hole cards region to ensure folded cards are still detected.
-                val threshold = if (isHole) ScannerConfig.ocrThreshold - 55 else ScannerConfig.ocrThreshold
+                val threshold = if (isHole) ScannerConfig.ocrThreshold - 15 else ScannerConfig.ocrThreshold
                 
                 // If it's very bright white (or grey for folded), it should be black text for OCR. Anything else is card/table background and should be white.
                 val color = if (r > threshold && g > threshold && b > threshold) {
@@ -424,8 +424,9 @@ class ScreenScanner(
                 // Buffer zones inside the frame window
                 val bufferX = (holeRect.width() * 0.05f).toInt()
                 val bufferY = (holeRect.height() * 0.05f).toInt()
-                // Right side exclusion for the drag/close symbols
-                val rightExclusion = maxOf((holeRect.width() * 0.15f).toInt(), 50)
+                // Hole cards overlay has no close button, only a small resize button on the bottom-right corner.
+                // We keep right exclusion at safety buffer level to avoid cutting off the right pocket card.
+                val rightExclusion = bufferX
                 
                 android.graphics.Rect(
                     holeRect.left + bufferX,
@@ -996,11 +997,16 @@ class ScreenScanner(
             val currentCommCount = currentState.board.count { it != null }
             val smoothedCommCount = smoothedComm.count { it != null }
             
+            var finalComm = smoothedComm
+            if (smoothedCommCount in 1 until currentCommCount) {
+                finalComm = currentState.board
+            }
+            
             val finalH1 = smoothedHole.getOrNull(0) ?: smoothedHole.firstOrNull() ?: null
             val finalH2 = smoothedHole.getOrNull(1) ?: smoothedHole.drop(1).firstOrNull() ?: null
             
             val finalBoard = List(5) { i ->
-                smoothedComm.getOrNull(i) ?: smoothedComm.getOrNull(i)
+                finalComm.getOrNull(i)
             }
             
             val scannedOpponents = OpponentScanner.scan(result, cleanBitmap!!, hudRects, commRect, holeRect)
