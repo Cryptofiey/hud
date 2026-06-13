@@ -791,15 +791,19 @@ class ScreenScanner(
                     .replace("RAISE", "").replace("РЕЙЗ", "")
                     .replace("STRADDLE", "").replace("СТРАДДЛ", "")
                     
-                val safeText = rawText.trim()
+                // Replace fractional bet sizes and exact chip stacks with BB to avoid false card detections.
+                // We MUST not accidentally remove bare '10' as it's a valid rank.
+                var safeText = rawText.trim()
+                safeText = safeText.replace(Regex("\\b\\d+[.,]\\d+\\s*(BB|ББ)?\\b"), "")
+                safeText = safeText.replace(Regex("\\b\\d+\\s*(BB|ББ)\\b"), "")
+                safeText = safeText.replace("POT", "").replace("ПОТ", "").replace("BB", "").replace("ББ", "")
+                
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
                     safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
                     safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
                     safeText.contains("KIND") || safeText.contains("HOUSE") ||
-                    safeText.contains("POT") || safeText.contains("BB") ||
                     safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
-                    safeText.contains("OF") || safeText.isEmpty() ||
-                    safeText.matches(Regex(".*\\d+[.,]\\d+.*"))) continue
+                    safeText.contains("OF") || safeText.isEmpty()) continue
 
                 val parsedRanks = findCardsInText(safeText)
                 for ((idx, rank) in parsedRanks.withIndex()) {
@@ -832,15 +836,19 @@ class ScreenScanner(
                     .replace("RAISE", "").replace("РЕЙЗ", "")
                     .replace("STRADDLE", "").replace("СТРАДДЛ", "")
                     
-                val safeText = rawText.trim()
+                // Replace fractional or exact stack sizes with BB to stop breaking hole card detections.
+                // We MUST not accidentally remove bare '10' as it's a valid rank.
+                var safeText = rawText.trim()
+                safeText = safeText.replace(Regex("\\b\\d+[.,]\\d+\\s*(BB|ББ)?\\b"), "")
+                safeText = safeText.replace(Regex("\\b\\d+\\s*(BB|ББ)\\b"), "")
+                safeText = safeText.replace("POT", "").replace("ПОТ", "").replace("BB", "").replace("ББ", "")
+                
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
                     safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
                     safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
                     safeText.contains("KIND") || safeText.contains("HOUSE") ||
-                    safeText.contains("POT") || safeText.contains("BB") ||
                     safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
-                    safeText.contains("OF") || safeText.isEmpty() ||
-                    safeText.matches(Regex(".*\\d+[.,]\\d+.*"))) continue
+                    safeText.contains("OF") || safeText.isEmpty()) continue
 
                 val parsedRanksRaw = findCardsInText(safeText, isHoleCard = true)
                 for ((idx, rankRaw) in parsedRanksRaw.withIndex()) {
@@ -1441,8 +1449,10 @@ class ScreenScanner(
         val minColor = minOf(avgR, avgG, avgB)
         val chroma = maxColor - minColor
         
-        // If the color is essentially gray/black with very little saturation, it's Spades
-        if (chroma < 20 || (maxColor < 60 && chroma < 30)) {
+        // If the color is essentially gray/black/dark blue with very little color dominance, it's Spades
+        // Spades in typical decks are black. In CoinPoker 4-color decks they are dark grey.
+        // We raise chroma thresholds to stop false detecting Spade as Heart/Diamond due to antialiasing or table colors.
+        if (chroma < 40 || (maxColor < 75 && chroma < 55)) {
             return Suit.SPADES
         }
         
