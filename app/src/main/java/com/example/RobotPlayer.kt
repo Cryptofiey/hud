@@ -98,11 +98,6 @@ object RobotPlayer {
                     return@collectLatest
                 }
 
-<<<<<<< HEAD
-                val advRec = uiState.advancedRecommendation
-                val rec = uiState.recommendation
-                val advisorText = ((advRec ?: rec)?.action ?: "").uppercase()
-=======
                 val l4Rec = uiState.l4Recommendation
                 val l3Rec = uiState.advancedRecommendation
                 val l2Rec = uiState.l2Recommendation
@@ -113,7 +108,6 @@ object RobotPlayer {
                 }
                 
                 val advisorText = (validRec?.action ?: "").uppercase()
->>>>>>> origin/main
                 
                 if (advisorText.isEmpty() || advisorText.contains("N/A", ignoreCase=true)) return@collectLatest
                 
@@ -176,7 +170,16 @@ object RobotPlayer {
                         var iterations = 0
                         var successfulClick = false
                     while (isActive && iterations < 5) {
-                        val currentRecText = PokerHudSharedState.uiState.value.let { it.advancedRecommendation ?: it.recommendation }?.action?.uppercase() ?: ""
+                        val currentState = PokerHudSharedState.uiState.value
+                        val currentValidRec = listOfNotNull(
+                            currentState.l4Recommendation, 
+                            currentState.advancedRecommendation, 
+                            currentState.l2Recommendation, 
+                            currentState.recommendation
+                        ).firstOrNull { 
+                            it.action.isNotEmpty() && !it.explanation.contains("Disabled", ignoreCase = true) && !it.action.equals("WAIT", ignoreCase = true)
+                        }
+                        val currentRecText = currentValidRec?.action?.uppercase() ?: ""
                         val stillMatching = when (canonicalAction) {
                             "FOLD" -> currentRecText.contains("FOLD") || currentRecText.contains("ФОЛД")
                             "CHECK" -> currentRecText.contains("CHECK") || currentRecText.contains("ЧЕК")
