@@ -1324,22 +1324,10 @@ class PokerHudService : Service() {
                                 board = updatedState.board,
                                 simulations = simSize
                             )
-                            val advRecommendation = com.example.AdvisorEngine.computeRecommendationAdvanced(
-                                heroCard1 = updatedState.heroCard1,
-                                heroCard2 = updatedState.heroCard2,
-                                board = updatedState.board,
-                                potSize = updatedState.potSize,
-                                heroBet = updatedState.heroBet,
-                                opponents = updatedState.opponents,
-                                activeOpponentsCount = updatedState.opponents.count { it.isActive },
-                                simResult = advResult,
-                                settings = updatedState.settings,
-                                position = updatedState.position,
-                                stage = updatedState.stage,
-                                smallBlind = updatedState.smallBlind,
-                                bigBlind = updatedState.bigBlind,
-                                heroStack = updatedState.heroStack,
-                                heroActionOptions = updatedState.heroActionOptions
+                            val advRecommendation = com.example.Recommendation(
+                                action = "WAIT",
+                                confidence = 0f,
+                                explanation = "L3 Disabled (INSPECTION L1/L2 MODE)"
                             )
 
                             val l2Recommendation = com.example.AdvisorEngine.computeRecommendationL2(
@@ -1360,22 +1348,10 @@ class PokerHudService : Service() {
                                 heroActionOptions = updatedState.heroActionOptions
                             )
 
-                            val l4Recommendation = com.example.AdvisorEngine.computeRecommendationL4(
-                                heroCard1 = updatedState.heroCard1,
-                                heroCard2 = updatedState.heroCard2,
-                                board = updatedState.board,
-                                potSize = updatedState.potSize,
-                                heroBet = updatedState.heroBet,
-                                opponents = updatedState.opponents,
-                                activeOpponentsCount = updatedState.opponents.count { it.isActive },
-                                simResult = advResult,
-                                settings = updatedState.settings,
-                                position = updatedState.position,
-                                stage = updatedState.stage,
-                                smallBlind = updatedState.smallBlind,
-                                bigBlind = updatedState.bigBlind,
-                                heroStack = updatedState.heroStack,
-                                heroActionOptions = updatedState.heroActionOptions
+                            val l4Recommendation = com.example.Recommendation(
+                                action = "WAIT",
+                                confidence = 0f,
+                                explanation = "L4 Disabled (INSPECTION L1/L2 MODE)"
                             )
 
                             PokerHudSharedState.uiState.update { 

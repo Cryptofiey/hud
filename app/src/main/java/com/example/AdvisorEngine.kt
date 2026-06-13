@@ -431,7 +431,13 @@ object AdvisorEngine {
         }
 
         // Formulate highly detailed explanation with mathematical weights tracking
-        val detailExplanation = "GTO L1: EV[Sim=${pct(s1)}%|Skl=${pct(s2)}%|Chen=${pct(s3)}%|Mrg=${pct(s4)}%] (Avg=${pct(l1Score)}%) | $explanation"
+        val breakdown = "Simulations (Branch 1): Base=${pct(s1)}%\n" +
+                        "Sklansky (Branch 2): Grp=$sklanskyGroup, Wgt=${pct(s2)}%\n" +
+                        "Chen Score (Branch 3): Wgt=${pct(s3)}%\n" +
+                        "Pot Odds/Margin (Branch 4): Targets=${pct(targetPotOdds)}%, Adj=${pct(s4)}%\n" +
+                        "Net Output: EV Average=${pct(l1Score)}%"
+                        
+        val detailExplanation = "⚙️ L1 MATH VETKI:\n$breakdown\n🎯 ACTION: $explanation"
 
         val confidence = when(action) {
             "RAISE", "ALL-IN", "BET" -> (((l1Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
@@ -564,12 +570,27 @@ object AdvisorEngine {
 
         for (opp in activeOpponents) {
             val stats = opp.stats
+            
             val hasProfile = stats?.histVpip != null
             val hasSession = stats != null && stats.handsPlayed > 2
 
-            // Fallback strategy: try Profile (hist), then try duplicates (session), then blend population and table average
-            val vpip = stats?.histVpip ?: stats?.vpip ?: (25f * 0.4f + avgTableVpip * 0.6f)
-            val pfr = stats?.histPfr ?: stats?.pfr ?: (15f * 0.4f + avgTablePfr * 0.6f)
+            // Prioritize sessionVpip scanned from screen. Soften with histVpip if available.
+            val screenVpip = opp.sessionVpip
+            val profileVpip = stats?.histVpip
+            val sessionVpipDb = if (hasSession) stats.vpip else null
+
+            val vpip = if (screenVpip != null) {
+                if (profileVpip != null) {
+                    // Soften: 70% screen, 30% historical
+                    (screenVpip * 0.7f) + (profileVpip * 0.3f)
+                } else {
+                    screenVpip
+                }
+            } else {
+                profileVpip ?: sessionVpipDb ?: (25f * 0.4f + avgTableVpip * 0.6f)
+            }
+
+            val pfr = stats?.histPfr ?: sessionVpipDb?.let { stats?.pfr } ?: (15f * 0.4f + avgTablePfr * 0.6f)
             val wtsd = stats?.histWtsd ?: (30f * 0.4f + avgTableWtsd * 0.6f)
             val wsd = stats?.histWsd ?: (50f * 0.4f + avgTableWsd * 0.6f)
 
@@ -601,8 +622,8 @@ object AdvisorEngine {
                 oppVpipAdj = 0.05f  // Loose fish -> exploit with wider value
             }
 
-            // Alternative Mechanism: completely disable personal data adjustments if they have no profile or session data
-            if (!hasProfile && !hasSession) {
+            // Alternative Mechanism: completely disable personal data adjustments if they have no profile, session, or screen data
+            if (!hasProfile && !hasSession && screenVpip == null) {
                 oppDeltaAdj = 0f
                 oppFocusAdj = 0f
                 oppVpipAdj = 0f
@@ -750,7 +771,15 @@ object AdvisorEngine {
         }
 
         // Compose high-fidelity overlay explanation reflecting GTO calibrated metrics
-        val detailedL2Explanation = "L2: EV[L1=${pct(baseL1Score)}%|Opp=${String.format(Locale.US, "%+.1f", netOpponentAdjustment*100)}%|Env=${String.format(Locale.US, "%+.1f", (positionalAdj+stageAdj+stackAdjustment)*100)}%] (Calib=${pct(l2Score)}%) | $explanation"
+        val l2Vetki = "L1 MATH BASE (Branch 1-4): Average=${pct(baseL1Score)}%\n" +
+                      "L2 OVERLAYS:\n" +
+                      "- VPIP/Stats Adj (Branch 5): ${if (netOpponentAdjustment >= 0) "+" else ""}${pct(netOpponentAdjustment)}%\n" +
+                      "- Positional Adj (Branch 6): ${position.name} -> ${if (positionalAdj >= 0) "+" else ""}${pct(positionalAdj)}%\n" +
+                      "- Stage/ICM Adj (Branch 7): ${stage.name} -> ${if (stageAdj >= 0) "+" else ""}${pct(stageAdj)}%\n" +
+                      "- Stack Limits (Branch 8): M-Ratio<10 -> ${if (stackAdjustment >= 0) "+" else ""}${pct(stackAdjustment)}%\n" +
+                      "Net Output: L2 Calibrated EV=${pct(l2Score)}%"
+
+        val detailedL2Explanation = "⚙️ L2 PERSONAL STATS VETKI:\n$l2Vetki\n🎯 ACTION: $explanation"
 
         val confidenceValue = when(action) {
             "RAISE", "ALL-IN", "BET" -> (((l2Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 95f)

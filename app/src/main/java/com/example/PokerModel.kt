@@ -72,6 +72,8 @@ data class OpponentState(
     val nickname: String = "Player $id",
     val betSize: Float = 0f,
     val stackSize: Float = 1000f,
+    val sessionVpip: Float? = null,
+    val sessionVpipBox: android.graphics.Rect? = null,
     val stats: PlayerStats? = null,
     val currentAction: String = "NONE",
     val isDealer: Boolean = false,

@@ -379,6 +379,38 @@ object OpponentScanner {
             opp.copy(betSize = closestBet)
         }
 
-        return opponentsWithBets.mapIndexed { i, opp -> opp.copy(id = i + 1) }
+        // Find session VPIP mapped to players
+        val opponentsWithVpip = opponentsWithBets.map { opp ->
+            var detectedVpip: Float? = null
+            var vpipBox: Rect? = null
+            
+            for (line in linesList) {
+                val lineBox = line.boundingBox ?: continue
+                val oppBox = opp.boundingBox ?: continue
+                
+                // The VPIP window is directly to the right of the player avatar/box
+                val isRight = lineBox.left >= oppBox.right - (width * 0.05f) && lineBox.left <= oppBox.right + (width * 0.15f)
+                val isVerticallyAligned = lineBox.centerY() >= oppBox.top && lineBox.centerY() <= oppBox.bottom
+                
+                if (isRight && isVerticallyAligned) {
+                    val text = line.text.trim()
+                    
+                    // Most VPIP on screen looks like a number or XX/YY or 50/100 (16). Wait, "50/100 (16)" was in the user's previous example.
+                    // Let's parse the first number.
+                    val parts = text.split("/", " ", "(", ")", "-").filter { it.isNotEmpty() }
+                    if (parts.isNotEmpty()) {
+                        val num = parts[0].replace(Regex("[^0-9]"), "").toFloatOrNull()
+                        if (num != null && num in 0f..100f) {
+                            detectedVpip = num
+                            vpipBox = lineBox
+                            break
+                        }
+                    }
+                }
+            }
+            opp.copy(sessionVpip = detectedVpip, sessionVpipBox = vpipBox)
+        }
+
+        return opponentsWithVpip.mapIndexed { i, opp -> opp.copy(id = i + 1) }
     }
 }
