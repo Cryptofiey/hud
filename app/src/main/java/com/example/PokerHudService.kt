@@ -2055,14 +2055,50 @@ class PokerHudService : Service() {
             textSize = 12f
             gravity = Gravity.CENTER
             setTextColor(AndroidColor.parseColor("#888888"))
-            layoutParams = FrameLayout.LayoutParams(dpToPx(16f), dpToPx(16f)).apply {
+            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
-                bottomMargin = dpToPx(3f)
-                rightMargin = dpToPx(3f)
+                bottomMargin = dpToPx(1f)
+                rightMargin = dpToPx(1f)
             }
             
-            setOnClickListener {
-                PokerHudSharedState.isProbsHudVertical.value = true
+            var initialWidth = 0
+            var initialHeight = 0
+            var initialTouchX = 0f
+            var initialTouchY = 0f
+            var clickStartTime = 0L
+
+            setOnTouchListener { _, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        initialWidth = params.width
+                        initialHeight = params.height
+                        initialTouchX = event.rawX
+                        initialTouchY = event.rawY
+                        clickStartTime = System.currentTimeMillis()
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val deltaX = (event.rawX - initialTouchX).toInt()
+                        val deltaY = (event.rawY - initialTouchY).toInt()
+                        params.width = Math.max(dpToPx(120f), initialWidth + deltaX)
+                        params.height = Math.max(dpToPx(100f), initialHeight + deltaY)
+                        try {
+                            windowManager?.updateViewLayout(frame, params)
+                        } catch (ignored: Exception) {}
+                        true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val duration = System.currentTimeMillis() - clickStartTime
+                        val distanceX = Math.abs(event.rawX - initialTouchX)
+                        val distanceY = Math.abs(event.rawY - initialTouchY)
+                        if (duration < 250 && distanceX < 12 && distanceY < 12) {
+                            // It's a tap - switch to vertical
+                            PokerHudSharedState.isProbsHudVertical.value = true
+                        }
+                        true
+                    }
+                    else -> false
+                }
             }
         }
         
