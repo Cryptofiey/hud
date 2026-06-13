@@ -1138,7 +1138,10 @@ object AdvisorEngine {
             return Recommendation("WAIT", 100f, "Wait cards.")
         }
 
-        // Get L3 advanced recommendation to base our adaptive adjustments upon
+        // L4 is disabled by USER request (Level 4 behavior-adaptive logic bypassed)
+        return Recommendation("", 0f, "Disabled by USER")
+    }
+        /*
         val baseL3 = computeRecommendationAdvanced(
             heroCard1, heroCard2, board, potSize, heroBet,
             opponents, activeOpponentsCount, simResult, settings, position, stage, smallBlind, bigBlind, heroStack, lastActions, heroActionOptions, isBbDisplay
@@ -1273,7 +1276,7 @@ object AdvisorEngine {
         }
 
         return Recommendation(action, confidence, customExplanation, baseL3.originalScore)
-    }
+        */
 }
 
 // 5. High-performance clean player stats and preferences database helper (SharedPreferences)

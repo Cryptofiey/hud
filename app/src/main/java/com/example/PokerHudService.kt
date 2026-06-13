@@ -2792,10 +2792,15 @@ class PokerHudService : Service() {
 
                         // 4. Update L4 recommendation
                         if (l4Rec != null) {
-                            val actName = translateAction(l4Rec.action)
-                            val exp = if (l4Rec.explanation.isNotEmpty()) " | ${l4Rec.explanation}" else ""
-                            txtL4Advisor.text = "🖐️ L4: $actName (${String.format(Locale.US, "%.0f%%", l4Rec.confidence)})$exp"
-                            setRecommendationColor(txtL4Advisor, l4Rec.action)
+                            if (l4Rec.explanation.contains("Disabled", ignoreCase = true)) {
+                                txtL4Advisor.text = "🖐️ L4: Отключен пользователем"
+                                txtL4Advisor.setTextColor(AndroidColor.parseColor("#FF90A4AE"))
+                            } else {
+                                val actName = translateAction(l4Rec.action)
+                                val exp = if (l4Rec.explanation.isNotEmpty()) " | ${l4Rec.explanation}" else ""
+                                txtL4Advisor.text = "🖐️ L4: $actName (${String.format(Locale.US, "%.0f%%", l4Rec.confidence)})$exp"
+                                setRecommendationColor(txtL4Advisor, l4Rec.action)
+                            }
                         } else {
                             txtL4Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🖐️ L4: Wait..." else ""
                             txtL4Advisor.setTextColor(AndroidColor.parseColor("#FF00FFCC"))
