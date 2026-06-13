@@ -308,8 +308,9 @@ class ScreenScanner(
         }
     }
 
-    private fun applyCardThresholding(bmp: Bitmap, vararg rects: android.graphics.Rect?) {
-        for (rect in rects) {
+    private fun applyCardThresholding(bmp: Bitmap, activeHoleRect: android.graphics.Rect?, activeCommRect: android.graphics.Rect?) {
+        val rects = listOf(Pair(activeHoleRect, true), Pair(activeCommRect, false))
+        for ((rect, isHole) in rects) {
             if (rect == null) continue
             val left = maxOf(0, rect.left)
             val top = maxOf(0, rect.top)
@@ -329,9 +330,10 @@ class ScreenScanner(
                 val g = (p shr 8) and 0xFF
                 val b = p and 0xFF
                 
-                val threshold = ScannerConfig.ocrThreshold
-                // If it's very bright white (as rank text and suit symbols on CoinPoker are solid white),
-                // it should be black text for OCR. Anything else is card/table background and should be white.
+                // Folded cards are darker grey. Lower the threshold for hole cards region to ensure folded cards are still detected.
+                val threshold = if (isHole) ScannerConfig.ocrThreshold - 55 else ScannerConfig.ocrThreshold
+                
+                // If it's very bright white (or grey for folded), it should be black text for OCR. Anything else is card/table background and should be white.
                 val color = if (r > threshold && g > threshold && b > threshold) {
                     0xFF000000.toInt() // Black text
                 } else {
@@ -791,12 +793,16 @@ class ScreenScanner(
                     .replace("RAISE", "").replace("РЕЙЗ", "")
                     .replace("STRADDLE", "").replace("СТРАДДЛ", "")
                     
-                // Replace fractional bet sizes and exact chip stacks with BB to avoid false card detections.
-                // We MUST not accidentally remove bare '10' as it's a valid rank.
-                var safeText = rawText.trim()
-                safeText = safeText.replace(Regex("\\b\\d+[.,]\\d+\\s*(BB|ББ)?\\b"), "")
-                safeText = safeText.replace(Regex("\\b\\d+\\s*(BB|ББ)\\b"), "")
-                safeText = safeText.replace("POT", "").replace("ПОТ", "").replace("BB", "").replace("ББ", "")
+                // Clean out typical text words to prevent false card detections
+                var safeText = rawText.uppercase(java.util.Locale.US).trim()
+                safeText = safeText.replace("POT", " ").replace("ПОТ", " ")
+                safeText = safeText.replace("BB", " ").replace("ББ", " ")
+                
+                // Remove fractional sizes (e.g. 15.1) and non-card integers (e.g. 11-99, 100+)
+                safeText = safeText.replace(Regex("\\b\\d+[.,]\\d+\\b"), " ")
+                safeText = safeText.replace(Regex("\\b\\d{3,}\\b"), " ") // 100+
+                safeText = safeText.replace(Regex("\\b(1[1-9]|[2-9]\\d)\\b"), " ") // 11-99
+                safeText = safeText.replace(Regex("\\b[01]\\b"), " ") // Standalone 0 or 1
                 
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
                     safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
@@ -843,12 +849,16 @@ class ScreenScanner(
                     .replace("RAISE", "").replace("РЕЙЗ", "")
                     .replace("STRADDLE", "").replace("СТРАДДЛ", "")
                     
-                // Replace fractional or exact stack sizes with BB to stop breaking hole card detections.
-                // We MUST not accidentally remove bare '10' as it's a valid rank.
-                var safeText = rawText.trim()
-                safeText = safeText.replace(Regex("\\b\\d+[.,]\\d+\\s*(BB|ББ)?\\b"), "")
-                safeText = safeText.replace(Regex("\\b\\d+\\s*(BB|ББ)\\b"), "")
-                safeText = safeText.replace("POT", "").replace("ПОТ", "").replace("BB", "").replace("ББ", "")
+                // Clean out typical text words to prevent false card detections
+                var safeText = rawText.uppercase(java.util.Locale.US).trim()
+                safeText = safeText.replace("POT", " ").replace("ПОТ", " ")
+                safeText = safeText.replace("BB", " ").replace("ББ", " ")
+                
+                // Remove fractional sizes (e.g. 15.1) and non-card integers (e.g. 11-99, 100+)
+                safeText = safeText.replace(Regex("\\b\\d+[.,]\\d+\\b"), " ")
+                safeText = safeText.replace(Regex("\\b\\d{3,}\\b"), " ") // 100+
+                safeText = safeText.replace(Regex("\\b(1[1-9]|[2-9]\\d)\\b"), " ") // 11-99
+                safeText = safeText.replace(Regex("\\b[01]\\b"), " ") // Standalone 0 or 1
                 
                 if (safeText.contains("OK") || safeText.contains("WAIT") || 
                     safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
