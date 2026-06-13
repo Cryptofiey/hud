@@ -501,11 +501,39 @@ class ScreenScanner(
                 PokerHudSharedState.triggerPasswordHiding()
             }
 
-            val potMatch = Regex("(POT|ПОТ)[^0-9]*([0-9.,]+)").find(fullScanText)
-            if (potMatch != null) {
-                val numStr = potMatch.groupValues[2].replace(",", "")
-                if (numStr.count { it == '.' } <= 1) {
-                    scannedPotSize = numStr.toFloatOrNull()
+            val linesList = mutableListOf<com.google.mlkit.vision.text.Text.Line>()
+            for (block in result.textBlocks) {
+                for (line in block.lines) {
+                    linesList.add(line)
+                }
+            }
+
+            for (line in linesList) {
+                val lineText = line.text.uppercase()
+                if (lineText.contains("POT") || lineText.contains("ПОТ")) {
+                    val lineBox = line.boundingBox
+                    val combinedText = if (lineBox != null) {
+                        OpponentScanner.mergeRightsideDigits(lineBox, line.text, linesList)
+                    } else {
+                        line.text
+                    }
+                    val potValMatch = Regex("(POT|ПОТ)[^0-9]*([0-9.,KMkmBb]+)").find(combinedText.uppercase())
+                    if (potValMatch != null) {
+                        val tempStr = potValMatch.groupValues[2].replace(",", ".").uppercase()
+                        val multiplier = when {
+                            tempStr.contains("K") -> 1000f
+                            tempStr.contains("M") -> 1000000f
+                            else -> 1f
+                        }
+                        val numStr = tempStr.replace(Regex("[^0-9.]"), "")
+                        if (numStr.isNotEmpty() && numStr.count { it == '.' } <= 1) {
+                            val value = (numStr.toFloatOrNull() ?: 0f) * multiplier
+                            if (value > 0f) {
+                                scannedPotSize = value
+                                break
+                            }
+                        }
+                    }
                 }
             }
             
@@ -1077,9 +1105,15 @@ class ScreenScanner(
                 }
             }
             
-            // Limit to 5 opponents max for 6-max format to prevent breaking position assignments
-            if (validOpponents.size > 5) {
-                validOpponents = validOpponents.sortedByDescending { it.boundingBox?.height() ?: 0 }.take(5)
+            // Limit to 5 opponents max for 6-max format, or 8 for tournaments to support 8-max / 9-max properly
+            val isTournament = fullScanText.contains("LEVEL", ignoreCase = true) || 
+                               fullScanText.contains("RANK", ignoreCase = true) || 
+                               fullScanText.contains("FREEROLL", ignoreCase = true) ||
+                               fullScanText.contains("REG", ignoreCase = true) ||
+                               levelMatch != null
+            val maxOpponents = if (isTournament) 8 else 5
+            if (validOpponents.size > maxOpponents) {
+                validOpponents = validOpponents.sortedByDescending { it.boundingBox?.height() ?: 0 }.take(maxOpponents)
             }
             val finalOpponents = validOpponents
 

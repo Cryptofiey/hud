@@ -21,10 +21,57 @@ object OpponentScanner {
         var pendingNicknameCount: Int = 0,
         var lastKnownStackSize: Float = 100f,
         var lastKnownBetSize: Float = 0f,
-        var lastKnownActive: Boolean = true
+        var lastKnownActive: Boolean = true,
+        var lastKnownVpip: Float? = null
     )
 
     private val trackedAnchors = mutableListOf<TrackedAnchor>()
+
+    fun mergeRightsideDigits(box: Rect, baseText: String, lines: List<Text.Line>): String {
+        var text = baseText
+        val h = box.height()
+        if (h <= 0) return text
+        var searchRight = box.right
+        
+        // Find any line to the right of 'box' that is vertically aligned
+        while (true) {
+            val nextLine = lines.firstOrNull { l ->
+                val b = l.boundingBox ?: return@firstOrNull false
+                if (l.text.trim() == baseText.trim()) return@firstOrNull false
+                val isToRight = b.left >= searchRight - (h * 0.2f) && b.left <= searchRight + (h * 4.0f)
+                val isVertAligned = Math.abs(b.centerY() - box.centerY()) < (h * 0.7f)
+                isToRight && isVertAligned
+            }
+            
+            if (nextLine != null) {
+                val nextText = nextLine.text.trim()
+                val cleanNext = nextText.replace(Regex("[^0-9.,KMBkmb]"), "")
+                if (cleanNext.isNotEmpty()) {
+                    text += " " + nextText
+                    searchRight = nextLine.boundingBox!!.right
+                } else {
+                    break
+                }
+            } else {
+                break
+            }
+        }
+        return text
+    }
+
+    private fun isSeatEmptyMarkerPresent(anchorBox: Rect, linesList: List<Text.Line>, width: Int): Boolean {
+        for (line in linesList) {
+            val lineBox = line.boundingBox ?: continue
+            val dist = Math.hypot((lineBox.centerX() - anchorBox.centerX()).toDouble(), (lineBox.centerY() - anchorBox.centerY()).toDouble())
+            if (dist < width * 0.16) {
+                val text = line.text.trim().uppercase()
+                if (text == "+" || text.contains("JOIN") || text.contains("TAKE SEAT") || text.contains("SIT DOWN") || text.contains("SITOUT") || text.contains("SIT OUT")) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
 
     private fun isValidPlayerName(name: String): Boolean {
         val upper = name.trim().uppercase()
@@ -137,7 +184,8 @@ object OpponentScanner {
                 val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < (width * 0.18f)
                 
                 if (isBelow && isAlignedHorizontally) {
-                    val textTrimmed = line.text.trim()
+                    val mergedText = mergeRightsideDigits(box, line.text, linesList)
+                    val textTrimmed = mergedText.trim()
                     // Reject if it contains generic letters (to avoid parsing chat messages as stack sizes)
                     val genericLetterCount = textTrimmed.count { it.isLetter() && it.uppercaseChar() !in listOf('K', 'M', 'B') }
                     if (genericLetterCount > 4) continue // More lenient to allow things like "14.2 BBs" or similar anomalies
@@ -309,6 +357,12 @@ object OpponentScanner {
                 } else {
                     anchor.consecutiveMisses++
                     
+                    // Proactive check: if we see an empty seat marker at this player location, remove instantly
+                    val isEmptyMarker = isSeatEmptyMarkerPresent(anchor.boundingBox, linesList, width)
+                    if (isEmptyMarker) {
+                        anchor.consecutiveMisses = 10 // force clean up immediately!
+                    }
+                    
                     if (anchor.consecutiveMisses > 8) { // Clean up empty positions faster (reduced from 25 to 8)
                         iterator.remove() // Player left, or we missed them too many times
                     } else if (anchor.isMature) {
@@ -446,7 +500,18 @@ object OpponentScanner {
                     }
                 }
             }
-            opp.copy(sessionVpip = detectedVpip, sessionVpipBox = vpipBox)
+            var finalVpip = detectedVpip
+            synchronized(trackedAnchors) {
+                val anchor = trackedAnchors.firstOrNull { it.nickname == opp.nickname }
+                if (anchor != null) {
+                    if (detectedVpip != null) {
+                        anchor.lastKnownVpip = detectedVpip
+                    } else {
+                        finalVpip = anchor.lastKnownVpip
+                    }
+                }
+            }
+            opp.copy(sessionVpip = finalVpip, sessionVpipBox = vpipBox)
         }
 
         return opponentsWithVpip.mapIndexed { i, opp -> opp.copy(id = i + 1) }
