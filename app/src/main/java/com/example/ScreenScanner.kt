@@ -805,7 +805,14 @@ class ScreenScanner(
                     safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
                     safeText.contains("OF") || safeText.isEmpty()) continue
 
-                val parsedRanks = findCardsInText(safeText)
+                var parsedRanks = findCardsInText(safeText)
+                
+                // If a single text block claims exactly identical duplicate ranks (e.g. "KK") 
+                // but the physical width of the text block is just one card wide, deduplicate it to avoid narrow slicing.
+                if (parsedRanks.size > 1 && parsedRanks.toSet().size == 1 && box.width() < commRect.width() * 0.15f) {
+                    parsedRanks = listOf(parsedRanks.first())
+                }
+                
                 for ((idx, rank) in parsedRanks.withIndex()) {
                     val sliceWidth = box.width() / parsedRanks.size
                     val sliceLeft = box.left + (idx * sliceWidth)
@@ -850,7 +857,15 @@ class ScreenScanner(
                     safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
                     safeText.contains("OF") || safeText.isEmpty()) continue
 
-                val parsedRanksRaw = findCardsInText(safeText, isHoleCard = true)
+                var parsedRanksRaw = findCardsInText(safeText, isHoleCard = true)
+                
+                // If a single text block claims exactly identical duplicate ranks (e.g. "KK") 
+                // but the physical width of the text block is narrow (like one card rank wide), deduplicate.
+                // Hole card ranks are larger compared to region than board, ~35% width max per text block.
+                if (parsedRanksRaw.size > 1 && parsedRanksRaw.toSet().size == 1 && box.width() < holeRect.width() * 0.35f) {
+                    parsedRanksRaw = listOf(parsedRanksRaw.first())
+                }
+                
                 for ((idx, rankRaw) in parsedRanksRaw.withIndex()) {
                     // Slicing the bounding box if multiple ranks are merged in a single text block
                     val sliceWidth = box.width() / parsedRanksRaw.size
@@ -873,12 +888,12 @@ class ScreenScanner(
                 val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
                 
                 // Dynamic threshold based on region width. A single card width is ~0.20 of 5-card board.
-                // To group the '1' and '0' of a '10' together but keep separate cards distinct, 
-                // we should use a very tight threshold like 3%.
+                // To group slices of OCR artifacts from a single text block together, we use 10% for board.
+                // This keeps physical cards (spaced ~20% apart) distinct, while merging segments of the same card.
                 val clusterThreshold = if (maxCards == 5) {
-                    regionRect.width() * 0.03f
+                    regionRect.width() * 0.10f
                 } else {
-                    regionRect.width() * 0.08f
+                    regionRect.width() * 0.20f
                 }
                 
                 for (elem in sorted) {
