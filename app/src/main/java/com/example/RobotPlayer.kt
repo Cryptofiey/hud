@@ -98,9 +98,22 @@ object RobotPlayer {
                     return@collectLatest
                 }
 
+<<<<<<< HEAD
                 val advRec = uiState.advancedRecommendation
                 val rec = uiState.recommendation
                 val advisorText = ((advRec ?: rec)?.action ?: "").uppercase()
+=======
+                val l4Rec = uiState.l4Recommendation
+                val l3Rec = uiState.advancedRecommendation
+                val l2Rec = uiState.l2Recommendation
+                val l1Rec = uiState.recommendation
+                
+                val validRec = listOfNotNull(l4Rec, l3Rec, l2Rec, l1Rec).firstOrNull { 
+                    it.action.isNotEmpty() && !it.explanation.contains("Disabled", ignoreCase = true) && !it.action.equals("WAIT", ignoreCase = true)
+                }
+                
+                val advisorText = (validRec?.action ?: "").uppercase()
+>>>>>>> origin/main
                 
                 if (advisorText.isEmpty() || advisorText.contains("N/A", ignoreCase=true)) return@collectLatest
                 
