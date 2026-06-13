@@ -866,9 +866,9 @@ class ScreenScanner(
                 // We use 12% of board region for community cards, 25% for hole cards.
                 // This strictly separates neighboring cards but perfectly groups symbols within the SAME card.
                 val clusterThreshold = if (maxCards == 5) {
-                    regionRect.width() * 0.12f
+                    regionRect.width() * 0.08f
                 } else {
-                    regionRect.width() * 0.25f
+                    regionRect.width() * 0.18f
                 }
                 
                 for (elem in sorted) {
@@ -1417,7 +1417,11 @@ class ScreenScanner(
                 // Skip bright white text pixels and nearly black shadow/border pixels.
                 // Suit background is typically a mid-to-dark color but not absolute black or absolute white.
                 if (r > 180 && g > 180 && b > 180) continue
-                if (r < 20 && g < 20 && b < 20) continue
+                
+                // We must NOT discard black pixels, because Spades are black!
+                // Instead, just avoid completely black screen-off pixels if any, 
+                // but dark pixels (e.g. 5, 5, 5) are very valid for Spades.
+                if (r == 0 && g == 0 && b == 0) continue
                 
                 totalRed += r
                 totalGreen += g
@@ -1550,9 +1554,10 @@ class ScreenScanner(
             }
             Rank.ACE, Rank.FOUR -> {
                 // Verify Ace vs 4
-                val topCenter = getRatio(0.50f, 0.15f, radius = 1)
-                android.util.Log.d("RankRefiner", "A vs 4 check: topCenter=$topCenter")
-                if (topCenter > 0.35f) {
+                // A has ink at the bottom left leg. 4 has NO ink at the bottom left (stem is on the right).
+                val bottomLeft = getRatio(0.20f, 0.85f, radius = 1)
+                android.util.Log.d("RankRefiner", "A vs 4 check: bottomLeft=$bottomLeft")
+                if (bottomLeft > 0.30f) {
                     Rank.ACE
                 } else {
                     Rank.FOUR
