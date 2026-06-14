@@ -333,11 +333,10 @@ class ScreenScanner(
                 val g = (p shr 8) and 0xFF
                 val b = p and 0xFF
                 
-                // Folded cards are darker grey. Lower the threshold for hole cards region to ensure folded cards are still detected.
-                val threshold = if (isHole) ScannerConfig.ocrThreshold - 15 else ScannerConfig.ocrThreshold
-                
-                // If it's very bright white (or grey for folded), it should be black text for OCR. Anything else is card/table background and should be white.
-                val color = if (r > threshold && g > threshold && b > threshold) {
+                // CoinPoker uses colored card backgrounds with bright white rank text.
+                // By selecting only the very bright pixels (white text) and turning them black,
+                // and turning everything else white, we get perfect OCR text for both light and dark cards!
+                val color = if (r > ScannerConfig.ocrThreshold && g > ScannerConfig.ocrThreshold && b > ScannerConfig.ocrThreshold) {
                     0xFF000000.toInt() // Black text
                 } else {
                     0xFFFFFFFF.toInt() // White background

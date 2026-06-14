@@ -1826,7 +1826,7 @@ class PokerHudService : Service() {
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
 
-        val wPx = (screenWidth * 0.75f).toInt()
+        val wPx = (screenWidth * 0.85f).toInt()
         val hPx = (screenHeight * 0.14f).toInt()
 
         val params = WindowManager.LayoutParams(
@@ -1975,7 +1975,7 @@ class PokerHudService : Service() {
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
 
-        val wPx = (screenWidth * 0.35f).toInt()
+        val wPx = (screenWidth * 0.40f).toInt()
         val hPx = (screenHeight * 0.12f).toInt()
 
         val params = WindowManager.LayoutParams(
@@ -1992,7 +1992,7 @@ class PokerHudService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
-            x = (screenWidth * 0.44f).toInt()
+            x = (screenWidth * 0.42f).toInt()
             y = (screenHeight * 0.69f).toInt()
         }
 
