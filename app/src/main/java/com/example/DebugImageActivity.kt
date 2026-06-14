@@ -58,9 +58,8 @@ fun DebugScreen() {
     var debugLog by remember { mutableStateOf("Select a cropped card image to start auto-tuning.") }
     var optimalThreshold by remember { mutableStateOf<Int?>(null) }
     
-    val tuneTargets = listOf("A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2", "Spades", "Hearts", "Diamonds", "Clubs")
-    var expectedTarget by remember { mutableStateOf(tuneTargets[0]) }
-    var expandedTarget by remember { mutableStateOf(false) }
+    var manualTemplateText by remember { mutableStateOf("") }
+    var isHoleTemplate by remember { mutableStateOf(true) }
     
     val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
         selectedImageUri = uri
@@ -89,19 +88,17 @@ fun DebugScreen() {
         Text("Poker Card OCR Auto-Tuner", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
         
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(modifier = Modifier.weight(1f)) {
-                Button(onClick = { expandedTarget = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Target: $expectedTarget")
-                }
-                DropdownMenu(expanded = expandedTarget, onDismissRequest = { expandedTarget = false }) {
-                    tuneTargets.forEach { t ->
-                        DropdownMenuItem(text = { Text(t) }, onClick = { 
-                            expectedTarget = t
-                            expandedTarget = false 
-                        })
-                    }
-                }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = manualTemplateText,
+                onValueChange = { manualTemplateText = it },
+                label = { Text("Target Combination (e.g. 'Ah 8c')") },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Checkbox(checked = isHoleTemplate, onCheckedChange = { isHoleTemplate = it })
+                Text("Hole?")
             }
         }
         
@@ -109,15 +106,15 @@ fun DebugScreen() {
         
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { launcher.launch("image/*") }, modifier = Modifier.weight(1f)) {
-                Text("Select Crop")
+                Text("Select Image")
             }
             Button(
                 onClick = {
-                    if (loadedBitmap != null) {
+                    if (loadedBitmap != null && manualTemplateText.isNotBlank()) {
                         debugLog = "Tuning started...\nTrying various brightness/contrast thresholds."
                         optimalThreshold = null
                         coroutineScope.launch {
-                            tuneCardRecognition(loadedBitmap!!, expectedTarget) { processedBmp, log, bestThresh ->
+                            tuneCardRecognition(loadedBitmap!!, manualTemplateText) { processedBmp, log, bestThresh ->
                                 resultBitmap = processedBmp
                                 debugLog = log
                                 if (bestThresh != null) optimalThreshold = bestThresh
@@ -127,30 +124,13 @@ fun DebugScreen() {
                 },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                enabled = loadedBitmap != null
+                enabled = loadedBitmap != null && manualTemplateText.isNotBlank()
             ) {
-                Text("Auto-Tune")
+                Text("Auto-Tune OCR")
             }
         }
         
         Spacer(Modifier.height(8.dp))
-        
-        var manualTemplateText by remember { mutableStateOf("") }
-        var isHoleTemplate by remember { mutableStateOf(true) }
-        
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = manualTemplateText,
-                onValueChange = { manualTemplateText = it },
-                label = { Text("Manual Label (e.g. 'Ah 8c')") },
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(Modifier.width(8.dp))
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Checkbox(checked = isHoleTemplate, onCheckedChange = { isHoleTemplate = it })
-                Text("Hole?")
-            }
-        }
         
         Button(
             onClick = {
@@ -201,7 +181,7 @@ fun DebugScreen() {
                     
                     TemplateManager.saveTemplate(context, targetBmp, manualTemplateText, isHoleTemplate)
                     resultBitmap = targetBmp // Show them the cropped pattern we saved
-                    debugLog = "Saved manual template for '${manualTemplateText}'!\nThe scanner will now bypass OCR and lock-on when it sees this exact crop."
+                    debugLog = "SUCCESS: Saved visual template override for '${manualTemplateText}'!\nThe scanner will now lock-on perfectly when it sees this exact combination.\n\nNote: Visual templates are much more reliable than Auto-Tuning OCR for whole combinations."
                 }
             },
             modifier = Modifier.fillMaxWidth(),
@@ -338,10 +318,21 @@ private suspend fun tuneCardRecognition(
                 
                 var success = false
                 if (isSuitTarget) {
-                    if (detectedSuit == expectedTarget) success = true
+                    if (detectedSuit.equals(expectedTarget, ignoreCase = true)) success = true
                 } else {
-                    // Try to match rank
-                    if (ocrTextFull.contains(expectedTarget)) success = true
+                    // Try to match rank or full combination
+                    val targetParts = expectedTarget.split(" ")
+                    var partsMatched = 0
+                    for (part in targetParts) {
+                        val simplePart = part.replace("h","").replace("d","").replace("c","").replace("s","")
+                            .replace("H","").replace("D","").replace("C","").replace("S","") 
+                        if (ocrTextFull.contains(simplePart, ignoreCase = true)) {
+                            partsMatched++
+                        }
+                    }
+                    if (partsMatched == targetParts.size && targetParts.isNotEmpty()) {
+                        success = true
+                    }
                 }
                 
                 if (success) {
