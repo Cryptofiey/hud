@@ -155,15 +155,9 @@ object OpponentScanner {
             // Define exclusion zones based on the new layout
             val inTopHeader = y < height * 0.09f
             // Community cards
-<<<<<<< HEAD
             val inCommunityCards = x > width * 0.10f && x < width * 0.90f && y > height * 0.40f && y < height * 0.54f
             // Hero pocket cards region near the bottom center avatar, slightly off-center to the right
             val inHeroCards = x > width * 0.44f && x < width * 0.79f && y > height * 0.69f && y < height * 0.83f
-=======
-            val inCommunityCards = x > width * 0.17f && x < width * 0.83f && y > height * 0.41f && y < height * 0.56f
-            // Hero pocket cards region near the bottom center avatar, slightly off-center to the right
-            val inHeroCards = x > width * 0.50f && x < width * 0.78f && y > height * 0.72f && y < height * 0.85f
->>>>>>> origin/main
             
             // Check if it's explicitly inside the known rects (redundant but safe)
             val inKnownComm = commRect != null && commRect.contains(x.toInt(), y.toInt())

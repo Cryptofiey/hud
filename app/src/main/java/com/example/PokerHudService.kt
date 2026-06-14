@@ -1826,13 +1826,8 @@ class PokerHudService : Service() {
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
 
-<<<<<<< HEAD
         val wPx = (screenWidth * 0.80f).toInt()
         val hPx = (screenHeight * 0.14f).toInt()
-=======
-        val wPx = (screenWidth * 0.64f).toInt()
-        val hPx = (screenHeight * 0.13f).toInt()
->>>>>>> origin/main
 
         val params = WindowManager.LayoutParams(
             wPx,
@@ -1843,22 +1838,12 @@ class PokerHudService : Service() {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
-<<<<<<< HEAD
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
             x = (screenWidth * 0.10f).toInt()
             y = (screenHeight * 0.40f).toInt()
-=======
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.LEFT
-            x = (screenWidth - wPx) / 2
-            y = (screenHeight * 0.42f).toInt()
->>>>>>> origin/main
         }
 
         val frame = FrameLayout(this).apply {
@@ -1989,13 +1974,8 @@ class PokerHudService : Service() {
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
 
-<<<<<<< HEAD
         val wPx = (screenWidth * 0.35f).toInt()
         val hPx = (screenHeight * 0.14f).toInt()
-=======
-        val wPx = (screenWidth * 0.26f).toInt()
-        val hPx = (screenHeight * 0.11f).toInt()
->>>>>>> origin/main
 
         val params = WindowManager.LayoutParams(
             wPx,
@@ -2006,22 +1986,12 @@ class PokerHudService : Service() {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
-<<<<<<< HEAD
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
             x = (screenWidth * 0.44f).toInt()
             y = (screenHeight * 0.69f).toInt()
-=======
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.LEFT
-            x = (screenWidth * 0.51f).toInt()
-            y = (screenHeight * 0.73f).toInt()
->>>>>>> origin/main
         }
 
         val frame = FrameLayout(this).apply {
