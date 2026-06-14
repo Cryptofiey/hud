@@ -1432,21 +1432,10 @@ class ScreenScanner(
             }
             
             if (!matched) {
-                // If it's not a rank, it might be a suit symbol or harmless noise
-                val c = raw[i]
-                val validSuitsOrNoise = setOf('♠', '♣', '♥', '♦', 'C', 'H')
-                if (c in validSuitsOrNoise) {
-                    i++
-                } else {
-                    if (isHoleCard) {
-                        i++ // Tolerate OCR noise in hole cards region
-                    } else {
-                        // Invalid character encountered in this block.
-                        // To prevent random letters in words from being parsed as cards,
-                        // we invalidate the ENTIRE block.
-                        return emptyList()
-                    }
-                }
+                // Skip the unrecognized character.
+                // We no longer invalidate the entire block because OCR often parses suit symbols (♠,♣,♥,♦)
+                // as random noise letters (V, Y, S, D, etc.), which used to cause correct cards to be entirely ignored.
+                i++
             }
         }
         
@@ -1602,7 +1591,7 @@ class ScreenScanner(
                     Rank.FIVE
                 }
             }
-            Rank.NINE -> {
+             Rank.NINE -> {
                 // Verify 9 vs 6
                 val topRight = getRatio(0.80f, 0.30f, radius = 1)
                 val bottomLeft = getRatio(0.20f, 0.70f, radius = 1)
@@ -1611,27 +1600,6 @@ class ScreenScanner(
                     Rank.SIX
                 } else {
                     Rank.NINE
-                }
-            }
-            Rank.SEVEN, Rank.TWO -> {
-                // Verify 7 vs 2
-                val bottomLeft = getRatio(0.22f, 0.85f, radius = 1)
-                android.util.Log.d("RankRefiner", "7 vs 2 check: bottomLeft=$bottomLeft")
-                if (bottomLeft > 0.35f) {
-                    Rank.TWO
-                } else {
-                    Rank.SEVEN
-                }
-            }
-            Rank.ACE, Rank.FOUR -> {
-                // Verify Ace vs 4
-                // A has ink at the bottom left leg. 4 has NO ink at the bottom left (stem is on the right).
-                val bottomLeft = getRatio(0.20f, 0.85f, radius = 1)
-                android.util.Log.d("RankRefiner", "A vs 4 check: bottomLeft=$bottomLeft")
-                if (bottomLeft > 0.30f) {
-                    Rank.ACE
-                } else {
-                    Rank.FOUR
                 }
             }
             else -> parsedRank
