@@ -131,7 +131,7 @@ class ScreenScanner(
                 while (isActive) {
                     val gotImage = processLatestImage()
                     if (gotImage) {
-                        delay(500) // Normal polling rate
+                        delay(250) // Reduced polling rate for snappier responses (was 500)
                     } else {
                         delay(50) // Poll faster while waiting for first frame
                     }
@@ -243,15 +243,16 @@ class ScreenScanner(
     }
 
     private fun getSmoothedCards(history: MutableList<List<Card?>>, newCards: List<Card?>, confirmed: MutableList<Card?>, windowSize: Int = 4): List<Card?> {
+        var maxHistoryRecords = windowSize
+        
         history.add(newCards)
-        if (history.size > windowSize) {
+        if (history.size > maxHistoryRecords) {
             history.removeAt(0)
         }
         
-        // Dynamically clear history: allow longer decay for player hole cards (20 frames) 
-        // compared to community board cards (8 frames) to prevent premature state clearing.
-        val clearThreshold = if (history === holeHistory) 20 else 8
-        if (history.size >= clearThreshold && history.takeLast(clearThreshold).all { list -> list.all { it == null } }) {
+        // Dynamically clear history: if the last few frames are ALL entirely empty, wipe everything.
+        val clearThreshold = if (history === holeHistory) windowSize else windowSize - 1
+        if (clearThreshold > 0 && history.size >= clearThreshold && history.takeLast(clearThreshold).all { list -> list.all { it == null } }) {
             history.clear()
             confirmed.clear()
             return emptyList()
@@ -802,7 +803,7 @@ class ScreenScanner(
                 if (box.width() > box.height() * 8.0f) continue
                 
                 // Minimum size threshold to filter out small text like pot size
-                if (box.height() < commRect.height() * 0.08f) continue
+                if (box.height() < commRect.height() * 0.04f) continue
                 
                 var rawText = element.text.trim().uppercase(java.util.Locale.US)
                 rawText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
@@ -919,13 +920,13 @@ class ScreenScanner(
                 val sorted = cards.sortedBy { it.second.centerX() }
                 val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
                 
-                // Dynamic threshold based on region width. A single card width is ~0.18-0.20 of 5-card board.
-                // We use 14% for board and 24% for hole cards to merge multiple scans of the same card
-                // (which can be spaced up to 13% apart horizontally), completely avoiding duplicate cards.
+                // Dynamic threshold based on region width.
+                // We use 6% for board and 15% for hole cards to merge multiple scans of the SAME card, 
+                // but small enough to NOT merge adjacent distinct cards even if the user draws a wide box.
                 val clusterThreshold = if (maxCards == 5) {
-                    regionRect.width() * 0.14f
+                    regionRect.width() * 0.06f
                 } else {
-                    regionRect.width() * 0.24f
+                    regionRect.width() * 0.15f
                 }
                 
                 for (elem in sorted) {
@@ -988,7 +989,7 @@ class ScreenScanner(
             }
 
             var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, confirmedHole, windowSize = 5)
-            var smoothedComm = getSmoothedCards(commHistory, foundCommCardsRaw, confirmedComm, windowSize = 5)
+            var smoothedComm = getSmoothedCards(commHistory, foundCommCardsRaw, confirmedComm, windowSize = 4)
             
             val smoothedAll = (smoothedHole + smoothedComm).filterNotNull()
             if (smoothedAll.size != smoothedAll.toSet().size) {
