@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Архитектура Логики L1, L2, L3, L4 (Poker Bot)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e1e24; color: #fff; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #f8f8f2; }
+        .container { display: flex; justify-content: center; align-items: flex-start; height: 100vh; }
+        .node circle { fill: #282a36; stroke: #bd93f9; stroke-width: 3px; }
+        .node text { font: 14px sans-serif; fill: #f8f8f2; text-shadow: 0 1px 0 #000, 1px 0 0 #000, 0 -1px 0 #000, -1px 0 0 #000; }
+        .link { fill: none; stroke: #6272a4; stroke-width: 2px; }
+        .zone-bg { fill: #44475a; opacity: 0.3; rx: 10px; ry: 10px; }
+        .zone-label { font-size: 20px; fill: #ffb86c; font-weight: bold; opacity: 0.8; }
+        .math-zone { stroke: #50fa7b; }
+        .predictive-zone { stroke: #8be9fd; }
+        .synth-zone { stroke: #ff79c6; }
+    </style>
+</head>
+<body>
+    <h1>Аудит-Схема и Цепочки Решений L1 ➔ L4</h1>
+    <div id="chart" class="container"></div>
+
+    <script>
+        // Tree structure corresponding to Poker Bot logical layers
+        const data = {
+            name: "Origin (Среда/Парсер)",
+            children: [
+                {
+                    name: "L1 (Clean Math: s1,s2,s3,s4)",
+                    zone: "math",
+                    children: [
+                        {
+                            name: "L2 (Personal Stats & Overlay)",
+                            zone: "math",
+                            children: [
+                                {
+                                    name: "L2 Final / Fallback",
+                                    zone: "math"
+                                },
+                                {
+                                    name: "L3 (Persona / Pathways)",
+                                    zone: "predictive",
+                                    children: [
+                                        { name: "L2.5 (Пассив / Ведение)", zone: "predictive" },
+                                        { name: "L3.0 (Велью-извлечение)", zone: "predictive" },
+                                        { name: "L3.5 (Агрессия / Блеф)", zone: "predictive" }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    name: "Синтезированные Ветки (SYNTH)",
+                    zone: "synth",
+                    children: [
+                        { name: "L4 Group 1 (Контр-стратегия A)", zone: "synth" },
+                        { name: "L4 Group 2 (Контр-стратегия B)", zone: "synth" },
+                        { name: "L4 Group 3 (Изменение текстур)", zone: "synth" }
+                    ]
+                }
+            ]
+        };
+
+        const width = 1100;
+        const height = 700;
+        const margin = {top: 50, right: 150, bottom: 50, left: 150};
+
+        const svg = d3.select("#chart").append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        // Zonal Backgrounds to match user sketch
+        svg.append("rect").attr("class", "zone-bg math-zone").attr("x", -100).attr("y", -20).attr("width", 350).attr("height", 600);
+        svg.append("rect").attr("class", "zone-bg predictive-zone").attr("x", 280).attr("y", -20).attr("width", 280).attr("height", 600);
+        svg.append("rect").attr("class", "zone-bg synth-zone").attr("x", 590).attr("y", -20).attr("width", 320).attr("height", 600);
+
+        svg.append("text").attr("class", "zone-label").attr("x", -80).attr("y", 10).text("ЗОНА 1: CLEAN MATH (L1, L2)");
+        svg.append("text").attr("class", "zone-label").attr("x", 300).attr("y", 10).text("ЗОНА 2: ПРОГНОЗЫ (L3)");
+        svg.append("text").attr("class", "zone-label").attr("x", 610).attr("y", 10).text("ЗОНА 3: СИНТЕТИКА (L4)");
+
+        // Add additional pseudo linkages (L3 branches converging to L4)
+        // Set up tree
+        const root = d3.hierarchy(data);
+        const tree = d3.tree().size([height - 100, width - 400]);
+        tree(root);
+
+        // Map colors base on branches
+        const colorScale = {"math": "#50fa7b", "predictive": "#8be9fd", "synth": "#ff79c6"};
+
+        // Links
+        svg.selectAll(".link")
+            .data(root.links())
+            .enter().append("path")
+            .attr("class", "link")
+            .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
+
+        // Adding convergence links manually representing merging L3 into final / L4 integration
+        const l3Nodes = root.descendants().filter(d => d.data.name.includes("L3."));
+        const synthMaster = root.descendants().find(d => d.data.name.includes("Синтезиро"));
+        
+        // Nodes
+        const node = svg.selectAll(".node")
+            .data(root.descendants())
+            .enter().append("g")
+            .attr("class", "node")
+            .attr("transform", d => "translate(" + d.y + "," + d.x + ")");
+
+        node.append("circle")
+            .attr("r", 12)
+            .style("stroke", d => d.data.zone ? colorScale[d.data.zone] : "#bd93f9")
+            .style("fill", "#282a36");
+
+        node.append("text")
+            .attr("dy", -18)
+            .attr("x", d => d.children ? -15 : 15)
+            .style("text-anchor", d => d.children ? "end" : "start")
+            .text(d => d.data.name);
+
+        // Action Decision box
+        svg.append("rect")
+            .attr("x", 850).attr("y", 300).attr("width", 150).attr("height", 60)
+            .attr("rx", 5).attr("ry", 5)
+            .style("fill", "#ff5555").style("stroke", "#ffb86c").style("stroke-width", 2);
+        
+        svg.append("text")
+            .attr("x", 925).attr("y", 335)
+            .style("text-anchor", "middle").style("font-size", "16px").style("fill", "#fff").style("font-weight", "bold")
+            .text("FINAL ACTION");
+
+    </script>
+</body>
+</html>
