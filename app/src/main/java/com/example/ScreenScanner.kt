@@ -1008,6 +1008,17 @@ class ScreenScanner(
                     }
                     holeCrop.recycle()
                 }
+
+                val cWidth = Math.min(cleanBitmap!!.width - activeCommRect.left, activeCommRect.width())
+                val cHeight = Math.min(cleanBitmap!!.height - activeCommRect.top, activeCommRect.height())
+                if (activeCommRect.left >= 0 && activeCommRect.top >= 0 && cWidth > 0 && cHeight > 0) {
+                    val commCrop = Bitmap.createBitmap(cleanBitmap!!, activeCommRect.left, activeCommRect.top, cWidth, cHeight)
+                    val oText = TemplateManager.match(commCrop, false)
+                    if (oText != null) {
+                        foundCommCardsRaw = parseOverrideMsg(oText, 5)
+                    }
+                    commCrop.recycle()
+                }
             } catch (e: Exception) { e.printStackTrace() }
 
             var rawAll = (foundHoleCardsRaw + foundCommCardsRaw).filterNotNull()
