@@ -406,35 +406,22 @@ class ScreenScanner(
             val hudRects = rects.third
             
             val activeCommRect = if (commRect.width() > 20) {
-                val density = context.resources.displayMetrics.density
-                val horizontalBuffer = maxOf((commRect.width() * 0.05f).toInt(), (10 * density).toInt())
-                val verticalBuffer = maxOf((commRect.height() * 0.05f).toInt(), (8 * density).toInt())
-                // Right side exclusion for the drag/close symbols (approx 15% of width or minimum 50px)
-                val rightExclusion = maxOf((commRect.width() * 0.15f).toInt(), 50)
-                
                 android.graphics.Rect(
                     commRect.left,
-                    commRect.top + verticalBuffer,
-                    commRect.right - rightExclusion,
-                    commRect.bottom - verticalBuffer
+                    commRect.top,
+                    commRect.right,
+                    commRect.bottom
                 )
             } else {
                 commRect
             }
             
             val activeHoleRect = if (holeRect.width() > 20) {
-                val density = context.resources.displayMetrics.density
-                val horizontalBuffer = maxOf((holeRect.width() * 0.05f).toInt(), (10 * density).toInt())
-                val verticalBuffer = maxOf((holeRect.height() * 0.05f).toInt(), (8 * density).toInt())
-                // Hole cards overlay has no close button, only a small resize button on the bottom-right corner.
-                // We keep right exclusion at safety buffer level to avoid cutting off the right pocket card.
-                val rightExclusion = horizontalBuffer
-                
                 android.graphics.Rect(
                     holeRect.left,
-                    holeRect.top + verticalBuffer,
-                    holeRect.right - rightExclusion,
-                    holeRect.bottom - verticalBuffer
+                    holeRect.top,
+                    holeRect.right,
+                    holeRect.bottom
                 )
             } else {
                 holeRect
@@ -811,8 +798,8 @@ class ScreenScanner(
 
             for (element in commElements) {
                 val box = element.boundingBox ?: continue
-                // Card ranks might be merged, but still shouldn't be extremely wide like a full sentence.
-                if (box.width() > box.height() * 4.0f) continue
+                // Card ranks might be merged; allow up to 8.0 aspect ratio for a full 5-card board.
+                if (box.width() > box.height() * 8.0f) continue
                 
                 // Minimum size threshold to filter out small text like pot size
                 if (box.height() < commRect.height() * 0.08f) continue
@@ -868,7 +855,7 @@ class ScreenScanner(
             
             for (element in holeElements) {
                 val box = element.boundingBox ?: continue
-                if (box.width() > box.height() * 4.0f) continue
+                if (box.width() > box.height() * 6.0f) continue
                 
                 // Minimum size threshold to filter out tiny text. Hole cards usually large.
                 if (box.height() < holeRect.height() * 0.05f) continue

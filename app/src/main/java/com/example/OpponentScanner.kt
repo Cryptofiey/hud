@@ -156,8 +156,8 @@ object OpponentScanner {
             val inTopHeader = y < height * 0.09f
             // Community cards are roughly in the center third
             val inCommunityCards = x > width * 0.20f && x < width * 0.80f && y > height * 0.35f && y < height * 0.60f
-            // Hero pocket cards region near the bottom center avatar, slightly off-center to the right (at 0.51W to 0.76W)
-            val inHeroCards = x > width * 0.51f && x < width * 0.80f && y > height * 0.73f && y < height * 0.90f
+            // Hero pocket cards region near the bottom center avatar, slightly off-center to the right
+            val inHeroCards = x > width * 0.54f && x < width * 0.80f && y > height * 0.73f && y < height * 0.90f
             
             // Check if it's explicitly inside the known rects (redundant but safe)
             val inKnownComm = commRect != null && commRect.contains(x.toInt(), y.toInt())
