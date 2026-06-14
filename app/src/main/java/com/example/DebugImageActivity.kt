@@ -236,11 +236,11 @@ fun DebugScreen() {
                 contentDescription = "Debug Result",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
+                    .height(450.dp)
                     .background(Color.DarkGray)
             )
         } else {
-            Box(modifier = Modifier.fillMaxWidth().height(200.dp).background(Color.DarkGray))
+            Box(modifier = Modifier.fillMaxWidth().height(450.dp).background(Color.DarkGray))
         }
         
         Spacer(Modifier.height(8.dp))
