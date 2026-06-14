@@ -48,6 +48,52 @@ class DebugImageActivity : ComponentActivity() {
     }
 }
 
+fun performAutoCropIfNeeded(context: android.content.Context, originalBmp: Bitmap, isHole: Boolean): Bitmap {
+    var targetBmp = originalBmp
+    if (targetBmp.height > 1000) {
+        val screenHeight = context.resources.displayMetrics.heightPixels
+        val screenWidth = context.resources.displayMetrics.widthPixels
+        
+        if (isHole) {
+            val wPx = (screenWidth * 0.35f).toInt()
+            val hPx = (screenHeight * 0.14f).toInt()
+            val cx = (screenWidth * 0.44f).toInt()
+            val cy = (screenHeight * 0.69f).toInt()
+            
+            // Scale factor if screenshot resolution differs from device displayMetrics
+            val scaleX = targetBmp.width.toFloat() / screenWidth
+            val scaleY = targetBmp.height.toFloat() / screenHeight
+            
+            val cropX = (cx * scaleX).toInt()
+            val cropY = (cy * scaleY).toInt()
+            val cropW = (wPx * scaleX).toInt()
+            val cropH = (hPx * scaleY).toInt()
+            
+            if (cropX >= 0 && cropY >= 0 && cropX + cropW <= targetBmp.width && cropY + cropH <= targetBmp.height) {
+                targetBmp = Bitmap.createBitmap(targetBmp, cropX, cropY, cropW, cropH)
+            }
+        } else {
+            val wPx = (screenWidth * 0.80f).toInt()
+            val hPx = (screenHeight * 0.14f).toInt()
+            val cx = (screenWidth * 0.10f).toInt()
+            val cy = (screenHeight * 0.40f).toInt()
+            
+            val scaleX = targetBmp.width.toFloat() / screenWidth
+            val scaleY = targetBmp.height.toFloat() / screenHeight
+            
+            val cropX = (cx * scaleX).toInt()
+            val cropY = (cy * scaleY).toInt()
+            val cropW = (wPx * scaleX).toInt()
+            val cropH = (hPx * scaleY).toInt()
+            
+            if (cropX >= 0 && cropY >= 0 && cropX + cropW <= targetBmp.width && cropY + cropH <= targetBmp.height) {
+                targetBmp = Bitmap.createBitmap(targetBmp, cropX, cropY, cropW, cropH)
+            }
+        }
+    }
+    return targetBmp
+}
+
 @Composable
 fun DebugScreen() {
     val context = LocalContext.current
@@ -113,8 +159,9 @@ fun DebugScreen() {
                     if (loadedBitmap != null && manualTemplateText.isNotBlank()) {
                         debugLog = "Tuning started...\nTrying various brightness/contrast thresholds."
                         optimalThreshold = null
+                        val targetBmp = performAutoCropIfNeeded(context, loadedBitmap!!, isHoleTemplate)
                         coroutineScope.launch {
-                            tuneCardRecognition(loadedBitmap!!, manualTemplateText) { processedBmp, log, bestThresh ->
+                            tuneCardRecognition(targetBmp, manualTemplateText) { processedBmp, log, bestThresh ->
                                 resultBitmap = processedBmp
                                 debugLog = log
                                 if (bestThresh != null) optimalThreshold = bestThresh
@@ -135,49 +182,7 @@ fun DebugScreen() {
         Button(
             onClick = {
                 if (loadedBitmap != null && manualTemplateText.isNotBlank()) {
-                    var targetBmp = loadedBitmap!!
-                    // Auto-crop if it's a full screenshot to perfectly align with screen scanner
-                    if (targetBmp.height > 1000) {
-                        val screenHeight = context.resources.displayMetrics.heightPixels
-                        val screenWidth = context.resources.displayMetrics.widthPixels
-                        
-                        if (isHoleTemplate) {
-                            val wPx = (screenWidth * 0.35f).toInt()
-                            val hPx = (screenHeight * 0.14f).toInt()
-                            val cx = (screenWidth * 0.44f).toInt()
-                            val cy = (screenHeight * 0.69f).toInt()
-                            
-                            // Scale factor if screenshot resolution differs from device displayMetrics
-                            val scaleX = targetBmp.width.toFloat() / screenWidth
-                            val scaleY = targetBmp.height.toFloat() / screenHeight
-                            
-                            val cropX = (cx * scaleX).toInt()
-                            val cropY = (cy * scaleY).toInt()
-                            val cropW = (wPx * scaleX).toInt()
-                            val cropH = (hPx * scaleY).toInt()
-                            
-                            if (cropX >= 0 && cropY >= 0 && cropX + cropW <= targetBmp.width && cropY + cropH <= targetBmp.height) {
-                                targetBmp = Bitmap.createBitmap(targetBmp, cropX, cropY, cropW, cropH)
-                            }
-                        } else {
-                            val wPx = (screenWidth * 0.80f).toInt()
-                            val hPx = (screenHeight * 0.14f).toInt()
-                            val cx = (screenWidth * 0.10f).toInt()
-                            val cy = (screenHeight * 0.40f).toInt()
-                            
-                            val scaleX = targetBmp.width.toFloat() / screenWidth
-                            val scaleY = targetBmp.height.toFloat() / screenHeight
-                            
-                            val cropX = (cx * scaleX).toInt()
-                            val cropY = (cy * scaleY).toInt()
-                            val cropW = (wPx * scaleX).toInt()
-                            val cropH = (hPx * scaleY).toInt()
-                            
-                            if (cropX >= 0 && cropY >= 0 && cropX + cropW <= targetBmp.width && cropY + cropH <= targetBmp.height) {
-                                targetBmp = Bitmap.createBitmap(targetBmp, cropX, cropY, cropW, cropH)
-                            }
-                        }
-                    }
+                    val targetBmp = performAutoCropIfNeeded(context, loadedBitmap!!, isHoleTemplate)
                     
                     TemplateManager.saveTemplate(context, targetBmp, manualTemplateText, isHoleTemplate)
                     resultBitmap = targetBmp // Show them the cropped pattern we saved
