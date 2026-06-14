@@ -413,7 +413,7 @@ class ScreenScanner(
                 val rightExclusion = maxOf((commRect.width() * 0.15f).toInt(), 50)
                 
                 android.graphics.Rect(
-                    commRect.left + horizontalBuffer,
+                    commRect.left,
                     commRect.top + verticalBuffer,
                     commRect.right - rightExclusion,
                     commRect.bottom - verticalBuffer
@@ -431,7 +431,7 @@ class ScreenScanner(
                 val rightExclusion = horizontalBuffer
                 
                 android.graphics.Rect(
-                    holeRect.left + horizontalBuffer,
+                    holeRect.left,
                     holeRect.top + verticalBuffer,
                     holeRect.right - rightExclusion,
                     holeRect.bottom - verticalBuffer
