@@ -1826,9 +1826,12 @@ class PokerHudService : Service() {
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
 
+        val wPx = (screenWidth * 0.60f).toInt()
+        val hPx = (screenHeight * 0.12f).toInt()
+
         val params = WindowManager.LayoutParams(
-            dpToPx(250f),
-            dpToPx(75f),
+            wPx,
+            hPx,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -1840,8 +1843,8 @@ class PokerHudService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
-            x = (screenWidth - dpToPx(250f)) / 2
-            y = (screenHeight * 0.435f).toInt()
+            x = (screenWidth - wPx) / 2
+            y = (screenHeight * 0.38f).toInt()
         }
 
         val frame = FrameLayout(this).apply {
@@ -1972,9 +1975,12 @@ class PokerHudService : Service() {
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
 
+        val wPx = (screenWidth * 0.28f).toInt()
+        val hPx = (screenHeight * 0.08f).toInt()
+
         val params = WindowManager.LayoutParams(
-            dpToPx(75f),
-            dpToPx(55f),
+            wPx,
+            hPx,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -1986,8 +1992,8 @@ class PokerHudService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
-            x = (screenWidth / 2) + dpToPx(20f)
-            y = (screenHeight * 0.765f).toInt()
+            x = (screenWidth / 2) - (wPx / 4)
+            y = (screenHeight * 0.70f).toInt()
         }
 
         val frame = FrameLayout(this).apply {

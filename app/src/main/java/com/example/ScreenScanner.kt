@@ -509,9 +509,13 @@ class ScreenScanner(
             }
 
             for (line in linesList) {
+                val lineBox = line.boundingBox
+                if (lineBox != null && (lineBox.centerY() < cleanBitmap!!.height * 0.20f || lineBox.centerY() > cleanBitmap!!.height * 0.65f)) {
+                    continue // POT text is located around the upper-middle of the screen
+                }
+                
                 val lineText = line.text.uppercase()
                 if (lineText.contains("POT") || lineText.contains("ПОТ")) {
-                    val lineBox = line.boundingBox
                     val combinedText = if (lineBox != null) {
                         OpponentScanner.mergeRightsideDigits(lineBox, line.text, linesList)
                     } else {
