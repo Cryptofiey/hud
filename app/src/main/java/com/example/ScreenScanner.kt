@@ -407,15 +407,16 @@ class ScreenScanner(
             
             val activeCommRect = if (commRect.width() > 20) {
                 val density = context.resources.displayMetrics.density
-                val borderBuffer = (3 * density).toInt().coerceAtLeast(4)
+                val horizontalBuffer = maxOf((commRect.width() * 0.05f).toInt(), (10 * density).toInt())
+                val verticalBuffer = maxOf((commRect.height() * 0.05f).toInt(), (8 * density).toInt())
                 // Right side exclusion for the drag/close symbols (approx 15% of width or minimum 50px)
                 val rightExclusion = maxOf((commRect.width() * 0.15f).toInt(), 50)
                 
                 android.graphics.Rect(
-                    commRect.left + borderBuffer,
-                    commRect.top + borderBuffer,
+                    commRect.left + horizontalBuffer,
+                    commRect.top + verticalBuffer,
                     commRect.right - rightExclusion,
-                    commRect.bottom - borderBuffer
+                    commRect.bottom - verticalBuffer
                 )
             } else {
                 commRect
@@ -423,16 +424,17 @@ class ScreenScanner(
             
             val activeHoleRect = if (holeRect.width() > 20) {
                 val density = context.resources.displayMetrics.density
-                val borderBuffer = (3 * density).toInt().coerceAtLeast(4)
+                val horizontalBuffer = maxOf((holeRect.width() * 0.05f).toInt(), (10 * density).toInt())
+                val verticalBuffer = maxOf((holeRect.height() * 0.05f).toInt(), (8 * density).toInt())
                 // Hole cards overlay has no close button, only a small resize button on the bottom-right corner.
                 // We keep right exclusion at safety buffer level to avoid cutting off the right pocket card.
-                val rightExclusion = borderBuffer
+                val rightExclusion = horizontalBuffer
                 
                 android.graphics.Rect(
-                    holeRect.left + borderBuffer,
-                    holeRect.top + borderBuffer,
+                    holeRect.left + horizontalBuffer,
+                    holeRect.top + verticalBuffer,
                     holeRect.right - rightExclusion,
-                    holeRect.bottom - borderBuffer
+                    holeRect.bottom - verticalBuffer
                 )
             } else {
                 holeRect
