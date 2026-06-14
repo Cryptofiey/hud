@@ -135,6 +135,39 @@ fun DebugScreen() {
         
         Spacer(Modifier.height(8.dp))
         
+        var manualTemplateText by remember { mutableStateOf("") }
+        var isHoleTemplate by remember { mutableStateOf(true) }
+        
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = manualTemplateText,
+                onValueChange = { manualTemplateText = it },
+                label = { Text("Manual Label (e.g. 'Ah 8c')") },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Checkbox(checked = isHoleTemplate, onCheckedChange = { isHoleTemplate = it })
+                Text("Hole?")
+            }
+        }
+        
+        Button(
+            onClick = {
+                if (loadedBitmap != null && manualTemplateText.isNotBlank()) {
+                    TemplateManager.saveTemplate(context, loadedBitmap!!, manualTemplateText, isHoleTemplate)
+                    debugLog = "Saved manual template for '${manualTemplateText}'!\nThe scanner will now bypass OCR and lock-on when it sees this exact crop."
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+            enabled = loadedBitmap != null && manualTemplateText.isNotBlank()
+        ) {
+            Text("Save as Visual Template Override")
+        }
+        
+        Spacer(Modifier.height(8.dp))
+        
         if (optimalThreshold != null) {
             Button(
                 onClick = {

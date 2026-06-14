@@ -920,12 +920,13 @@ class ScreenScanner(
                 val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
                 
                 // Dynamic threshold based on region width.
-                // We use 6% for board and 15% for hole cards to merge multiple scans of the SAME card, 
-                // but small enough to NOT merge adjacent distinct cards even if the user draws a wide box.
+                // We use 14% for board and 35% for hole cards to merge multiple scans of the SAME card 
+                // (which often detects small top-left rank AND large center rank),
+                // but small enough to NOT merge adjacent distinct cards.
                 val clusterThreshold = if (maxCards == 5) {
-                    regionRect.width() * 0.06f
+                    regionRect.width() * 0.14f
                 } else {
-                    regionRect.width() * 0.15f
+                    regionRect.width() * 0.35f
                 }
                 
                 for (elem in sorted) {
@@ -968,6 +969,46 @@ class ScreenScanner(
 
             var foundCommCardsRaw = clusterCards(tempCommCards, 5, commRect)
             var foundHoleCardsRaw = clusterCards(tempHoleCards, 2, holeRect)
+
+            try {
+                TemplateManager.init(pokerHudService)
+                
+                fun parseOverrideMsg(text: String, maxCards: Int): MutableList<Card?> {
+                    val list = MutableList<Card?>(maxCards) { null }
+                    val parts = text.split(" ")
+                    for (i in parts.indices) {
+                        if (i >= maxCards) break
+                        val p = parts[i].trim()
+                        if (p.length >= 2) {
+                            val rStr = p.substring(0, p.length - 1).uppercase()
+                            val sChar = p.last().lowercaseChar()
+                            val rank = Rank.values().find { it.symbol.equals(rStr, ignoreCase = true) }
+                            val suit = when(sChar) {
+                                'h', '♥' -> Suit.HEARTS
+                                'd', '♦' -> Suit.DIAMONDS
+                                'c', '♣' -> Suit.CLUBS
+                                's', '♠' -> Suit.SPADES
+                                else -> null
+                            }
+                            if (rank != null && suit != null) {
+                                list[i] = Card(rank, suit)
+                            }
+                        }
+                    }
+                    return list
+                }
+
+                val hWidth = Math.min(cleanBitmap!!.width - activeHoleRect.left, activeHoleRect.width())
+                val hHeight = Math.min(cleanBitmap!!.height - activeHoleRect.top, activeHoleRect.height())
+                if (activeHoleRect.left >= 0 && activeHoleRect.top >= 0 && hWidth > 0 && hHeight > 0) {
+                    val holeCrop = Bitmap.createBitmap(cleanBitmap!!, activeHoleRect.left, activeHoleRect.top, hWidth, hHeight)
+                    val oText = TemplateManager.match(holeCrop, true)
+                    if (oText != null) {
+                        foundHoleCardsRaw = parseOverrideMsg(oText, 2)
+                    }
+                    holeCrop.recycle()
+                }
+            } catch (e: Exception) { e.printStackTrace() }
 
             var rawAll = (foundHoleCardsRaw + foundCommCardsRaw).filterNotNull()
             if (rawAll.size != rawAll.toSet().size) {
