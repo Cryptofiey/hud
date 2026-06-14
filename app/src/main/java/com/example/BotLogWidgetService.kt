@@ -144,7 +144,7 @@ class BotLogWidgetService : Service() {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
