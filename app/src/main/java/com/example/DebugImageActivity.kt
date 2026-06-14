@@ -155,7 +155,52 @@ fun DebugScreen() {
         Button(
             onClick = {
                 if (loadedBitmap != null && manualTemplateText.isNotBlank()) {
-                    TemplateManager.saveTemplate(context, loadedBitmap!!, manualTemplateText, isHoleTemplate)
+                    var targetBmp = loadedBitmap!!
+                    // Auto-crop if it's a full screenshot to perfectly align with screen scanner
+                    if (targetBmp.height > 1000) {
+                        val screenHeight = context.resources.displayMetrics.heightPixels
+                        val screenWidth = context.resources.displayMetrics.widthPixels
+                        
+                        if (isHoleTemplate) {
+                            val wPx = (screenWidth * 0.35f).toInt()
+                            val hPx = (screenHeight * 0.14f).toInt()
+                            val cx = (screenWidth * 0.44f).toInt()
+                            val cy = (screenHeight * 0.69f).toInt()
+                            
+                            // Scale factor if screenshot resolution differs from device displayMetrics
+                            val scaleX = targetBmp.width.toFloat() / screenWidth
+                            val scaleY = targetBmp.height.toFloat() / screenHeight
+                            
+                            val cropX = (cx * scaleX).toInt()
+                            val cropY = (cy * scaleY).toInt()
+                            val cropW = (wPx * scaleX).toInt()
+                            val cropH = (hPx * scaleY).toInt()
+                            
+                            if (cropX >= 0 && cropY >= 0 && cropX + cropW <= targetBmp.width && cropY + cropH <= targetBmp.height) {
+                                targetBmp = Bitmap.createBitmap(targetBmp, cropX, cropY, cropW, cropH)
+                            }
+                        } else {
+                            val wPx = (screenWidth * 0.80f).toInt()
+                            val hPx = (screenHeight * 0.14f).toInt()
+                            val cx = (screenWidth * 0.10f).toInt()
+                            val cy = (screenHeight * 0.40f).toInt()
+                            
+                            val scaleX = targetBmp.width.toFloat() / screenWidth
+                            val scaleY = targetBmp.height.toFloat() / screenHeight
+                            
+                            val cropX = (cx * scaleX).toInt()
+                            val cropY = (cy * scaleY).toInt()
+                            val cropW = (wPx * scaleX).toInt()
+                            val cropH = (hPx * scaleY).toInt()
+                            
+                            if (cropX >= 0 && cropY >= 0 && cropX + cropW <= targetBmp.width && cropY + cropH <= targetBmp.height) {
+                                targetBmp = Bitmap.createBitmap(targetBmp, cropX, cropY, cropW, cropH)
+                            }
+                        }
+                    }
+                    
+                    TemplateManager.saveTemplate(context, targetBmp, manualTemplateText, isHoleTemplate)
+                    resultBitmap = targetBmp // Show them the cropped pattern we saved
                     debugLog = "Saved manual template for '${manualTemplateText}'!\nThe scanner will now bypass OCR and lock-on when it sees this exact crop."
                 }
             },
