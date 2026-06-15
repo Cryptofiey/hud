@@ -131,9 +131,9 @@ class ScreenScanner(
                 while (isActive) {
                     val gotImage = processLatestImage()
                     if (gotImage) {
-                        delay(150) // Reduced polling rate for snappier responses (was 250)
+                        delay(30) // Fast polling rate for snappier responses
                     } else {
-                        delay(50) // Poll faster while waiting for first frame
+                        delay(10) // Poll faster while waiting for next frame
                     }
                 }
             }
@@ -1017,14 +1017,6 @@ class ScreenScanner(
                 
                 // Keep largest areas in case of noise, then map them to physical slots based on distance
                 val topCards = resolvedCards.sortedByDescending { it.third }.take(maxCards)
-                
-                if (maxCards == 2) {
-                    val sortedByX = topCards.sortedBy { it.second }
-                    for (i in 0 until sortedByX.size) {
-                        resultList[i] = sortedByX[i].first
-                    }
-                    return resultList
-                }
                 
                 val expectedSlotWidth = regionRect.width().toFloat() / maxCards
                 

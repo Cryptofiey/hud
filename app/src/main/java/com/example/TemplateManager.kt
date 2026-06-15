@@ -12,11 +12,17 @@ object TemplateManager {
     private val templates = mutableListOf<Template>()
     private var isInitialized = false
 
-    data class Template(
+    class Template(
         val bitmap: Bitmap,
         val text: String, // e.g. "Ah 8c"
         val isHoleCards: Boolean
-    )
+    ) {
+        val w = bitmap.width
+        val h = bitmap.height
+        val pixels = IntArray(w * h).also {
+            bitmap.getPixels(it, 0, w, 0, 0, w, h)
+        }
+    }
 
     fun init(context: Context) {
         if (isInitialized) return
@@ -74,50 +80,77 @@ object TemplateManager {
     fun matchMultiple(inputBmp: Bitmap, maxCards: Int): List<MatchResult> {
         if (templates.isEmpty()) return emptyList()
         
-        val matchingTemplates = templates
-        if (matchingTemplates.isEmpty()) return emptyList()
+        val inputW = inputBmp.width
+        val inputH = inputBmp.height
+        if (inputW <= 0 || inputH <= 0) return emptyList()
+        
+        val inputPixels = IntArray(inputW * inputH)
+        inputBmp.getPixels(inputPixels, 0, inputW, 0, 0, inputW, inputH)
         
         val foundCards = mutableListOf<Triple<Int, String, android.graphics.Rect>>() // X coord, Card Text, Rect
-        
-        // Ensure we don't pick the same X coordinate multiple times by storing matched regions
         val matchedRegions = mutableListOf<IntRange>()
         
-        for (template in matchingTemplates) {
-            val tBmp = template.bitmap
-            if (tBmp.width > inputBmp.width || tBmp.height > inputBmp.height) continue
+        for (template in templates) {
+            val tW = template.w
+            val tH = template.h
+            if (tW > inputW || tH > inputH) continue
             
-            // Slide template across inputBmp's X axis
-            // We assume the Y axis is mostly aligned, so we just check a small range of Y or Y=0 to Y = inputHeight - templateHeight
-            val maxY = inputBmp.height - tBmp.height
-            val maxX = inputBmp.width - tBmp.width
-            
+            val maxY = inputH - tH
+            val maxX = inputW - tW
             val yStep = Math.max(1, maxY / 4) // check a few Y offsets
             val xStep = 2 // slide every 2 pixels
             
             for (x in 0..maxX step xStep) {
-                // If this X is already covered by a matched region, skip
                 if (matchedRegions.any { x in it }) continue
                 
                 var bestMseLoc = Float.MAX_VALUE
                 for (y in 0..maxY step yStep) {
-                    val mse = computeMseRegion(inputBmp, tBmp, x, y)
+                    val mse = computeMseFast(inputPixels, inputW, x, y, template.pixels, tW, tH)
                     if (mse < bestMseLoc) bestMseLoc = mse
                 }
                 
-                // If we found a strong match
                 if (bestMseLoc < 500.0f) { 
-                    val rect = android.graphics.Rect(x, 0, x + tBmp.width, tBmp.height)
+                    val rect = android.graphics.Rect(x, 0, x + tW, tH)
                     foundCards.add(Triple(x, template.text, rect))
-                    // Mark region as matched to avoid overlapping matches
-                    matchedRegions.add(x until (x + tBmp.width - tBmp.width/4)) // Allow slight overlap
+                    matchedRegions.add(x until (x + tW - tW / 4))
                 }
             }
         }
         
-        // Sort by X coordinate (left to right)
         foundCards.sortBy { it.first }
-        
         return foundCards.take(maxCards).map { MatchResult(it.second, it.third) }
+    }
+
+    private fun computeMseFast(
+        inputPixels: IntArray, inputW: Int, startX: Int, startY: Int,
+        templatePixels: IntArray, tW: Int, tH: Int
+    ): Float {
+        var sumSq = 0L
+        var tmplIdx = 0
+        for (ty in 0 until tH) {
+            var inputIdx = (startY + ty) * inputW + startX
+            for (tx in 0 until tW) {
+                val c1 = inputPixels[inputIdx]
+                val c2 = templatePixels[tmplIdx]
+                
+                val r1 = (c1 shr 16) and 0xFF
+                val g1 = (c1 shr 8) and 0xFF
+                val b1 = c1 and 0xFF
+                val gray1 = (r1 + g1 + b1) / 3
+                
+                val r2 = (c2 shr 16) and 0xFF
+                val g2 = (c2 shr 8) and 0xFF
+                val b2 = c2 and 0xFF
+                val gray2 = (r2 + g2 + b2) / 3
+                
+                val diff = gray1 - gray2
+                sumSq += (diff * diff)
+                
+                inputIdx++
+                tmplIdx++
+            }
+        }
+        return sumSq.toFloat() / (tW * tH)
     }
 
     private fun computeMseRegion(bigBmp: Bitmap, smallBmp: Bitmap, startX: Int, startY: Int): Float {
