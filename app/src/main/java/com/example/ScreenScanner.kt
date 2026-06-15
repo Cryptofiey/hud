@@ -429,12 +429,77 @@ class ScreenScanner(
             
             val currentState = PokerHudSharedState.uiState.value
 
-            // 1. RUN FULL SCREEN OCR
-            ocrBitmap = cleanBitmap!!.copy(Bitmap.Config.ARGB_8888, true)
-            applyCardThresholding(ocrBitmap!!, activeHoleRect, activeCommRect)
+            val (templateResult, result) = kotlinx.coroutines.coroutineScope {
+                val templateDeferred = async(Dispatchers.Default) {
+                    val tHole = mutableListOf<Pair<Card, android.graphics.Rect>>()
+                    val tComm = mutableListOf<Pair<Card, android.graphics.Rect>>()
+                    try {
+                        TemplateManager.init(pokerHudService)
+                        
+                        val hWidth = Math.min(cleanBitmap!!.width - activeHoleRect.left, activeHoleRect.width())
+                        val hHeight = Math.min(cleanBitmap!!.height - activeHoleRect.top, activeHoleRect.height())
+                        if (activeHoleRect.left >= 0 && activeHoleRect.top >= 0 && hWidth > 0 && hHeight > 0) {
+                            val holeCrop = Bitmap.createBitmap(cleanBitmap!!, activeHoleRect.left, activeHoleRect.top, hWidth, hHeight)
+                            val matches = TemplateManager.matchMultiple(holeCrop, 2)
+                            for (match in matches) {
+                                val gLeft = activeHoleRect.left + match.rect.left
+                                val gTop = activeHoleRect.top + match.rect.top
+                                val gRight = activeHoleRect.left + match.rect.right
+                                val gBottom = activeHoleRect.top + match.rect.bottom
+                                val globalRect = android.graphics.Rect(gLeft, gTop, gRight, gBottom)
+                                
+                                val cleanStr = match.text.replace(Regex("[hdcsHDCS♥♦♣♠]"), "").trim().uppercase()
+                                val rank = Rank.values().find { it.symbol.equals(cleanStr, ignoreCase = true) }
+                                
+                                if (rank != null) {
+                                    val suit = robustDetectSuit(cleanBitmap!!, globalRect) ?: Suit.SPADES
+                                    tHole.add(Pair(Card(rank, suit), globalRect))
+                                }
+                            }
+                            holeCrop.recycle()
+                        }
+
+                        val cWidth = Math.min(cleanBitmap!!.width - activeCommRect.left, activeCommRect.width())
+                        val cHeight = Math.min(cleanBitmap!!.height - activeCommRect.top, activeCommRect.height())
+                        if (activeCommRect.left >= 0 && activeCommRect.top >= 0 && cWidth > 0 && cHeight > 0) {
+                            val commCrop = Bitmap.createBitmap(cleanBitmap!!, activeCommRect.left, activeCommRect.top, cWidth, cHeight)
+                            val matches = TemplateManager.matchMultiple(commCrop, 5)
+                            for (match in matches) {
+                                val gLeft = activeCommRect.left + match.rect.left
+                                val gTop = activeCommRect.top + match.rect.top
+                                val gRight = activeCommRect.left + match.rect.right
+                                val gBottom = activeCommRect.top + match.rect.bottom
+                                val globalRect = android.graphics.Rect(gLeft, gTop, gRight, gBottom)
+                                
+                                val cleanStr = match.text.replace(Regex("[hdcsHDCS♥♦♣♠]"), "").trim().uppercase()
+                                val rank = Rank.values().find { it.symbol.equals(cleanStr, ignoreCase = true) }
+                                
+                                if (rank != null) {
+                                    val suit = robustDetectSuit(cleanBitmap!!, globalRect) ?: Suit.SPADES
+                                    tComm.add(Pair(Card(rank, suit), globalRect))
+                                }
+                            }
+                            commCrop.recycle()
+                        }
+                    } catch (e: Exception) { e.printStackTrace() }
+                    Pair(tHole, tComm)
+                }
+
+                // 1. RUN FULL SCREEN OCR
+                ocrBitmap = cleanBitmap!!.copy(Bitmap.Config.ARGB_8888, true)
+                applyCardThresholding(ocrBitmap!!, activeHoleRect, activeCommRect)
+                
+                val inputImage = InputImage.fromBitmap(ocrBitmap!!, 0)
+                val ocrTask = recognizer.process(inputImage)
+                
+                val ocrRes = ocrTask.await()
+                val tempRes = templateDeferred.await()
+                Pair(tempRes, ocrRes)
+            }
+
+            val templateHoleCards = templateResult.first
+            val templateCommCards = templateResult.second
             
-            val inputImage = InputImage.fromBitmap(ocrBitmap!!, 0)
-            val result = recognizer.process(inputImage).await()
             // We do NOT recycle ocrBitmap immediately as we will use it for pixel-level rank checks.
 
             // 2. EXTRACT CARDS BY BOUNDING BOX INTERSECT
@@ -999,60 +1064,6 @@ class ScreenScanner(
                 
                 return resultList
             }
-
-            val templateHoleCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
-            val templateCommCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
-            
-            try {
-                TemplateManager.init(pokerHudService)
-                
-                val hWidth = Math.min(cleanBitmap!!.width - activeHoleRect.left, activeHoleRect.width())
-                val hHeight = Math.min(cleanBitmap!!.height - activeHoleRect.top, activeHoleRect.height())
-                if (activeHoleRect.left >= 0 && activeHoleRect.top >= 0 && hWidth > 0 && hHeight > 0) {
-                    val holeCrop = Bitmap.createBitmap(cleanBitmap!!, activeHoleRect.left, activeHoleRect.top, hWidth, hHeight)
-                    val matches = TemplateManager.matchMultiple(holeCrop, 2)
-                    for (match in matches) {
-                        val gLeft = activeHoleRect.left + match.rect.left
-                        val gTop = activeHoleRect.top + match.rect.top
-                        val gRight = activeHoleRect.left + match.rect.right
-                        val gBottom = activeHoleRect.top + match.rect.bottom
-                        val globalRect = android.graphics.Rect(gLeft, gTop, gRight, gBottom)
-                        
-                        // Extract only rank (ignore suit characters if present in template string)
-                        val cleanStr = match.text.replace(Regex("[hdcsHDCS♥♦♣♠]"), "").trim().uppercase()
-                        val rank = Rank.values().find { it.symbol.equals(cleanStr, ignoreCase = true) }
-                        
-                        if (rank != null) {
-                            val suit = robustDetectSuit(cleanBitmap!!, globalRect) ?: Suit.SPADES
-                            templateHoleCards.add(Pair(Card(rank, suit), globalRect))
-                        }
-                    }
-                    holeCrop.recycle()
-                }
-
-                val cWidth = Math.min(cleanBitmap!!.width - activeCommRect.left, activeCommRect.width())
-                val cHeight = Math.min(cleanBitmap!!.height - activeCommRect.top, activeCommRect.height())
-                if (activeCommRect.left >= 0 && activeCommRect.top >= 0 && cWidth > 0 && cHeight > 0) {
-                    val commCrop = Bitmap.createBitmap(cleanBitmap!!, activeCommRect.left, activeCommRect.top, cWidth, cHeight)
-                    val matches = TemplateManager.matchMultiple(commCrop, 5)
-                    for (match in matches) {
-                        val gLeft = activeCommRect.left + match.rect.left
-                        val gTop = activeCommRect.top + match.rect.top
-                        val gRight = activeCommRect.left + match.rect.right
-                        val gBottom = activeCommRect.top + match.rect.bottom
-                        val globalRect = android.graphics.Rect(gLeft, gTop, gRight, gBottom)
-                        
-                        val cleanStr = match.text.replace(Regex("[hdcsHDCS♥♦♣♠]"), "").trim().uppercase()
-                        val rank = Rank.values().find { it.symbol.equals(cleanStr, ignoreCase = true) }
-                        
-                        if (rank != null) {
-                            val suit = robustDetectSuit(cleanBitmap!!, globalRect) ?: Suit.SPADES
-                            templateCommCards.add(Pair(Card(rank, suit), globalRect))
-                        }
-                    }
-                    commCrop.recycle()
-                }
-            } catch (e: Exception) { e.printStackTrace() }
 
             // Filter out OCR detections that fall within the cluster radius of a Template detection
             // This forces `clusterCards` to only see our Template detection for that column
