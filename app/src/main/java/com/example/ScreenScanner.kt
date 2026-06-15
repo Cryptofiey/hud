@@ -28,12 +28,12 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
 
 class ScreenScanner(
-    private val pokerHudService: PokerHudService,
-    private val resultData: Intent,
+    private val context: Context,
+    private val resultData: Intent?,
     private val resultCode: Int,
     private val stopAfterProfileScan: Boolean = false
 ) {
-    private val context: Context = pokerHudService
+    private val pokerHudService = context as? PokerHudService
     private var mediaProjection: MediaProjection? = null
     private var imageReader: ImageReader? = null
     private var virtualDisplay: android.hardware.display.VirtualDisplay? = null
@@ -106,7 +106,7 @@ class ScreenScanner(
 
             if (ScannerConfig.activeProjection == null) {
                 val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                ScannerConfig.activeProjection = projectionManager.getMediaProjection(resultCode, resultData)
+                ScannerConfig.activeProjection = projectionManager.getMediaProjection(resultCode, resultData!!)
             }
             mediaProjection = ScannerConfig.activeProjection
 
@@ -543,7 +543,7 @@ class ScreenScanner(
             image = null
 
             val rects = withContext(Dispatchers.Main) {
-                Triple(pokerHudService.getCommRect(), pokerHudService.getHoleRect(), pokerHudService.getHudRects())
+                Triple(pokerHudService!!.getCommRect(), pokerHudService.getHoleRect(), pokerHudService.getHudRects())
             }
             val commRect = rects.first
             val holeRect = rects.second
@@ -578,7 +578,7 @@ class ScreenScanner(
                     val tHole = mutableListOf<Pair<Card, android.graphics.Rect>>()
                     val tComm = mutableListOf<Pair<Card, android.graphics.Rect>>()
                     try {
-                        TemplateManager.init(pokerHudService)
+                        TemplateManager.init(context)
                         
                         val hWidth = Math.min(cleanBitmap!!.width - activeHoleRect.left, activeHoleRect.width())
                         val hHeight = Math.min(cleanBitmap!!.height - activeHoleRect.top, activeHoleRect.height())
@@ -1463,7 +1463,7 @@ class ScreenScanner(
                 val scannedProfile = ProfileScanner.scan(result, cleanBitmap!!, hudRects)
                 if (scannedProfile != null && scannedProfile.nickname != "Unknown_Profile") {
                     profileBoxesToHighlight = scannedProfile.profileBoundingBoxes
-                    val prefsManager = PreferencesManager(pokerHudService)
+                    val prefsManager = PreferencesManager(context)
                     val existing = prefsManager.loadPlayerStats(scannedProfile.nickname)
                     val updated = existing.copy(
                         histVpip = scannedProfile.histVpip ?: existing.histVpip,

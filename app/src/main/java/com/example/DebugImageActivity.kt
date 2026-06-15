@@ -89,8 +89,7 @@ fun DebugScreen() {
                 val outDirPublic = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PokerCrops_$timestamp")
                 if (!outDirPublic.exists()) outDirPublic.mkdirs()
                 
-                val hudService = PokerHudService.instance
-                val scanner = if (hudService != null) ScreenScanner(hudService, android.content.Intent(), 0) else null
+                val scanner = ScreenScanner(context, null, 0)
 
                 dir?.listFiles()?.forEach { file ->
                     if (file.name?.endsWith(".png") == true || file.name?.endsWith(".jpg") == true) {
@@ -192,15 +191,7 @@ fun DebugScreen() {
                         val hRect = if (isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
                         val cRect = if (!isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
 
-                        val hudService = PokerHudService.instance
-                        if (hudService == null) {
-                            withContext(Dispatchers.Main) {
-                                debugLog += "\nERROR: HUD Service is not running! Start it first!"
-                            }
-                            return@forEach
-                        }
-                        
-                        val scanner = ScreenScanner(hudService, android.content.Intent(), 0)
+                        val scanner = ScreenScanner(context, null, 0)
                         val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
                         val (detectedHole, detectedComm) = result
                         val activeRawList = if (isHole) detectedHole else detectedComm
@@ -317,11 +308,11 @@ fun DebugScreen() {
         
         Text(
             text = debugLog, 
-            style = MaterialTheme.typography.bodySmall, 
+            style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF00FF00), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), 
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(Color(0xFFE0E0E0))
+                .background(Color(0xFF1E1E1E))
                 .padding(8.dp)
                 .verticalScroll(rememberScrollState())
         )
