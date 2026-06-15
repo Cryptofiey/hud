@@ -131,7 +131,7 @@ class ScreenScanner(
                 while (isActive) {
                     val gotImage = processLatestImage()
                     if (gotImage) {
-                        delay(250) // Reduced polling rate for snappier responses (was 500)
+                        delay(150) // Reduced polling rate for snappier responses (was 250)
                     } else {
                         delay(50) // Poll faster while waiting for first frame
                     }
@@ -278,18 +278,14 @@ class ScreenScanner(
             val prevConfirmed = confirmed[i]
             
             if (best != null) {
-                // Confirm the card only if it has been seen at least twice.
-                if (best.value >= 2) {
+                // Confirm the card instantly if it appears in history. To prevent flickering, we only 
+                // revert to prevConfirmed if it has EQUAL count to best.
+                val prevCount = counts[prevConfirmed] ?: 0
+                if (prevConfirmed != null && prevCount >= best.value) {
+                    result.add(prevConfirmed)
+                } else {
                     result.add(best.key)
                     confirmed[i] = best.key
-                } else {
-                    val prevCount = counts[prevConfirmed] ?: 0
-                    if (prevConfirmed != null && prevCount > 0) {
-                        result.add(prevConfirmed)
-                    } else {
-                        result.add(null)
-                        confirmed[i] = null
-                    }
                 }
             } else {
                 result.add(null)
