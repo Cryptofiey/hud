@@ -18,14 +18,31 @@ import com.google.api.services.drive.DriveScopes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class GoogleDriveManager(private val context: Context) {
+class GoogleDriveManager(private val context: android.content.Context) {
+
+    private val injectedClientId: String? = try {
+        val field = BuildConfig::class.java.getField("GOOGLE_DRIVE_CLIENT_ID")
+        val value = field.get(null) as? String
+        if (value == "YOUR_CLIENT_ID_HERE") null else value
+    } catch (e: Exception) {
+        null
+    }
+    
+    private val savedClientId: String? = context.getSharedPreferences("poker_debug", android.content.Context.MODE_PRIVATE)
+        .getString("drive_client_id", null)
+        
+    private val clientId: String? = if (!savedClientId.isNullOrEmpty()) savedClientId else injectedClientId
 
     fun getSignInClient(): GoogleSignInClient {
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        val gsoBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             .requestScopes(Scope(DriveScopes.DRIVE_FILE), Scope(DriveScopes.DRIVE_READONLY), Scope(DriveScopes.DRIVE))
-            .build()
-        return GoogleSignIn.getClient(context, gso)
+        
+        clientId?.let {
+            gsoBuilder.requestIdToken(it)
+        }
+        
+        return GoogleSignIn.getClient(context, gsoBuilder.build())
     }
 
     suspend fun getDriveService(account: GoogleSignInAccount): Drive {

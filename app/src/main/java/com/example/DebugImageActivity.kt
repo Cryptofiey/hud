@@ -35,7 +35,39 @@ class DebugImageActivity : ComponentActivity() {
 fun DebugScreen() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var debugLog by remember { mutableStateOf("AI Server Debugger v2.0 Ready.\n\nSelect a folder below depending on your task.") }
+    var debugLog by remember { mutableStateOf("AI Server Debugger v3.0 Ready.\n\nSelect a folder below depending on your task.") }
+    var showSettings by remember { mutableStateOf(false) }
+    var manualClientId by remember { mutableStateOf(context.getSharedPreferences("poker_debug", android.content.Context.MODE_PRIVATE).getString("drive_client_id", "") ?: "") }
+
+    if (showSettings) {
+        AlertDialog(
+            onDismissRequest = { showSettings = false },
+            title = { Text("Google Drive Settings") },
+            text = {
+                Column {
+                    Text("Enter Web Client ID from Google Cloud Console:", style = MaterialTheme.typography.bodySmall)
+                    TextField(
+                        value = manualClientId,
+                        onValueChange = { manualClientId = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("XXX.apps.googleusercontent.com") }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text("Note: You can also set GOOGLE_DRIVE_CLIENT_ID in the Secrets panel.", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    context.getSharedPreferences("poker_debug", android.content.Context.MODE_PRIVATE).edit().putString("drive_client_id", manualClientId).apply()
+                    showSettings = false
+                    debugLog += "\nSettings saved. Please restart the Drive flow."
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSettings = false }) { Text("Cancel") }
+            }
+        )
+    }
 
     val templateLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -390,6 +422,11 @@ fun DebugScreen() {
         }
     }
 
+    val scrollState = rememberScrollState()
+    LaunchedEffect(debugLog) {
+        scrollState.animateScrollTo(scrollState.maxValue)
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("AI Automated Server Debugger", style = MaterialTheme.typography.titleLarge)
         
@@ -420,10 +457,22 @@ fun DebugScreen() {
         Spacer(Modifier.height(8.dp))
 
         Button(onClick = { 
-            val client = GoogleDriveManager(context).getSignInClient()
+            val savedId = context.getSharedPreferences("poker_debug", android.content.Context.MODE_PRIVATE).getString("drive_client_id", null)
+            val client = if (savedId.isNullOrEmpty()) {
+                GoogleDriveManager(context).getSignInClient()
+            } else {
+                // We'd need to update GoogleDriveManager to accept a dynamic ID, but for now we rely on the injected one or prompt user
+                GoogleDriveManager(context).getSignInClient() 
+            }
             googleSignInLauncher.launch(client.signInIntent)
         }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))) {
             Text("5. Google Drive Auto-Label (OAuth2)")
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        Button(onClick = { showSettings = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)) {
+            Text("Configure OAuth Credentials")
         }
         
         Spacer(Modifier.height(16.dp))
@@ -437,7 +486,7 @@ fun DebugScreen() {
                 .weight(1f)
                 .background(Color(0xFF1E1E1E))
                 .padding(8.dp)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
         )
     }
 }
