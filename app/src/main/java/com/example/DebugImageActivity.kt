@@ -125,11 +125,22 @@ fun DebugScreen() {
                         var commName = "comm_${System.currentTimeMillis()}"
                         var holeName = "hole_${System.currentTimeMillis()}"
 
-                        // If scanner exists, try to guess the cards to auto-name the files for batch tester
-                        if (scanner != null) {
+                        // Parse explicit cards from original filename if it exists
+                        val originalName = file.name ?: ""
+                        val expectedRegex = Regex("([2-9TJQKA][hdcs])", RegexOption.IGNORE_CASE)
+                        val explicitCards = expectedRegex.findAll(originalName).map { it.value.lowercase() }.toList()
+
+                        if (explicitCards.size >= 2) {
+                            // First two are usually hole, parsing the rest as comm
+                            val holeCards = explicitCards.take(2).joinToString("")
+                            val commCards = explicitCards.drop(2).joinToString("")
+                            if (holeCards.isNotEmpty()) holeName = "hole_$holeCards"
+                            if (commCards.isNotEmpty()) commName = "comm_$commCards"
+                        } else if (scanner != null) {
+                            // Optional fallback
                             val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
-                            val holeCards = result.first.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c")
-                            val commCards = result.second.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c")
+                            val holeCards = result.first.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c").lowercase()
+                            val commCards = result.second.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c").lowercase()
                             
                             if (holeCards.isNotEmpty()) holeName = "hole_$holeCards"
                             if (commCards.isNotEmpty()) commName = "comm_$commCards"
