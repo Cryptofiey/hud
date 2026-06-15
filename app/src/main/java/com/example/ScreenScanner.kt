@@ -886,9 +886,9 @@ class ScreenScanner(
                         val cx = box.centerX()
                         val cy = box.centerY()
                         
-                        if (commRect.width() > 20 && activeCommRect.contains(cx, cy)) {
+                        if (commRect.width() > 20 && android.graphics.Rect.intersects(activeCommRect, box)) {
                             commElements.add(element)
-                        } else if (holeRect.width() > 20 && activeHoleRect.contains(cx, cy)) {
+                        } else if (holeRect.width() > 20 && android.graphics.Rect.intersects(activeHoleRect, box)) {
                             holeElements.add(element)
                         }
                         
@@ -1030,7 +1030,7 @@ class ScreenScanner(
                 // Remove fractional sizes (e.g. 15.1) and non-card integers (e.g. 11-99, 100+)
                 safeText = safeText.replace(Regex("\\b\\d+[.,]\\d+\\b"), " ")
                 safeText = safeText.replace(Regex("\\b\\d{3,}\\b"), " ") // 100+
-                safeText = safeText.replace(Regex("\\b(1[1-9]|[2-9]\\d)\\b"), " ") // 11-99
+                // DO NOT strip 11-99 for commRect, prevents parsing flops like 444
                 safeText = safeText.replace(Regex("\\b[01]\\b"), " ") // Standalone 0 or 1
                 
                 if (safeText.isEmpty()) continue
@@ -1086,7 +1086,7 @@ class ScreenScanner(
                 // Remove fractional sizes (e.g. 15.1) and non-card integers (e.g. 11-99, 100+)
                 safeText = safeText.replace(Regex("\\b\\d+[.,]\\d+\\b"), " ")
                 safeText = safeText.replace(Regex("\\b\\d{3,}\\b"), " ") // 100+
-                safeText = safeText.replace(Regex("\\b(1[1-9]|[2-9]\\d)\\b"), " ") // 11-99
+                // DO NOT strip 11-99 for holeRect, deletes pocket pairs like 44
                 safeText = safeText.replace(Regex("\\b[01]\\b"), " ") // Standalone 0 or 1
                 
                 if (safeText.isEmpty()) continue
@@ -1123,13 +1123,13 @@ class ScreenScanner(
                 val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
                 
                 // Dynamic threshold based on region width.
-                // We use 14% for board and 25% for hole cards to merge multiple scans of the SAME card 
+                // We use 14% for board and 15% for hole cards to merge multiple scans of the SAME card 
                 // (which often detects small top-left rank AND large center rank),
                 // but small enough to NOT merge adjacent distinct cards.
                 val clusterThreshold = if (maxCards == 5) {
                     regionRect.width() * 0.14f
                 } else {
-                    regionRect.width() * 0.25f
+                    regionRect.width() * 0.15f
                 }
                 
                 for (elem in sorted) {
