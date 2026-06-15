@@ -227,6 +227,14 @@ fun DebugScreen() {
                     debugLog += "\nFirst Card Skips: $missingFirst cases"
                     debugLog += "\nRandom Card Skips: $missingRandom cases"
                     debugLog += "\nFlickering / Slow Build-Up: $slowStable cases"
+                    
+                    try {
+                        val reportFile = java.io.File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), "PokerBot_ValidationReport.txt")
+                        reportFile.writeText(debugLog)
+                        debugLog += "\n\n✅ Отчет сохранен в папку Downloads (Android/data/com.example/files/Download/PokerBot_ValidationReport.txt). Пожалуйста, прикрепите его сюда или отправьте через GitHub!"
+                    } catch (e: Exception) {
+                        debugLog += "\nFailed to save report: ${e.message}"
+                    }
                 }
             }
         }
