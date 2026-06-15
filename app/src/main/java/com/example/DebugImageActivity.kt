@@ -35,39 +35,7 @@ class DebugImageActivity : ComponentActivity() {
 fun DebugScreen() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var debugLog by remember { mutableStateOf("AI Server Debugger v3.0 Ready.\n\nSelect a folder below depending on your task.") }
-    var showSettings by remember { mutableStateOf(false) }
-    var manualClientId by remember { mutableStateOf(context.getSharedPreferences("poker_debug", android.content.Context.MODE_PRIVATE).getString("drive_client_id", "") ?: "") }
-
-    if (showSettings) {
-        AlertDialog(
-            onDismissRequest = { showSettings = false },
-            title = { Text("Google Drive Settings") },
-            text = {
-                Column {
-                    Text("Enter Web Client ID from Google Cloud Console:", style = MaterialTheme.typography.bodySmall)
-                    TextField(
-                        value = manualClientId,
-                        onValueChange = { manualClientId = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("XXX.apps.googleusercontent.com") }
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text("Note: You can also set GOOGLE_DRIVE_CLIENT_ID in the Secrets panel.", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    context.getSharedPreferences("poker_debug", android.content.Context.MODE_PRIVATE).edit().putString("drive_client_id", manualClientId).apply()
-                    showSettings = false
-                    debugLog += "\nSettings saved. Please restart the Drive flow."
-                }) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSettings = false }) { Text("Cancel") }
-            }
-        )
-    }
+    var debugLog by remember { mutableStateOf("AI Server Debugger v2.0 Ready.\n\nSelect a folder below depending on your task.") }
 
     val templateLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -328,109 +296,6 @@ fun DebugScreen() {
         }
     }
 
-    var driveLog by remember { mutableStateOf("") }
-    val googleSignInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
-                coroutineScope.launch {
-                    val driveManager = GoogleDriveManager(context)
-                    val driveService = driveManager.getDriveService(account)
-                    debugLog += "\nSuccessfully connected to Google Drive API as ${account.email}"
-                    
-                    // The specific folder from user request
-                    val folderId = "1PnDobWj3RBd0LXmGiKEECAKP_WBdDvmR"
-                    debugLog += "\nListing files in folder $folderId..."
-                    
-                    val files = driveManager.listFilesInFolder(driveService, folderId)
-                    debugLog += "\nFound ${files.size} files."
-                    
-                    var renamedCount = 0
-                    var deletedCount = 0
-                    for (file in files) {
-                        if (file.name.endsWith(".png") || file.name.endsWith(".jpg")) {
-                            debugLog += "\nProcessing image: ${file.name}..."
-                            
-                            try {
-                                val outStream = java.io.ByteArrayOutputStream()
-                                driveService.files().get(file.id).executeMediaAndDownloadTo(outStream)
-                                val bytes = outStream.toByteArray()
-                                val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                
-                                if (bmp != null) {
-                                    val w = bmp.width
-                                    val h = bmp.height
-                                    
-                                    // Match default HUD regions for CoinPoker
-                                    val cLeft = (w * 0.10f).toInt()
-                                    val cTop = (h * 0.40f).toInt()
-                                    val cRight = cLeft + (w * 0.80f).toInt()
-                                    val cBottom = cTop + (h * 0.14f).toInt()
-                                    
-                                    val hLeft = (w * 0.35f).toInt()
-                                    val hTop = (h * 0.65f).toInt()
-                                    val hRight = hLeft + (w * 0.35f).toInt()
-                                    val hBottom = hTop + (h * 0.14f).toInt()
-                                    
-                                    val cRect = android.graphics.Rect(cLeft, cTop, cRight, cBottom)
-                                    val hRect = android.graphics.Rect(hLeft, hTop, hRight, hBottom)
-                                    
-                                    val scanner = ScreenScanner(context, null, 0)
-                                    val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
-                                    val holeStr = result.first.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c").lowercase()
-                                    val commStr = result.second.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c").lowercase()
-                                    
-                                    if (holeStr.isEmpty() && commStr.isEmpty()) {
-                                        // No cards detected, consider deleting if it doesn't look like a valid table or just noise
-                                        debugLog += " -> No cards detected. Deleting poor quality photo."
-                                        driveManager.deleteFile(driveService, file.id)
-                                        deletedCount++
-                                    } else {
-                                        var newName = ""
-                                        if (file.name.contains("hole") || file.name.contains("comm")) {
-                                            // It's a crop
-                                            if (file.name.contains("hole")) newName = "hole_${holeStr}.png"
-                                            else newName = "comm_${commStr}.png"
-                                        } else {
-                                            // It's a full screenshot
-                                            newName = "comm_${commStr}_hole_${holeStr}.png"
-                                        }
-                                        
-                                        if (newName != file.name && newName.isNotEmpty()) {
-                                            val success = driveManager.renameFile(driveService, file.id, newName)
-                                            if (success) {
-                                                debugLog += " -> Renamed to $newName"
-                                                renamedCount++
-                                            } else {
-                                                debugLog += " -> Failed to rename."
-                                            }
-                                        } else {
-                                            debugLog += " -> Correct name already."
-                                        }
-                                    }
-                                    bmp.recycle()
-                                } else {
-                                    // Corrupt image
-                                    debugLog += " -> Corrupt image. Deleting."
-                                    driveManager.deleteFile(driveService, file.id)
-                                    deletedCount++
-                                }
-                            } catch (e: Exception) {
-                                debugLog += "\nError processing ${file.name}: ${e.message}"
-                            }
-                        }
-                    }
-                    debugLog += "\nDrive Task Complete. Renamed: $renamedCount, Deleted: $deletedCount."
-                }
-            } catch (e: Exception) {
-                debugLog += "\nGoogle Sign In Failed: ${e.message}"
-            }
-        } else {
-            debugLog += "\nGoogle Sign In Cancelled."
-        }
-    }
-
     val scrollState = rememberScrollState()
     LaunchedEffect(debugLog) {
         scrollState.animateScrollTo(scrollState.maxValue)
@@ -461,27 +326,6 @@ fun DebugScreen() {
 
         Button(onClick = { templateLauncher.launch(android.net.Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth()) {
             Text("4. Генератор шаблонов (Опционально)")
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        Button(onClick = { 
-            val savedId = context.getSharedPreferences("poker_debug", android.content.Context.MODE_PRIVATE).getString("drive_client_id", null)
-            val client = if (savedId.isNullOrEmpty()) {
-                GoogleDriveManager(context).getSignInClient()
-            } else {
-                // We'd need to update GoogleDriveManager to accept a dynamic ID, but for now we rely on the injected one or prompt user
-                GoogleDriveManager(context).getSignInClient() 
-            }
-            googleSignInLauncher.launch(client.signInIntent)
-        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))) {
-            Text("5. Google Drive Auto-Label (OAuth2)")
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        Button(onClick = { showSettings = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)) {
-            Text("Configure OAuth Credentials")
         }
         
         Spacer(Modifier.height(16.dp))

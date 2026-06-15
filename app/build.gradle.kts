@@ -58,10 +58,6 @@ android {
     compose = true
     buildConfig = true
   }
-  packaging {
-    resources.excludes.add("META-INF/INDEX.LIST")
-    resources.excludes.add("META-INF/DEPENDENCIES")
-  }
 }
 
 base {
@@ -114,11 +110,6 @@ dependencies {
   // implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
-  implementation(libs.play.services.auth)
-  implementation(libs.google.api.client.android)
-  implementation(libs.google.api.services.drive)
-  implementation("com.google.http-client:google-http-client-gson:1.43.3")
-  implementation("com.google.auth:google-auth-library-oauth2-http:1.20.0")
   implementation("androidx.documentfile:documentfile:1.0.1")
   implementation("com.google.mlkit:text-recognition:16.0.0")
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
