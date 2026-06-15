@@ -81,8 +81,13 @@ fun DebugScreen() {
             withContext(Dispatchers.IO) {
                 val dir = DocumentFile.fromTreeUri(context, uri)
                 val timestamp = System.currentTimeMillis()
-                val outDir = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PokerCrops_$timestamp")
-                if (!outDir.exists()) outDir.mkdirs()
+                
+                val outDirInternal = java.io.File(context.filesDir, "PokerCropsInternal")
+                if (outDirInternal.exists()) outDirInternal.deleteRecursively()
+                outDirInternal.mkdirs()
+                
+                val outDirPublic = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PokerCrops_$timestamp")
+                if (!outDirPublic.exists()) outDirPublic.mkdirs()
                 
                 val hudService = PokerHudService.instance
                 val scanner = if (hudService != null) ScreenScanner(hudService, android.content.Intent(), 0) else null
@@ -100,8 +105,8 @@ fun DebugScreen() {
                         val cRight = cLeft + (w * 0.80f).toInt()
                         val cBottom = cTop + (h * 0.14f).toInt()
                         
-                        val hLeft = (w * 0.44f).toInt()
-                        val hTop = (h * 0.69f).toInt()
+                        val hLeft = (w * 0.35f).toInt()
+                        val hTop = (h * 0.65f).toInt()
                         val hRight = hLeft + (w * 0.35f).toInt()
                         val hBottom = hTop + (h * 0.14f).toInt()
                         
@@ -124,11 +129,19 @@ fun DebugScreen() {
                             if (commCards.isNotEmpty()) commName = "comm_$commCards"
                         }
                         
-                        val commOut = java.io.File(outDir, "${commName}.png")
-                        java.io.FileOutputStream(commOut).use { commCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                        val fileCommInt = java.io.File(outDirInternal, "${commName}.png")
+                        java.io.FileOutputStream(fileCommInt).use { commCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                        val fileHoleInt = java.io.File(outDirInternal, "${holeName}.png")
+                        java.io.FileOutputStream(fileHoleInt).use { holeCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
 
-                        val holeOut = java.io.File(outDir, "${holeName}.png")
-                        java.io.FileOutputStream(holeOut).use { holeCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                        try {
+                            val fileCommPub = java.io.File(outDirPublic, "${commName}.png")
+                            java.io.FileOutputStream(fileCommPub).use { commCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                            val fileHolePub = java.io.File(outDirPublic, "${holeName}.png")
+                            java.io.FileOutputStream(fileHolePub).use { holeCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                        } catch (e: Exception) {
+                            // Ignore public storage errors
+                        }
                         
                         commCropTotal.recycle()
                         holeCropTotal.recycle()
@@ -142,16 +155,18 @@ fun DebugScreen() {
                 }
                 
                 withContext(Dispatchers.Main) {
-                    debugLog += "\n\n🎉 Нарезка окончена! Сохранено $crCount парных фото в общую папку устройства: Downloads/PokerCrops_$timestamp/\nТеперь можно запустить тестер на эту папку."
+                    debugLog += "\n\n🎉 Нарезка окончена! Сохранено $crCount парных фото.\n"
+                    debugLog += "Сохранено во внутреннюю память для Шага 2.\n"
+                    debugLog += "Также копия направлена в Downloads/PokerCrops_$timestamp/"
                 }
             }
         }
     }
 
-    val testLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+    fun runTestsOnFileUris(files: List<Pair<String, android.net.Uri>>, clearLog: Boolean = true) {
         coroutineScope.launch(Dispatchers.Main) {
-            debugLog = "Starting Auto-Validation Test Suite (Server AI Mode)...\n"
+            if (clearLog) debugLog = ""
+            debugLog += "Starting Auto-Validation Test Suite (Server AI Mode)...\n"
             var passed = 0
             var failed = 0
             var missingFirst = 0
@@ -160,18 +175,19 @@ fun DebugScreen() {
             var slowStable = 0
             
             withContext(Dispatchers.IO) {
-                val dir = DocumentFile.fromTreeUri(context, uri)
-                dir?.listFiles()?.forEach { file ->
-                    if (file.name?.endsWith(".png") == true || file.name?.endsWith(".jpg") == true) {
-                        val bmp = decodeUri(context, file.uri) ?: return@forEach
+                files.forEach { (fileName, fileUri) ->
+                    if (fileName.endsWith(".png") == true || fileName.endsWith(".jpg") == true) {
+                        val bmp = decodeUri(context, fileUri) ?: return@forEach
                         val expectedRegex = Regex("([2-9TJQKA][hdcs])", RegexOption.IGNORE_CASE)
-                        val matches = expectedRegex.findAll(file.name ?: "")
+                        val matches = expectedRegex.findAll(fileName ?: "")
                         val expectedCards = matches.map { it.value.lowercase() }.toList()
 
-                        debugLog += "\n-----------------------------------"
-                        debugLog += "\n[TEST] ${file.name}\nExpected: $expectedCards"
+                        withContext(Dispatchers.Main) {
+                            debugLog += "\n-----------------------------------"
+                            debugLog += "\n[TEST] ${fileName}\nExpected: $expectedCards"
+                        }
                         
-                        val isHole = file.name!!.contains("hole", ignoreCase = true) || expectedCards.size <= 2
+                        val isHole = fileName.contains("hole", ignoreCase = true) || expectedCards.size <= 2
                         
                         val hRect = if (isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
                         val cRect = if (!isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
@@ -183,7 +199,6 @@ fun DebugScreen() {
                             }
                             return@forEach
                         }
-                        
                         
                         val scanner = ScreenScanner(hudService, android.content.Intent(), 0)
                         val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
@@ -232,11 +247,41 @@ fun DebugScreen() {
                     try {
                         val reportFile = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PokerBot_ValidationReport.txt")
                         reportFile.writeText(debugLog)
-                        debugLog += "\n\n✅ Отчет сохранен в корневую общую папку Downloads (Файлы -> Меню -> Загрузки/Downloads). Пожалуйста, прикрепите его сюда или отправьте через GitHub!"
+                        debugLog += "\n\n✅ Отчет сохранен в Корневую папку Загрузки (Downloads)."
                     } catch (e: Exception) {
                         debugLog += "\nFailed to save report: ${e.message}"
                     }
                 }
+            }
+        }
+    }
+
+    val testLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch(Dispatchers.IO) {
+            val dir = DocumentFile.fromTreeUri(context, uri)
+            val filesList = dir?.listFiles()?.mapNotNull { file -> 
+                file.name?.let { Pair(it, file.uri) }
+            } ?: emptyList()
+            runTestsOnFileUris(filesList)
+        }
+    }
+    
+    val runInternalTester = {
+        coroutineScope.launch(Dispatchers.IO) {
+            val outDirInternal = java.io.File(context.filesDir, "PokerCropsInternal")
+            if (outDirInternal.exists()) {
+                val filesList = outDirInternal.listFiles()?.map { file ->
+                    Pair(file.name, android.net.Uri.fromFile(file))
+                } ?: emptyList()
+                
+                if (filesList.isEmpty()) {
+                    withContext(Dispatchers.Main) { debugLog = "Ошибка: Папка PokerCropsInternal пуста! Сначала выполните Шаг 1." }
+                } else {
+                    runTestsOnFileUris(filesList, clearLog = true)
+                }
+            } else {
+                withContext(Dispatchers.Main) { debugLog = "Ошибка: Папка PokerCropsInternal не найдена! Сначала выполните Шаг 1." }
             }
         }
     }
@@ -247,19 +292,25 @@ fun DebugScreen() {
         Spacer(Modifier.height(16.dp))
         
         Button(onClick = { cropLauncher.launch(android.net.Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))) {
-            Text("1. Нарезка фото-кадров (Auto-Crop Pipeline)")
+            Text("1. Нарезка фото-кадров (Auto-Crop)")
         }
 
         Spacer(Modifier.height(8.dp))
         
-        Button(onClick = { testLauncher.launch(Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63))) {
-            Text("2. Массовый Тестер (Auto-Validation Tester)")
+        Button(onClick = { runInternalTester() }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63))) {
+            Text("2. Запуск тестера (Внутренние фото Шага 1)")
+        }
+        
+        Spacer(Modifier.height(8.dp))
+        
+        Button(onClick = { testLauncher.launch(Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0))) {
+            Text("3. Тестер из папки (Выбрать любую)")
         }
         
         Spacer(Modifier.height(8.dp))
 
         Button(onClick = { templateLauncher.launch(Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth()) {
-            Text("3. Генератор шаблонов (Не обязательно)")
+            Text("4. Генератор шаблонов (Опционально)")
         }
         
         Spacer(Modifier.height(16.dp))
