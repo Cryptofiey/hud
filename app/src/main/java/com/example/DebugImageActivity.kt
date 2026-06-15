@@ -80,7 +80,8 @@ fun DebugScreen() {
             
             withContext(Dispatchers.IO) {
                 val dir = DocumentFile.fromTreeUri(context, uri)
-                val outDir = java.io.File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), "PokerCrops")
+                val timestamp = System.currentTimeMillis()
+                val outDir = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PokerCrops_$timestamp")
                 if (!outDir.exists()) outDir.mkdirs()
                 
                 val hudService = PokerHudService.instance
@@ -141,7 +142,7 @@ fun DebugScreen() {
                 }
                 
                 withContext(Dispatchers.Main) {
-                    debugLog += "\n\n🎉 Pipeline Complete! Saved $crCount full pairs to Downloads/PokerCrops/\nYou can copy them anywhere or point test suite directly there."
+                    debugLog += "\n\n🎉 Нарезка окончена! Сохранено $crCount парных фото в общую папку устройства: Downloads/PokerCrops_$timestamp/\nТеперь можно запустить тестер на эту папку."
                 }
             }
         }
@@ -229,9 +230,9 @@ fun DebugScreen() {
                     debugLog += "\nFlickering / Slow Build-Up: $slowStable cases"
                     
                     try {
-                        val reportFile = java.io.File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS), "PokerBot_ValidationReport.txt")
+                        val reportFile = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PokerBot_ValidationReport.txt")
                         reportFile.writeText(debugLog)
-                        debugLog += "\n\n✅ Отчет сохранен в папку Downloads (Android/data/com.example/files/Download/PokerBot_ValidationReport.txt). Пожалуйста, прикрепите его сюда или отправьте через GitHub!"
+                        debugLog += "\n\n✅ Отчет сохранен в корневую общую папку Downloads (Файлы -> Меню -> Загрузки/Downloads). Пожалуйста, прикрепите его сюда или отправьте через GitHub!"
                     } catch (e: Exception) {
                         debugLog += "\nFailed to save report: ${e.message}"
                     }
@@ -243,18 +244,22 @@ fun DebugScreen() {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("AI Automated Server Debugger", style = MaterialTheme.typography.titleLarge)
         
-        Button(onClick = { cropLauncher.launch(android.net.Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))) {
-            Text("3. Auto-Crop Pipeline (Screenshots -> Tests)")
-        }
-
         Spacer(Modifier.height(16.dp))
         
-        Button(onClick = { templateLauncher.launch(Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth()) {
-            Text("1. Auto-Template Generator (Select Folder)")
+        Button(onClick = { cropLauncher.launch(android.net.Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))) {
+            Text("1. Нарезка фото-кадров (Auto-Crop Pipeline)")
         }
+
+        Spacer(Modifier.height(8.dp))
         
         Button(onClick = { testLauncher.launch(Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63))) {
-            Text("2. Auto-Validation Tester (Select Folder)")
+            Text("2. Массовый Тестер (Auto-Validation Tester)")
+        }
+        
+        Spacer(Modifier.height(8.dp))
+
+        Button(onClick = { templateLauncher.launch(Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth()) {
+            Text("3. Генератор шаблонов (Не обязательно)")
         }
         
         Spacer(Modifier.height(16.dp))
