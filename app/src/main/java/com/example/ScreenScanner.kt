@@ -949,19 +949,48 @@ class ScreenScanner(
                 val resolvedCards = clusters.map { cluster ->
                     val sortedClusterByTop = cluster.sortedBy { it.second.top }
                     val primaryCard = sortedClusterByTop.first().first
-                    val minX = cluster.minOf { it.second.centerX() }
+                    val avgX = cluster.map { it.second.centerX() }.average()
                     val area = cluster.sumOf { it.second.width() * it.second.height() }
-                    Triple(primaryCard, minX, area)
+                    Triple(primaryCard, avgX, area)
                 }
                 
-                // Sort by area to keep main cards if there is noise, then resort by X for left-to-right ordering
-                val topCards = resolvedCards.sortedByDescending { it.third }
-                    .take(maxCards)
-                    .sortedBy { it.second }
-                    .map { it.first }
+                // Keep largest areas in case of noise, then map them to physical slots based on distance
+                val topCards = resolvedCards.sortedByDescending { it.third }.take(maxCards)
                 
-                for (i in 0 until topCards.size) {
-                    resultList[i] = topCards[i]
+                val expectedSlotWidth = regionRect.width().toFloat() / maxCards
+                
+                for (cardInfo in topCards) {
+                    val card = cardInfo.first
+                    val cx = cardInfo.second
+                    
+                    val relX = cx - regionRect.left
+                    var slotIdx = (relX / expectedSlotWidth).toInt()
+                    
+                    // Clamp to valid slots
+                    if (slotIdx < 0) slotIdx = 0
+                    if (slotIdx >= maxCards) slotIdx = maxCards - 1
+                    
+                    // Conflict resolution: if slot occupied, place it in the next closest empty slot
+                    if (resultList[slotIdx] == null) {
+                        resultList[slotIdx] = card
+                    } else {
+                        // Find closest empty slot
+                        var bestSlot = -1
+                        var minDistance = Float.MAX_VALUE
+                        for (i in 0 until maxCards) {
+                            if (resultList[i] == null) {
+                                val emptySlotTargetX = regionRect.left + (i * expectedSlotWidth) + (expectedSlotWidth / 2)
+                                val dist = Math.abs(cx - emptySlotTargetX)
+                                if (dist < minDistance) {
+                                    minDistance = dist.toFloat()
+                                    bestSlot = i
+                                }
+                            }
+                        }
+                        if (bestSlot != -1) {
+                            resultList[bestSlot] = card
+                        }
+                    }
                 }
                 
                 return resultList
@@ -977,7 +1006,7 @@ class ScreenScanner(
                 val hHeight = Math.min(cleanBitmap!!.height - activeHoleRect.top, activeHoleRect.height())
                 if (activeHoleRect.left >= 0 && activeHoleRect.top >= 0 && hWidth > 0 && hHeight > 0) {
                     val holeCrop = Bitmap.createBitmap(cleanBitmap!!, activeHoleRect.left, activeHoleRect.top, hWidth, hHeight)
-                    val matches = TemplateManager.matchMultiple(holeCrop, true, 2)
+                    val matches = TemplateManager.matchMultiple(holeCrop, 2)
                     for (match in matches) {
                         val gLeft = activeHoleRect.left + match.rect.left
                         val gTop = activeHoleRect.top + match.rect.top
@@ -1001,7 +1030,7 @@ class ScreenScanner(
                 val cHeight = Math.min(cleanBitmap!!.height - activeCommRect.top, activeCommRect.height())
                 if (activeCommRect.left >= 0 && activeCommRect.top >= 0 && cWidth > 0 && cHeight > 0) {
                     val commCrop = Bitmap.createBitmap(cleanBitmap!!, activeCommRect.left, activeCommRect.top, cWidth, cHeight)
-                    val matches = TemplateManager.matchMultiple(commCrop, false, 5)
+                    val matches = TemplateManager.matchMultiple(commCrop, 5)
                     for (match in matches) {
                         val gLeft = activeCommRect.left + match.rect.left
                         val gTop = activeCommRect.top + match.rect.top

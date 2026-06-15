@@ -71,10 +71,10 @@ object TemplateManager {
     data class MatchResult(val text: String, val rect: android.graphics.Rect)
 
     // Returns a list of matches found from left to right
-    fun matchMultiple(inputBmp: Bitmap, isHoleCards: Boolean, maxCards: Int): List<MatchResult> {
+    fun matchMultiple(inputBmp: Bitmap, maxCards: Int): List<MatchResult> {
         if (templates.isEmpty()) return emptyList()
         
-        val matchingTemplates = templates.filter { it.isHoleCards == isHoleCards }
+        val matchingTemplates = templates
         if (matchingTemplates.isEmpty()) return emptyList()
         
         val foundCards = mutableListOf<Triple<Int, String, android.graphics.Rect>>() // X coord, Card Text, Rect
