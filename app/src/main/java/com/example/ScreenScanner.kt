@@ -1027,9 +1027,10 @@ class ScreenScanner(
                 safeText = safeText.replace("POT", " ").replace("ПОТ", " ")
                 safeText = safeText.replace("BB", " ").replace("ББ", " ")
                 
-                // Remove fractional sizes (e.g. 15.1) and non-card integers (e.g. 11-99, 100+)
+                // Remove fractional sizes (e.g. 15.1)
                 safeText = safeText.replace(Regex("\\b\\d+[.,]\\d+\\b"), " ")
-                safeText = safeText.replace(Regex("\\b\\d{3,}\\b"), " ") // 100+
+                // Strip large chip stacks from comm rect, but allow 104, 105 etc. by negative lookahead for 10x
+                safeText = safeText.replace(Regex("\\b(?!10\\d)\\d{3,}\\b"), " ")
                 // DO NOT strip 11-99 for commRect, prevents parsing flops like 444
                 safeText = safeText.replace(Regex("\\b[01]\\b"), " ") // Standalone 0 or 1
                 
@@ -1083,9 +1084,9 @@ class ScreenScanner(
                 safeText = safeText.replace("POT", " ").replace("ПОТ", " ")
                 safeText = safeText.replace("BB", " ").replace("ББ", " ")
                 
-                // Remove fractional sizes (e.g. 15.1) and non-card integers (e.g. 11-99, 100+)
+                // Remove fractional sizes (e.g. 15.1)
                 safeText = safeText.replace(Regex("\\b\\d+[.,]\\d+\\b"), " ")
-                safeText = safeText.replace(Regex("\\b\\d{3,}\\b"), " ") // 100+
+                // Do NOT strip \d{3,} for holeRect, because '104' is a valid pocket pair (10, 4) merged by OCR.
                 // DO NOT strip 11-99 for holeRect, deletes pocket pairs like 44
                 safeText = safeText.replace(Regex("\\b[01]\\b"), " ") // Standalone 0 or 1
                 
@@ -1621,6 +1622,7 @@ class ScreenScanner(
         // Pre-replace common OCR symbol mistakes before stripping
         var preProcessed = text.uppercase(java.util.Locale.US)
         preProcessed = preProcessed.replace("&", "8").replace("$", "8").replace("@", "Q").replace("%", "8").replace("?", "7").replace("!", "1")
+        preProcessed = preProcessed.replace("U", "J").replace("]", "J").replace("[", "J")
         // Replace Cyrillic lookalikes
         preProcessed = preProcessed.replace("А", "A").replace("К", "K").replace("Т", "T").replace("В", "B").replace("О", "O").replace("С", "C").replace("Р", "P")
 
@@ -1630,12 +1632,6 @@ class ScreenScanner(
         if (raw.length > 20) return emptyList() // Too long, likely noise
         if (raw.isEmpty()) return emptyList()
         
-        // Block obvious chip stacks or bets, but ONLY for community cards (hole cards might be '104' without space)
-        if (!isHoleCard) {
-            val noSymbols = text.uppercase(java.util.Locale.US).replace(Regex("[^A-Z0-9 ]"), "")
-            if (noSymbols.matches(Regex(".*\\d{3,}.*"))) return emptyList() // 100, 500 etc.
-        }
-
         var i = 0
         while (i < raw.length) {
             var matched = false
@@ -1656,7 +1652,7 @@ class ScreenScanner(
                     'A' -> Rank.ACE
                     'K' -> Rank.KING
                     'Q', 'O', '0' -> Rank.QUEEN
-                    'J' -> Rank.JACK
+                    'J', '1', 'I', 'L' -> Rank.JACK
                     '9' -> Rank.NINE
                     '8' -> Rank.EIGHT
                     '7' -> Rank.SEVEN
