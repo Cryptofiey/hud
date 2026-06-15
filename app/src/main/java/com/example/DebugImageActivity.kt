@@ -45,7 +45,8 @@ fun DebugScreen() {
             val dir = DocumentFile.fromTreeUri(context, uri)
             dir?.listFiles()?.forEach { file ->
                 if (file.name?.endsWith(".png") == true || file.name?.endsWith(".jpg") == true) {
-                    val bmp = decodeUri(context, file.uri) ?: return@forEach
+                    val bmp = decodeUri(context, file.uri)
+                    if (bmp == null) return@forEach
                     val expectedRegex = Regex("([2-9TJQKA][hdcs])", RegexOption.IGNORE_CASE)
                     val matches = expectedRegex.findAll(file.name ?: "")
                     val cards = matches.map { it.value }.toList()
@@ -98,7 +99,8 @@ fun DebugScreen() {
 
                 dir?.listFiles()?.forEach { file ->
                     if (file.name?.endsWith(".png") == true || file.name?.endsWith(".jpg") == true) {
-                        val bmp = decodeUri(context, file.uri) ?: return@forEach
+                        val bmp = decodeUri(context, file.uri)
+                        if (bmp == null) return@forEach
                         
                         val w = bmp.width
                         val h = bmp.height
@@ -181,7 +183,8 @@ fun DebugScreen() {
             withContext(Dispatchers.IO) {
                 files.forEach { (fileName, fileUri) ->
                     if (fileName.endsWith(".png") == true || fileName.endsWith(".jpg") == true) {
-                        val bmp = decodeUri(context, fileUri) ?: return@forEach
+                        val bmp = decodeUri(context, fileUri)
+                        if (bmp == null) return@forEach
                         val expectedRegex = Regex("([2-9TJQKA][hdcs])", RegexOption.IGNORE_CASE)
                         val matches = expectedRegex.findAll(fileName ?: "")
                         val expectedCards = matches.map { it.value.lowercase() }.toList()
