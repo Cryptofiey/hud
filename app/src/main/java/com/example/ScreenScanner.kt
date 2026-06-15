@@ -826,12 +826,15 @@ class ScreenScanner(
                 safeText = safeText.replace(Regex("\\b(1[1-9]|[2-9]\\d)\\b"), " ") // 11-99
                 safeText = safeText.replace(Regex("\\b[01]\\b"), " ") // Standalone 0 or 1
                 
-                if (safeText.contains("OK") || safeText.contains("WAIT") || 
-                    safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
-                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
-                    safeText.contains("KIND") || safeText.contains("HOUSE") ||
-                    safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
-                    safeText.contains("OF") || safeText.isEmpty()) continue
+                if (safeText.isEmpty()) continue
+                safeText = safeText.replace("OK", " ").replace("WAIT", " ")
+                    .replace("OUTS", " ").replace("STRAIGHT", " ")
+                    .replace("PAIR", " ").replace("FLUSH", " ").replace("HIGH", " ")
+                    .replace("KIND", " ").replace("HOUSE", " ")
+                    .replace("SHOW", " ").replace("MUCK", " ").replace("AUTO", " ")
+                    .replace("OF", " ")
+                    
+                if (safeText.trim().isEmpty()) continue
 
                 var parsedRanks = findCardsInText(safeText)
                 
@@ -879,12 +882,15 @@ class ScreenScanner(
                 safeText = safeText.replace(Regex("\\b(1[1-9]|[2-9]\\d)\\b"), " ") // 11-99
                 safeText = safeText.replace(Regex("\\b[01]\\b"), " ") // Standalone 0 or 1
                 
-                if (safeText.contains("OK") || safeText.contains("WAIT") || 
-                    safeText.contains("OUTS") || safeText.contains("STRAIGHT") ||
-                    safeText.contains("PAIR") || safeText.contains("FLUSH") || safeText.contains("HIGH") ||
-                    safeText.contains("KIND") || safeText.contains("HOUSE") ||
-                    safeText.contains("SHOW") || safeText.contains("MUCK") || safeText.contains("AUTO") ||
-                    safeText.contains("OF") || safeText.isEmpty()) continue
+                if (safeText.isEmpty()) continue
+                safeText = safeText.replace("OK", " ").replace("WAIT", " ")
+                    .replace("OUTS", " ").replace("STRAIGHT", " ")
+                    .replace("PAIR", " ").replace("FLUSH", " ").replace("HIGH", " ")
+                    .replace("KIND", " ").replace("HOUSE", " ")
+                    .replace("SHOW", " ").replace("MUCK", " ").replace("AUTO", " ")
+                    .replace("OF", " ")
+                    
+                if (safeText.trim().isEmpty()) continue
 
                 var parsedRanksRaw = findCardsInText(safeText, isHoleCard = true)
                 
