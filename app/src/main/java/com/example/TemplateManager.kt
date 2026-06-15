@@ -68,14 +68,16 @@ object TemplateManager {
         templates.add(Template(bitmap, text, isHole))
     }
 
-    // Returns a list of card strings like ["Ah", "8c"] found from left to right
-    fun matchMultiple(inputBmp: Bitmap, isHoleCards: Boolean, maxCards: Int): List<String> {
+    data class MatchResult(val text: String, val rect: android.graphics.Rect)
+
+    // Returns a list of matches found from left to right
+    fun matchMultiple(inputBmp: Bitmap, isHoleCards: Boolean, maxCards: Int): List<MatchResult> {
         if (templates.isEmpty()) return emptyList()
         
         val matchingTemplates = templates.filter { it.isHoleCards == isHoleCards }
         if (matchingTemplates.isEmpty()) return emptyList()
         
-        val foundCards = mutableListOf<Pair<Int, String>>() // X coord, Card Text
+        val foundCards = mutableListOf<Triple<Int, String, android.graphics.Rect>>() // X coord, Card Text, Rect
         
         // Ensure we don't pick the same X coordinate multiple times by storing matched regions
         val matchedRegions = mutableListOf<IntRange>()
@@ -104,12 +106,10 @@ object TemplateManager {
                 
                 // If we found a strong match
                 if (bestMseLoc < 500.0f) { 
-                    foundCards.add(Pair(x, template.text))
+                    val rect = android.graphics.Rect(x, 0, x + tBmp.width, tBmp.height)
+                    foundCards.add(Triple(x, template.text, rect))
                     // Mark region as matched to avoid overlapping matches
                     matchedRegions.add(x until (x + tBmp.width - tBmp.width/4)) // Allow slight overlap
-                    
-                    // Stop searching for THIS template around this matched area
-                    // But we might find the same card again later (e.g. two 8c on board is impossible in poker, but anyway)
                 }
             }
         }
@@ -117,7 +117,7 @@ object TemplateManager {
         // Sort by X coordinate (left to right)
         foundCards.sortBy { it.first }
         
-        return foundCards.take(maxCards).map { it.second }
+        return foundCards.take(maxCards).map { MatchResult(it.second, it.third) }
     }
 
     private fun computeMseRegion(bigBmp: Bitmap, smallBmp: Bitmap, startX: Int, startY: Int): Float {

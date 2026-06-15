@@ -967,46 +967,31 @@ class ScreenScanner(
                 return resultList
             }
 
-            var foundCommCardsRaw = clusterCards(tempCommCards, 5, commRect)
-            var foundHoleCardsRaw = clusterCards(tempHoleCards, 2, holeRect)
-
+            val templateHoleCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
+            val templateCommCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
+            
             try {
                 TemplateManager.init(pokerHudService)
                 
-                fun parseOverrideList(texts: List<String>, maxCards: Int): MutableList<Card?> {
-                    val list = MutableList<Card?>(maxCards) { null }
-                    for (i in texts.indices) {
-                        if (i >= maxCards) break
-                        val p = texts[i].trim()
-                        if (p.length >= 2) {
-                            val rStr = p.substring(0, p.length - 1).uppercase()
-                            val sChar = p.last().lowercaseChar()
-                            val rank = Rank.values().find { it.symbol.equals(rStr, ignoreCase = true) }
-                            val suit = when(sChar) {
-                                'h', '♥' -> Suit.HEARTS
-                                'd', '♦' -> Suit.DIAMONDS
-                                'c', '♣' -> Suit.CLUBS
-                                's', '♠' -> Suit.SPADES
-                                else -> null
-                            }
-                            if (rank != null && suit != null) {
-                                list[i] = Card(rank, suit)
-                            }
-                        }
-                    }
-                    return list
-                }
-
                 val hWidth = Math.min(cleanBitmap!!.width - activeHoleRect.left, activeHoleRect.width())
                 val hHeight = Math.min(cleanBitmap!!.height - activeHoleRect.top, activeHoleRect.height())
                 if (activeHoleRect.left >= 0 && activeHoleRect.top >= 0 && hWidth > 0 && hHeight > 0) {
                     val holeCrop = Bitmap.createBitmap(cleanBitmap!!, activeHoleRect.left, activeHoleRect.top, hWidth, hHeight)
-                    val matchedTexts = TemplateManager.matchMultiple(holeCrop, true, 2)
-                    if (matchedTexts.isNotEmpty()) {
-                        // Merge detected template cards overriding OCR cards
-                        val tCards = parseOverrideList(matchedTexts, 2)
-                        for (i in 0 until 2) {
-                            if (tCards[i] != null) foundHoleCardsRaw[i] = tCards[i]
+                    val matches = TemplateManager.matchMultiple(holeCrop, true, 2)
+                    for (match in matches) {
+                        val gLeft = activeHoleRect.left + match.rect.left
+                        val gTop = activeHoleRect.top + match.rect.top
+                        val gRight = activeHoleRect.left + match.rect.right
+                        val gBottom = activeHoleRect.top + match.rect.bottom
+                        val globalRect = android.graphics.Rect(gLeft, gTop, gRight, gBottom)
+                        
+                        // Extract only rank (ignore suit characters if present in template string)
+                        val cleanStr = match.text.replace(Regex("[hdcsHDCS♥♦♣♠]"), "").trim().uppercase()
+                        val rank = Rank.values().find { it.symbol.equals(cleanStr, ignoreCase = true) }
+                        
+                        if (rank != null) {
+                            val suit = robustDetectSuit(cleanBitmap!!, globalRect) ?: Suit.SPADES
+                            templateHoleCards.add(Pair(Card(rank, suit), globalRect))
                         }
                     }
                     holeCrop.recycle()
@@ -1016,16 +1001,40 @@ class ScreenScanner(
                 val cHeight = Math.min(cleanBitmap!!.height - activeCommRect.top, activeCommRect.height())
                 if (activeCommRect.left >= 0 && activeCommRect.top >= 0 && cWidth > 0 && cHeight > 0) {
                     val commCrop = Bitmap.createBitmap(cleanBitmap!!, activeCommRect.left, activeCommRect.top, cWidth, cHeight)
-                    val matchedTexts = TemplateManager.matchMultiple(commCrop, false, 5)
-                    if (matchedTexts.isNotEmpty()) {
-                        val tCards = parseOverrideList(matchedTexts, 5)
-                        for (i in 0 until 5) {
-                            if (tCards[i] != null) foundCommCardsRaw[i] = tCards[i]
+                    val matches = TemplateManager.matchMultiple(commCrop, false, 5)
+                    for (match in matches) {
+                        val gLeft = activeCommRect.left + match.rect.left
+                        val gTop = activeCommRect.top + match.rect.top
+                        val gRight = activeCommRect.left + match.rect.right
+                        val gBottom = activeCommRect.top + match.rect.bottom
+                        val globalRect = android.graphics.Rect(gLeft, gTop, gRight, gBottom)
+                        
+                        val cleanStr = match.text.replace(Regex("[hdcsHDCS♥♦♣♠]"), "").trim().uppercase()
+                        val rank = Rank.values().find { it.symbol.equals(cleanStr, ignoreCase = true) }
+                        
+                        if (rank != null) {
+                            val suit = robustDetectSuit(cleanBitmap!!, globalRect) ?: Suit.SPADES
+                            templateCommCards.add(Pair(Card(rank, suit), globalRect))
                         }
                     }
                     commCrop.recycle()
                 }
             } catch (e: Exception) { e.printStackTrace() }
+
+            // Filter out OCR detections that fall within the cluster radius of a Template detection
+            // This forces `clusterCards` to only see our Template detection for that column
+            val safeTempHole = tempHoleCards.filter { ocrM -> 
+                !templateHoleCards.any { tM -> Math.abs(ocrM.second.centerX() - tM.second.centerX()) < holeRect.width() * 0.35f }
+            }.toMutableList()
+            safeTempHole.addAll(templateHoleCards)
+            
+            val safeTempComm = tempCommCards.filter { ocrM -> 
+                !templateCommCards.any { tM -> Math.abs(ocrM.second.centerX() - tM.second.centerX()) < commRect.width() * 0.14f }
+            }.toMutableList()
+            safeTempComm.addAll(templateCommCards)
+
+            var foundCommCardsRaw = clusterCards(safeTempComm, 5, commRect)
+            var foundHoleCardsRaw = clusterCards(safeTempHole, 2, holeRect)
 
             var rawAll = (foundHoleCardsRaw + foundCommCardsRaw).filterNotNull()
             if (rawAll.size != rawAll.toSet().size) {
