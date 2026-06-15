@@ -68,31 +68,87 @@ object TemplateManager {
         templates.add(Template(bitmap, text, isHole))
     }
 
-    // Returns parsing format "Ah 8c" or null
-    fun match(inputBmp: Bitmap, isHoleCards: Boolean): String? {
-        if (templates.isEmpty()) return null
+    // Returns a list of card strings like ["Ah", "8c"] found from left to right
+    fun matchMultiple(inputBmp: Bitmap, isHoleCards: Boolean, maxCards: Int): List<String> {
+        if (templates.isEmpty()) return emptyList()
         
         val matchingTemplates = templates.filter { it.isHoleCards == isHoleCards }
-        if (matchingTemplates.isEmpty()) return null
+        if (matchingTemplates.isEmpty()) return emptyList()
         
-        var bestMatch: String? = null
-        var bestMse = Float.MAX_VALUE
+        val foundCards = mutableListOf<Pair<Int, String>>() // X coord, Card Text
+        
+        // Ensure we don't pick the same X coordinate multiple times by storing matched regions
+        val matchedRegions = mutableListOf<IntRange>()
         
         for (template in matchingTemplates) {
-            val mse = computeMse(inputBmp, template.bitmap)
-            if (mse < bestMse) {
-                bestMse = mse
-                bestMatch = template.text
+            val tBmp = template.bitmap
+            if (tBmp.width > inputBmp.width || tBmp.height > inputBmp.height) continue
+            
+            // Slide template across inputBmp's X axis
+            // We assume the Y axis is mostly aligned, so we just check a small range of Y or Y=0 to Y = inputHeight - templateHeight
+            val maxY = inputBmp.height - tBmp.height
+            val maxX = inputBmp.width - tBmp.width
+            
+            val yStep = Math.max(1, maxY / 4) // check a few Y offsets
+            val xStep = 2 // slide every 2 pixels
+            
+            for (x in 0..maxX step xStep) {
+                // If this X is already covered by a matched region, skip
+                if (matchedRegions.any { x in it }) continue
+                
+                var bestMseLoc = Float.MAX_VALUE
+                for (y in 0..maxY step yStep) {
+                    val mse = computeMseRegion(inputBmp, tBmp, x, y)
+                    if (mse < bestMseLoc) bestMseLoc = mse
+                }
+                
+                // If we found a strong match
+                if (bestMseLoc < 500.0f) { 
+                    foundCards.add(Pair(x, template.text))
+                    // Mark region as matched to avoid overlapping matches
+                    matchedRegions.add(x until (x + tBmp.width - tBmp.width/4)) // Allow slight overlap
+                    
+                    // Stop searching for THIS template around this matched area
+                    // But we might find the same card again later (e.g. two 8c on board is impossible in poker, but anyway)
+                }
             }
         }
         
-        // Threshold: MSE < 600.0 means it's extremely close visually. 
-        // 600 MSE -> sqrt(600) = ~24 avg diff out of 255 per pixel.
-        // This tolerates small background noise and compression.
-        if (bestMse < 600.0f) { 
-            return bestMatch
+        // Sort by X coordinate (left to right)
+        foundCards.sortBy { it.first }
+        
+        return foundCards.take(maxCards).map { it.second }
+    }
+
+    private fun computeMseRegion(bigBmp: Bitmap, smallBmp: Bitmap, startX: Int, startY: Int): Float {
+        val w = smallBmp.width
+        val h = smallBmp.height
+        val pixelsBig = IntArray(w * h)
+        val pixelsSmall = IntArray(w * h)
+        
+        bigBmp.getPixels(pixelsBig, 0, w, startX, startY, w, h)
+        smallBmp.getPixels(pixelsSmall, 0, w, 0, 0, w, h)
+        
+        var sumSq = 0L
+        for (i in pixelsBig.indices) {
+            val c1 = pixelsBig[i]
+            val c2 = pixelsSmall[i]
+            
+            val r1 = Color.red(c1)
+            val g1 = Color.green(c1)
+            val b1 = Color.blue(c1)
+            val gray1 = (r1 + g1 + b1) / 3
+            
+            val r2 = Color.red(c2)
+            val g2 = Color.green(c2)
+            val b2 = Color.blue(c2)
+            val gray2 = (r2 + g2 + b2) / 3
+            
+            val diff = gray1 - gray2
+            sumSq += (diff * diff)
         }
-        return null
+        
+        return sumSq.toFloat() / (w * h)
     }
 
     private fun computeMse(bmp1: Bitmap, bmp2: Bitmap): Float {

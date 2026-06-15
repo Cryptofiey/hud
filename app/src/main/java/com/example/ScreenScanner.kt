@@ -973,12 +973,11 @@ class ScreenScanner(
             try {
                 TemplateManager.init(pokerHudService)
                 
-                fun parseOverrideMsg(text: String, maxCards: Int): MutableList<Card?> {
+                fun parseOverrideList(texts: List<String>, maxCards: Int): MutableList<Card?> {
                     val list = MutableList<Card?>(maxCards) { null }
-                    val parts = text.split(" ")
-                    for (i in parts.indices) {
+                    for (i in texts.indices) {
                         if (i >= maxCards) break
-                        val p = parts[i].trim()
+                        val p = texts[i].trim()
                         if (p.length >= 2) {
                             val rStr = p.substring(0, p.length - 1).uppercase()
                             val sChar = p.last().lowercaseChar()
@@ -1002,9 +1001,13 @@ class ScreenScanner(
                 val hHeight = Math.min(cleanBitmap!!.height - activeHoleRect.top, activeHoleRect.height())
                 if (activeHoleRect.left >= 0 && activeHoleRect.top >= 0 && hWidth > 0 && hHeight > 0) {
                     val holeCrop = Bitmap.createBitmap(cleanBitmap!!, activeHoleRect.left, activeHoleRect.top, hWidth, hHeight)
-                    val oText = TemplateManager.match(holeCrop, true)
-                    if (oText != null) {
-                        foundHoleCardsRaw = parseOverrideMsg(oText, 2)
+                    val matchedTexts = TemplateManager.matchMultiple(holeCrop, true, 2)
+                    if (matchedTexts.isNotEmpty()) {
+                        // Merge detected template cards overriding OCR cards
+                        val tCards = parseOverrideList(matchedTexts, 2)
+                        for (i in 0 until 2) {
+                            if (tCards[i] != null) foundHoleCardsRaw[i] = tCards[i]
+                        }
                     }
                     holeCrop.recycle()
                 }
@@ -1013,9 +1016,12 @@ class ScreenScanner(
                 val cHeight = Math.min(cleanBitmap!!.height - activeCommRect.top, activeCommRect.height())
                 if (activeCommRect.left >= 0 && activeCommRect.top >= 0 && cWidth > 0 && cHeight > 0) {
                     val commCrop = Bitmap.createBitmap(cleanBitmap!!, activeCommRect.left, activeCommRect.top, cWidth, cHeight)
-                    val oText = TemplateManager.match(commCrop, false)
-                    if (oText != null) {
-                        foundCommCardsRaw = parseOverrideMsg(oText, 5)
+                    val matchedTexts = TemplateManager.matchMultiple(commCrop, false, 5)
+                    if (matchedTexts.isNotEmpty()) {
+                        val tCards = parseOverrideList(matchedTexts, 5)
+                        for (i in 0 until 5) {
+                            if (tCards[i] != null) foundCommCardsRaw[i] = tCards[i]
+                        }
                     }
                     commCrop.recycle()
                 }

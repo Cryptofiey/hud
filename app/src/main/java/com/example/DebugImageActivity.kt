@@ -48,7 +48,7 @@ class DebugImageActivity : ComponentActivity() {
     }
 }
 
-fun performAutoCropIfNeeded(context: android.content.Context, originalBmp: Bitmap, isHole: Boolean): Bitmap {
+fun performAutoCropIfNeeded(context: android.content.Context, originalBmp: Bitmap, isHole: Boolean, cardIndex: Int? = null): Bitmap {
     var targetBmp = originalBmp
     if (targetBmp.height > 1000) {
         val screenHeight = context.resources.displayMetrics.heightPixels
@@ -64,10 +64,17 @@ fun performAutoCropIfNeeded(context: android.content.Context, originalBmp: Bitma
             val scaleX = targetBmp.width.toFloat() / screenWidth
             val scaleY = targetBmp.height.toFloat() / screenHeight
             
-            val cropX = (cx * scaleX).toInt()
+            var cropX = (cx * scaleX).toInt()
             val cropY = (cy * scaleY).toInt()
-            val cropW = (wPx * scaleX).toInt()
+            var cropW = (wPx * scaleX).toInt()
             val cropH = (hPx * scaleY).toInt()
+            
+            if (cardIndex != null) {
+                // Slicing piece for a single card out of the 2-card block
+                val sliceW = cropW / 2
+                cropX += sliceW * cardIndex
+                cropW = sliceW
+            }
             
             if (cropX >= 0 && cropY >= 0 && cropX + cropW <= targetBmp.width && cropY + cropH <= targetBmp.height) {
                 targetBmp = Bitmap.createBitmap(targetBmp, cropX, cropY, cropW, cropH)
@@ -81,10 +88,17 @@ fun performAutoCropIfNeeded(context: android.content.Context, originalBmp: Bitma
             val scaleX = targetBmp.width.toFloat() / screenWidth
             val scaleY = targetBmp.height.toFloat() / screenHeight
             
-            val cropX = (cx * scaleX).toInt()
+            var cropX = (cx * scaleX).toInt()
             val cropY = (cy * scaleY).toInt()
-            val cropW = (wPx * scaleX).toInt()
+            var cropW = (wPx * scaleX).toInt()
             val cropH = (hPx * scaleY).toInt()
+            
+            if (cardIndex != null) {
+                // Slicing piece for a single card out of the 5-card block
+                val sliceW = cropW / 5
+                cropX += sliceW * cardIndex
+                cropW = sliceW
+            }
             
             if (cropX >= 0 && cropY >= 0 && cropX + cropW <= targetBmp.width && cropY + cropH <= targetBmp.height) {
                 targetBmp = Bitmap.createBitmap(targetBmp, cropX, cropY, cropW, cropH)
@@ -106,6 +120,7 @@ fun DebugScreen() {
     
     var manualTemplateText by remember { mutableStateOf("") }
     var isHoleTemplate by remember { mutableStateOf(true) }
+    var selectedCardIndex by remember { mutableStateOf(0) }
     
     val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
         selectedImageUri = uri
@@ -138,13 +153,34 @@ fun DebugScreen() {
             OutlinedTextField(
                 value = manualTemplateText,
                 onValueChange = { manualTemplateText = it },
-                label = { Text("Target Combination (e.g. 'Ah 8c')") },
+                label = { Text("Target Single Card (e.g. 'Ah')") },
                 modifier = Modifier.weight(1f)
             )
             Spacer(Modifier.width(8.dp))
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Checkbox(checked = isHoleTemplate, onCheckedChange = { isHoleTemplate = it })
+                Checkbox(checked = isHoleTemplate, onCheckedChange = { 
+                    isHoleTemplate = it
+                    if (isHoleTemplate && selectedCardIndex > 1) {
+                        selectedCardIndex = 1
+                    }
+                })
                 Text("Hole?")
+            }
+        }
+        
+        Spacer(Modifier.height(8.dp))
+        
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Extract Card Position (left-to-right): ", style = MaterialTheme.typography.bodySmall)
+            val maxCards = if (isHoleTemplate) 2 else 5
+            for (i in 0 until maxCards) {
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    androidx.compose.material3.RadioButton(
+                        selected = selectedCardIndex == i,
+                        onClick = { selectedCardIndex = i }
+                    )
+                    Text("$i", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
         
@@ -159,7 +195,7 @@ fun DebugScreen() {
                     if (loadedBitmap != null && manualTemplateText.isNotBlank()) {
                         debugLog = "Tuning started...\nTrying various brightness/contrast thresholds."
                         optimalThreshold = null
-                        val targetBmp = performAutoCropIfNeeded(context, loadedBitmap!!, isHoleTemplate)
+                        val targetBmp = performAutoCropIfNeeded(context, loadedBitmap!!, isHoleTemplate, selectedCardIndex)
                         coroutineScope.launch {
                             tuneCardRecognition(targetBmp, manualTemplateText) { processedBmp, log, bestThresh ->
                                 resultBitmap = processedBmp
@@ -182,11 +218,11 @@ fun DebugScreen() {
         Button(
             onClick = {
                 if (loadedBitmap != null && manualTemplateText.isNotBlank()) {
-                    val targetBmp = performAutoCropIfNeeded(context, loadedBitmap!!, isHoleTemplate)
+                    val targetBmp = performAutoCropIfNeeded(context, loadedBitmap!!, isHoleTemplate, selectedCardIndex)
                     
                     TemplateManager.saveTemplate(context, targetBmp, manualTemplateText, isHoleTemplate)
                     resultBitmap = targetBmp // Show them the cropped pattern we saved
-                    debugLog = "SUCCESS: Saved visual template override for '${manualTemplateText}'!\nThe scanner will now lock-on perfectly when it sees this exact combination.\n\nNote: Visual templates are much more reliable than Auto-Tuning OCR for whole combinations."
+                    debugLog = "SUCCESS: Saved SINGLE CARD template override for '${manualTemplateText}' at position $selectedCardIndex!\nThe scanner will now slide this exact crop from left to right."
                 }
             },
             modifier = Modifier.fillMaxWidth(),
