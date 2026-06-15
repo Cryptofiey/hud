@@ -285,6 +285,100 @@ fun DebugScreen() {
         }
     }
 
+    var driveLog by remember { mutableStateOf("") }
+    val googleSignInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                coroutineScope.launch {
+                    val driveManager = GoogleDriveManager(context)
+                    val driveService = driveManager.getDriveService(account)
+                    debugLog += "\nSuccessfully connected to Google Drive API as ${account.email}"
+                    
+                    // The specific folder from user request
+                    val folderId = "1PnDobWj3RBd0LXmGiKEECAKP_WBdDvmR"
+                    debugLog += "\nListing files in folder $folderId..."
+                    
+                    val files = driveManager.listFilesInFolder(driveService, folderId)
+                    debugLog += "\nFound ${files.size} files."
+                    
+                    var renamedCount = 0
+                    for (file in files) {
+                        if (file.name.endsWith(".png") || file.name.endsWith(".jpg")) {
+                            debugLog += "\nProcessing image: ${file.name}..."
+                            
+                            try {
+                                val outStream = java.io.ByteArrayOutputStream()
+                                driveService.files().get(file.id).executeMediaAndDownloadTo(outStream)
+                                val bytes = outStream.toByteArray()
+                                val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                
+                                if (bmp != null) {
+                                    val w = bmp.width
+                                    val h = bmp.height
+                                    
+                                    // Match default HUD regions for CoinPoker exactly as in PokerHudService
+                                    val cLeft = (w * 0.10f).toInt()
+                                    val cTop = (h * 0.40f).toInt()
+                                    val cRight = cLeft + (w * 0.80f).toInt()
+                                    val cBottom = cTop + (h * 0.14f).toInt()
+                                    
+                                    val hLeft = (w * 0.35f).toInt()
+                                    val hTop = (h * 0.65f).toInt()
+                                    val hRight = hLeft + (w * 0.35f).toInt()
+                                    val hBottom = hTop + (h * 0.14f).toInt()
+                                    
+                                    val cRect = android.graphics.Rect(cLeft, cTop, cRight, cBottom)
+                                    val hRect = android.graphics.Rect(hLeft, hTop, hRight, hBottom)
+                                    
+                                    val scanner = ScreenScanner(context, null, 0)
+                                    val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
+                                    val holeCards = result.first.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c")
+                                    val commCards = result.second.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c")
+                                    
+                                    var newName = file.name
+                                    var changed = false
+                                    if (file.name.contains("hole") && holeCards.isNotEmpty() && !file.name.contains(holeCards)) {
+                                        newName = "hole_${holeCards}.png"
+                                        changed = true
+                                    } else if (file.name.contains("comm") && commCards.isNotEmpty() && !file.name.contains(commCards)) {
+                                        newName = "comm_${commCards}.png"
+                                        changed = true
+                                    } else if (!file.name.contains("hole") && !file.name.contains("comm")) {
+                                        // Assume it's a full screenshot, rename to include both
+                                        newName = "screenshot_${holeCards}_${commCards}.png"
+                                        changed = true
+                                    }
+                                    
+                                    if (changed && newName != file.name) {
+                                        val success = driveManager.renameFile(driveService, file.id, newName)
+                                        if (success) {
+                                            debugLog += " -> Renamed to $newName"
+                                            renamedCount++
+                                        } else {
+                                            debugLog += " -> Failed to rename."
+                                        }
+                                    } else {
+                                        debugLog += " -> Already correct or cannot infer."
+                                    }
+                                    bmp.recycle()
+                                }
+                            } catch (e: Exception) {
+                                debugLog += "\nError: ${e.message}"
+                            }
+                        }
+                    }
+                    debugLog += "\nDrive Enum Complete. Found $renamedCount images."
+                }
+            } catch (e: Exception) {
+                debugLog += "\nGoogle Sign In Failed: ${e.message}"
+            }
+        } else {
+            debugLog += "\nGoogle Sign In Cancelled."
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("AI Automated Server Debugger", style = MaterialTheme.typography.titleLarge)
         
@@ -302,17 +396,27 @@ fun DebugScreen() {
         
         Spacer(Modifier.height(8.dp))
         
-        Button(onClick = { testLauncher.launch(Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0))) {
+        Button(onClick = { testLauncher.launch(android.net.Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0))) {
             Text("3. Тестер из папки (Выбрать любую)")
         }
         
         Spacer(Modifier.height(8.dp))
 
-        Button(onClick = { templateLauncher.launch(Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth()) {
+        Button(onClick = { templateLauncher.launch(android.net.Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth()) {
             Text("4. Генератор шаблонов (Опционально)")
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        Button(onClick = { 
+            val client = GoogleDriveManager(context).getSignInClient()
+            googleSignInLauncher.launch(client.signInIntent)
+        }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))) {
+            Text("5. Google Drive Auto-Label (OAuth2)")
         }
         
         Spacer(Modifier.height(16.dp))
+
         
         Text(
             text = debugLog, 
