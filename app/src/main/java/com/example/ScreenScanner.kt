@@ -333,10 +333,9 @@ class ScreenScanner(
                 val g = (p shr 8) and 0xFF
                 val b = p and 0xFF
                 
-                // CoinPoker uses colored card backgrounds with bright white rank text.
-                // By selecting only the very bright pixels (white text) and turning them black,
-                // and turning everything else white, we get perfect OCR text for both light and dark cards!
-                val color = if (r > ScannerConfig.ocrThreshold && g > ScannerConfig.ocrThreshold && b > ScannerConfig.ocrThreshold) {
+                // Allow slightly darker text (e.g., 150 instead of 195) to pass as white text, 
+                // preventing shaded hole cards from disappearing.
+                val color = if (r > 150 && g > 150 && b > 150) {
                     0xFF000000.toInt() // Black text
                 } else {
                     0xFFFFFFFF.toInt() // White background
