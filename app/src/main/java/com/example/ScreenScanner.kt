@@ -242,7 +242,7 @@ class ScreenScanner(
         return finalSlots.take(expectedMaxCards)
     }
 
-    private fun getSmoothedCards(history: MutableList<List<Card?>>, newCards: List<Card?>, confirmed: MutableList<Card?>, windowSize: Int = 4): List<Card?> {
+    fun getSmoothedCards(history: MutableList<List<Card?>>, newCards: List<Card?>, confirmed: MutableList<Card?>, windowSize: Int = 4): List<Card?> {
         var maxHistoryRecords = windowSize
         
         history.add(newCards)

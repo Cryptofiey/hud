@@ -74,9 +74,13 @@ fun DebugScreen() {
     val testLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         coroutineScope.launch(Dispatchers.Main) {
-            debugLog = "Starting Auto-Validation Test Suite...\n"
+            debugLog = "Starting Auto-Validation Test Suite (Server AI Mode)...\n"
             var passed = 0
             var failed = 0
+            var missingFirst = 0
+            var missingRandom = 0
+            var missingAll = 0
+            var slowStable = 0
             
             withContext(Dispatchers.IO) {
                 val dir = DocumentFile.fromTreeUri(context, uri)
@@ -87,9 +91,10 @@ fun DebugScreen() {
                         val matches = expectedRegex.findAll(file.name ?: "")
                         val expectedCards = matches.map { it.value.lowercase() }.toList()
 
-                        debugLog += "\n[TEST] ${file.name}"
+                        debugLog += "\n-----------------------------------"
+                        debugLog += "\n[TEST] ${file.name}\nExpected: $expectedCards"
                         
-                        val isHole = file.name!!.contains("hole", ignoreCase = true) || expectedCards.size == 2
+                        val isHole = file.name!!.contains("hole", ignoreCase = true) || expectedCards.size <= 2
                         
                         val hRect = if (isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
                         val cRect = if (!isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
@@ -102,24 +107,57 @@ fun DebugScreen() {
                             return@forEach
                         }
                         
-                        val result = ScreenScanner(hudService, android.content.Intent(), 0).processGivenBitmap(context, bmp, hRect, cRect)
+                        val scanner = ScreenScanner(hudService, android.content.Intent(), 0)
+                        val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
                         val (detectedHole, detectedComm) = result
+                        val activeRawList = if (isHole) detectedHole else detectedComm
                         
-                        val detectedStr = (detectedHole.filterNotNull().map { it.toString().lowercase() } + 
-                                          detectedComm.filterNotNull().map { it.toString().lowercase() })
+                        // Categorize raw failures
+                        val nonNulls = activeRawList.count { it != null }
+                        if (nonNulls == 0 && expectedCards.isNotEmpty()) {
+                            debugLog += "\n ⚠️ ROOT ISSUE: Not finding cards at all (0 detected)."
+                            missingAll++
+                        } else if (activeRawList.firstOrNull() == null && expectedCards.isNotEmpty()) {
+                            debugLog += "\n ⚠️ ROOT ISSUE: Skipping first card."
+                            missingFirst++
+                        } else if (nonNulls < expectedCards.size) {
+                            debugLog += "\n ⚠️ ROOT ISSUE: Skipping random internal card(s)."
+                            missingRandom++
+                        }
                         
-                        // We check if all expected cards are in the detected list and vice versa
-                        val expectedSet = expectedCards.toSet()
-                        val detectedSet = detectedStr.toSet()
+                        // Simulate multi-frame smoothing
+                        val history = mutableListOf<List<Card?>>()
+                        val confirmed = mutableListOf<Card?>()
+                        var stabilizedFrame = -1
+                        var finalSmoothedStr = listOf<String>()
                         
-                        val allMatch = expectedSet == detectedSet && expectedCards.size == detectedStr.size
+                        // Emulate 8 frames of seeing this exact raw output
+                        for (frame in 1..8) {
+                            val smoothed = scanner.getSmoothedCards(history, activeRawList, confirmed, if (isHole) 3 else 4)
+                            val smoothedStr = smoothed.filterNotNull().map { it.toString().lowercase() }
+                            
+                            val allMatch = expectedCards.size == smoothedStr.size && expectedCards.toSet() == smoothedStr.toSet()
+                            if (allMatch && stabilizedFrame == -1) {
+                                stabilizedFrame = frame
+                                finalSmoothedStr = smoothedStr
+                            }
+                            if (frame == 8 && stabilizedFrame == -1) {
+                                finalSmoothedStr = smoothedStr
+                            }
+                        }
                         
                         withContext(Dispatchers.Main) {
-                            if (allMatch) {
-                                debugLog += " -> PASS"
+                            if (stabilizedFrame == 1) {
+                                debugLog += "\n ✅ PASS - Immediate Hit."
+                                passed++
+                            } else if (stabilizedFrame > 1) {
+                                debugLog += "\n ⚠️ PASS (Delayed) - Flickering / Iteration Build-Up: Stabilized at frame $stabilizedFrame."
+                                debugLog += "\n   Result: $finalSmoothedStr"
+                                slowStable++
                                 passed++
                             } else {
-                                debugLog += " -> FAIL!\n   Expected: $expectedCards\n   Detected: $detectedStr"
+                                debugLog += "\n ❌ FAIL - Could not resolve correctly after 8 frames."
+                                debugLog += "\n   Detected: $finalSmoothedStr / Raw: ${activeRawList.map{it?.toString()}}"
                                 failed++
                             }
                         }
@@ -127,7 +165,15 @@ fun DebugScreen() {
                     }
                 }
                 withContext(Dispatchers.Main) {
-                    debugLog += "\n\n=== TEST REPORT ===\nTotal: ${passed + failed}\nPassed: $passed\nFailed: $failed"
+                    debugLog += "\n\n=== AI DEBUG REPORT ==="
+                    debugLog += "\nTotal Tests: ${passed + failed}"
+                    debugLog += "\nPassed: $passed"
+                    debugLog += "\nFailed: $failed"
+                    debugLog += "\n-- Identified Root Issues --"
+                    debugLog += "\nTotal Misses (Blindness): $missingAll cases"
+                    debugLog += "\nFirst Card Skips: $missingFirst cases"
+                    debugLog += "\nRandom Card Skips: $missingRandom cases"
+                    debugLog += "\nFlickering / Slow Build-Up: $slowStable cases"
                 }
             }
         }
