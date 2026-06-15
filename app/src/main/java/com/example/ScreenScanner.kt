@@ -957,6 +957,14 @@ class ScreenScanner(
                 // Keep largest areas in case of noise, then map them to physical slots based on distance
                 val topCards = resolvedCards.sortedByDescending { it.third }.take(maxCards)
                 
+                if (maxCards == 2) {
+                    val sortedByX = topCards.sortedBy { it.second }
+                    for (i in 0 until sortedByX.size) {
+                        resultList[i] = sortedByX[i].first
+                    }
+                    return resultList
+                }
+                
                 val expectedSlotWidth = regionRect.width().toFloat() / maxCards
                 
                 for (cardInfo in topCards) {
