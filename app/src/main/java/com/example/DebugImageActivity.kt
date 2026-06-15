@@ -94,6 +94,7 @@ fun DebugScreen() {
                         val w = bmp.width
                         val h = bmp.height
                         
+<<<<<<< HEAD
                         // Match default HUD regions for CoinPoker exactly as in PokerHudService
                         val cLeft = (w * 0.10f).toInt()
                         val cTop = (h * 0.40f).toInt()
@@ -104,6 +105,18 @@ fun DebugScreen() {
                         val hTop = (h * 0.69f).toInt()
                         val hRight = hLeft + (w * 0.35f).toInt()
                         val hBottom = hTop + (h * 0.14f).toInt()
+=======
+                        // Default regions for CoinPoker
+                        val cLeft = (w * 0.22f).toInt()
+                        val cTop = (h * 0.38f).toInt()
+                        val cRight = (w * 0.78f).toInt()
+                        val cBottom = (h * 0.68f).toInt()
+                        
+                        val hLeft = (w * 0.50f).toInt()
+                        val hTop = (h * 0.65f).toInt()
+                        val hRight = (w * 0.98f).toInt()
+                        val hBottom = (h * 0.98f).toInt()
+>>>>>>> origin/main
                         
                         val cRect = android.graphics.Rect(cLeft, cTop, cRight, cBottom)
                         val hRect = android.graphics.Rect(hLeft, hTop, hRight, hBottom)
