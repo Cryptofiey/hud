@@ -86,8 +86,13 @@ fun DebugScreen() {
                 if (outDirInternal.exists()) outDirInternal.deleteRecursively()
                 outDirInternal.mkdirs()
                 
-                val outDirPublic = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PokerCrops_$timestamp")
-                if (!outDirPublic.exists()) outDirPublic.mkdirs()
+                var pcIndex = 1
+                var outDirPublic = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PC$pcIndex")
+                while (outDirPublic.exists()) {
+                    pcIndex++
+                    outDirPublic = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PC$pcIndex")
+                }
+                outDirPublic.mkdirs()
                 
                 val scanner = ScreenScanner(context, null, 0)
 
@@ -156,7 +161,7 @@ fun DebugScreen() {
                 withContext(Dispatchers.Main) {
                     debugLog += "\n\n🎉 Нарезка окончена! Сохранено $crCount парных фото.\n"
                     debugLog += "Сохранено во внутреннюю память для Шага 2.\n"
-                    debugLog += "Также копия направлена в Downloads/PokerCrops_$timestamp/"
+                    debugLog += "Также копия направлена в Downloads/PC$pcIndex"
                 }
             }
         }
