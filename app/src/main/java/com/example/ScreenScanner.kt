@@ -857,9 +857,6 @@ class ScreenScanner(
                 val box = element.boundingBox ?: continue
                 if (box.width() > box.height() * 6.0f) continue
                 
-                // Minimum size threshold to filter out tiny text. Hole cards usually large.
-                if (box.height() < holeRect.height() * 0.05f) continue
-                
                 var rawText = element.text.trim().uppercase(java.util.Locale.US)
                 rawText = rawText.replace("COINPOKER", "").replace("COIN", "").replace("POKER", "").trim()
                 rawText = rawText.replace("ALL-IN", "").replace("ALL IN", "").replace("ALLIN", "")
@@ -891,13 +888,6 @@ class ScreenScanner(
 
                 var parsedRanksRaw = findCardsInText(safeText, isHoleCard = true)
                 
-                // If a single text block claims exactly identical duplicate ranks (e.g. "KK") 
-                // but the physical width of the text block is narrow (like one card rank wide), deduplicate.
-                // Hole card ranks are larger compared to region than board, ~35% width max per text block.
-                if (parsedRanksRaw.size > 1 && parsedRanksRaw.toSet().size == 1 && box.width() < holeRect.width() * 0.35f) {
-                    parsedRanksRaw = listOf(parsedRanksRaw.first())
-                }
-                
                 for ((idx, rankRaw) in parsedRanksRaw.withIndex()) {
                     // Slicing the bounding box if multiple ranks are merged in a single text block
                     val sliceWidth = box.width() / parsedRanksRaw.size
@@ -926,7 +916,7 @@ class ScreenScanner(
                 val clusterThreshold = if (maxCards == 5) {
                     regionRect.width() * 0.14f
                 } else {
-                    regionRect.width() * 0.35f
+                    regionRect.width() * 0.08f
                 }
                 
                 for (elem in sorted) {
@@ -1061,7 +1051,7 @@ class ScreenScanner(
             // Filter out OCR detections that fall within the cluster radius of a Template detection
             // This forces `clusterCards` to only see our Template detection for that column
             val safeTempHole = tempHoleCards.filter { ocrM -> 
-                !templateHoleCards.any { tM -> Math.abs(ocrM.second.centerX() - tM.second.centerX()) < holeRect.width() * 0.35f }
+                !templateHoleCards.any { tM -> Math.abs(ocrM.second.centerX() - tM.second.centerX()) < holeRect.width() * 0.08f }
             }.toMutableList()
             safeTempHole.addAll(templateHoleCards)
             
