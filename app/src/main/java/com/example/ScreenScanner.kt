@@ -282,10 +282,12 @@ class ScreenScanner(
                     result.add(best.key)
                     confirmed[i] = best.key
                 } else {
-                    if (prevConfirmed != null) {
+                    val prevCount = counts[prevConfirmed] ?: 0
+                    if (prevConfirmed != null && prevCount > 0) {
                         result.add(prevConfirmed)
                     } else {
                         result.add(null)
+                        confirmed[i] = null
                     }
                 }
             } else {
@@ -333,14 +335,16 @@ class ScreenScanner(
                 val g = (p shr 8) and 0xFF
                 val b = p and 0xFF
                 
-                // Allow slightly darker text (e.g., 150 instead of 195) to pass as white text, 
-                // preventing shaded hole cards from disappearing.
-                val color = if (r > 150 && g > 150 && b > 150) {
-                    0xFF000000.toInt() // Black text
-                } else {
-                    0xFFFFFFFF.toInt() // White background
-                }
-                pixels[i] = color
+                // CoinPoker cards use solid colored backgrounds with WHITE text for all suits.
+                // To feed optimal images to ML Kit (which prefers dark text on light background),
+                // we convert to grayscale and invert. This preserves anti-aliasing perfectly.
+                val luminance = (0.299 * r + 0.587 * g + 0.114 * b).toInt()
+                val invertedLuma = 255 - Math.min(255, Math.max(0, luminance))
+                
+                // Enhance contrast slightly by spreading the inverted luminance
+                val contrast = Math.min(255, Math.max(0, (invertedLuma - 40) * 255 / 180))
+                
+                pixels[i] = (0xFF shl 24) or (contrast shl 16) or (contrast shl 8) or contrast
             }
             
             bmp.setPixels(pixels, 0, width, left, top, width, height)
