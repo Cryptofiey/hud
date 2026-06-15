@@ -1,0 +1,150 @@
+# Poker HUD - Key Components Documentation
+## Screen Capture & Image Processing
+
+### OverlayService.java (Screen Capture Initialization)
+This file handles the MediaProjection setup and screen capture initiation:
+
+**Key Methods:**
+1. `startScreenCapture(Display display, MediaProjection mediaProjection)` - Initializes screen capture
+   - Sets up MediaProjection callback
+   - Initializes overlay UI components
+   - Creates virtual display for continuous screen capture
+   - Handles orientation changes
+
+2. `initVirtualDisplay()` - Creates the virtual display for capturing screen content
+   - Uses MediaProjection.createVirtualDisplay() 
+   - Captures at device's real screen resolution
+   - Uses the surface from ChangeFinder for image processing
+
+3. `destroyMediaProjection()` - Cleans up screen capture resources
+   - Stops analysis
+   - Releases virtual display
+   - Unregisters and stops MediaProjection
+
+**Screen Capture Flow:**
+1. User grants screen capture permission via system dialog
+2. OverlayService receives MediaProjection instance
+3. startScreenCapture() is called with display and mediaProjection
+4. Virtual display is created to continuously capture screen
+5. Captured frames are processed by ChangeFinder (uses RenderScript)
+6. Recognition objects are generated from processed frames
+7. Recognition data is passed to AdvisorEngine for decision making
+
+### Recognition.java (Card Detection Logic)
+Processes raw image data to identify playing cards:
+
+**Key Components:**
+- **Card Recognition:** Converts detected symbols to Card objects using rank/suit mappings
+- **Confidence Tracking:** Maintains detection confidence scores
+- **Temporal Filtering:** Updates recognition based on consecutive frames
+- **Geometry Handling:** Tracks bounding boxes, zoom margins, and spatial relationships
+
+**Key Methods:**
+- `toCard()` - Converts recognized title to Card object
+- `update()` - Temporally filters recognition data
+- `compareTo()` - Compares two recognitions for similarity
+- `getLocation()`, `getConfidence()` - Accessors for processed data
+
+### PixelDetector.java (Image Processing Pipeline)
+Handles low-level image processing for card detection:
+
+**Key Components:**
+- **RenderScript Utilization:** Uses GPU acceleration for image processing
+- **Template Matching:** Compares captured images to card templates
+- **Background Subtraction:** Isolates card regions from table background
+- **Multi-card Detection:** Can detect multiple cards simultaneously
+
+**Key Methods:**
+- `updateLayers()` - Updates detection layers with new Recognition data
+- `checkArea()` - Performs template matching on specified screen region
+- **MatchingData** - Returns match scores for background and card regions
+
+## Advisor Engine & Calculation Components
+
+### AdvisorEngine.java (Decision Making Core)
+Implements the intelligent recommendation system:
+
+**Key Features:**
+- **Multi-factor Analysis:** Combines equity, Sklansky stats, player stats, position, tournament stage, and recent actions
+- **Adaptive Weighting:** Automatically adjusts factor weights based on available data
+- **Soft Logic:** Gradually changes recommendations as confidence increases
+- **Explainable Output:** Provides reasoning for each recommendation
+
+**Core Algorithm (in `recommend` method):**
+1. **Equity Calculation:** Extracts win/draw/loss rates for hero hand vs opponents
+2. **Equity Factor:** Maps equity to [0,1] range with thresholds
+3. **Sklansky Factor:** Analyzes hand grouping performance
+4. **Stats Factor:** Uses opponent profiling data (VPIP, PFR, aggression)
+5. **Position Factor:** Values based on table position
+6. **Stage Factor:** Considers stack size and blind level
+7. **Dynamic Factor:** Adjusts based on recent table action patterns
+8. **Weighted Combination:** Applies adaptive weights to all factors
+9. **Action Selection:** Maps final score to poker action (FOLD/CHECK/CALL/RAISE/ALL_IN)
+
+**Key Classes:**
+- `Recommendation` - Contains suggested action, confidence, and explanation
+- `Action` - Enum of possible poker actions
+
+### Calculator Classes (Equity & Probability Calculations)
+Located in `/app/src/main/java/se/vallanderasaservice/pokerequityhud/poker/`
+
+**Primary Calculators:**
+1. **HoldemCalculator.java** - Texas Hold'em equity calculations
+2. **OmahaCalculator.java** - Omaha equity calculations  
+3. **SixPlusHoldemCalculator.java** - 6+ Hold'em equity calculations
+4. **CommonCalculator.java** - Shared probability calculation utilities
+5. **DistributionsCalculator.java** - Hand distribution analysis
+6. **HandTypeCalculator.java** - Hand classification (pair, flush, etc.)
+7. **SklanskyCalculator.java** - Sklansky hand group calculations
+
+**Key Interfaces:**
+- `Calculator` - Base interface with `getWinRate()` method
+- Hand-specific calculators implement Monte Carlo or exact calculation methods
+
+**Data Flow:**
+Screen Capture → Recognition → PixelDetector → Card Detection → 
+Poker Calculators (equity/probability) → AdvisorEngine (decision) → 
+AdvisorChart (HUD display) ← Controlled by advisorMainEnabled checkbox
+
+## Configuration & Storage
+
+### Settings.java (Persistent Storage)
+Manages all user preferences and runtime state:
+
+**Screen Monitoring Areas:**
+- `handArea` - Rectangle for player card detection (handAreaX/Y/W/H)
+- `boardArea` - Rectangle for community card detection (boardAreaX/Y/W/H)
+
+**Advisor Controls (Checkboxes):**
+- `advisorMainEnabled` - Shows main advisor HUD (pot, PIP, nickname, blinds, bet)
+- `advisorPlayerStatsEnabled` - Shows extended stats on avatar click
+
+**Advisor Parameters (Updated from Screen Data):**
+- `advisorVPIP` - Voluntarily put in percentage (from observed actions)
+- `advisorPFR` - Pre-flop raise percentage (from observed actions)
+- `advisorAggressionFactor` - Opponent aggression factor
+- `advisorLast5Actions` - Recent action history (F/C/R/A sequence)
+
+**Persistence:**
+- All values loaded/saved via SharedPreferences in loadSettings()/saveSettings()
+- Screen areas persist across sessions for consistent detection regions
+
+## Data Flow Summary
+
+1. **Screen Capture:** OverlayService uses MediaProjection to capture screen frames
+2. **Image Processing:** PixelDetector processes frames using RenderScript templates
+3. **Card Recognition:** Recognition class identifies cards and their confidence
+4. **Geometric Mapping:** Detected cards mapped to handArea/boardArea settings
+5. **Probability Calculation:** Poker calculators determine hand equity vs opponents
+6. **Opponent Profiling:** PlayerDatabase tracks VPIP/PFR from historical actions
+7. **Decision Making:** AdvisorEngine combines all factors into action recommendation
+8. **HUD Display:** AdvisorChart shows recommendation if advisorMainEnabled=true
+9. **User Controls:** Checkboxes in VisualizationFragment enable/disable features
+10. **Persistence:** Settings persist via SharedPreferences across app restarts
+
+This architecture allows the poker HUD to:
+- Continuously monitor the poker table via screen capture
+- Identify cards and player actions in real-time
+- Calculate optimal strategies based on game theory and opponent tendencies
+- Display recommendations through configurable HUD elements
+- Adapt to individual player styles through historical data tracking
