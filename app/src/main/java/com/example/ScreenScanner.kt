@@ -450,7 +450,9 @@ class ScreenScanner(
                 } else {
                     val lastCluster = clusters.last()
                     val lastCx = lastCluster.map { it.second.centerX() }.average()
-                    if (elem.second.centerX() - lastCx < clusterThreshold) {
+                    val matchRank = lastCluster.first().first.rank == elem.first.rank
+                    
+                    if (matchRank && (elem.second.centerX() - lastCx < clusterThreshold)) {
                         lastCluster.add(elem)
                     } else {
                         clusters.add(mutableListOf(elem))
@@ -1139,9 +1141,10 @@ class ScreenScanner(
                     } else {
                         val lastCluster = clusters.last()
                         val lastCx = lastCluster.map { it.second.centerX() }.average()
+                        val matchRank = lastCluster.first().first.rank == elem.first.rank
                         
-                        // If horizontal distance is small, they are the same card (e.g. top rank and bottom rank symbols)
-                        if (elem.second.centerX() - lastCx < clusterThreshold) {
+                        // If horizontal distance is small AND rank matches, they are the same card (e.g. top rank and bottom rank symbols)
+                        if (matchRank && (elem.second.centerX() - lastCx < clusterThreshold)) {
                             lastCluster.add(elem)
                         } else {
                             clusters.add(mutableListOf(elem))
