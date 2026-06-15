@@ -347,6 +347,7 @@ fun DebugScreen() {
                     debugLog += "\nFound ${files.size} files."
                     
                     var renamedCount = 0
+                    var deletedCount = 0
                     for (file in files) {
                         if (file.name.endsWith(".png") || file.name.endsWith(".jpg")) {
                             debugLog += "\nProcessing image: ${file.name}..."
@@ -361,7 +362,7 @@ fun DebugScreen() {
                                     val w = bmp.width
                                     val h = bmp.height
                                     
-                                    // Match default HUD regions for CoinPoker exactly as in PokerHudService
+                                    // Match default HUD regions for CoinPoker
                                     val cLeft = (w * 0.10f).toInt()
                                     val cTop = (h * 0.40f).toInt()
                                     val cRight = cLeft + (w * 0.80f).toInt()
@@ -377,42 +378,50 @@ fun DebugScreen() {
                                     
                                     val scanner = ScreenScanner(context, null, 0)
                                     val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
-                                    val holeCards = result.first.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c")
-                                    val commCards = result.second.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c")
+                                    val holeStr = result.first.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c").lowercase()
+                                    val commStr = result.second.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c").lowercase()
                                     
-                                    var newName = file.name
-                                    var changed = false
-                                    if (file.name.contains("hole") && holeCards.isNotEmpty() && !file.name.contains(holeCards)) {
-                                        newName = "hole_${holeCards}.png"
-                                        changed = true
-                                    } else if (file.name.contains("comm") && commCards.isNotEmpty() && !file.name.contains(commCards)) {
-                                        newName = "comm_${commCards}.png"
-                                        changed = true
-                                    } else if (!file.name.contains("hole") && !file.name.contains("comm")) {
-                                        // Assume it's a full screenshot, rename to include both
-                                        newName = "screenshot_${holeCards}_${commCards}.png"
-                                        changed = true
-                                    }
-                                    
-                                    if (changed && newName != file.name) {
-                                        val success = driveManager.renameFile(driveService, file.id, newName)
-                                        if (success) {
-                                            debugLog += " -> Renamed to $newName"
-                                            renamedCount++
-                                        } else {
-                                            debugLog += " -> Failed to rename."
-                                        }
+                                    if (holeStr.isEmpty() && commStr.isEmpty()) {
+                                        // No cards detected, consider deleting if it doesn't look like a valid table or just noise
+                                        debugLog += " -> No cards detected. Deleting poor quality photo."
+                                        driveManager.deleteFile(driveService, file.id)
+                                        deletedCount++
                                     } else {
-                                        debugLog += " -> Already correct or cannot infer."
+                                        var newName = ""
+                                        if (file.name.contains("hole") || file.name.contains("comm")) {
+                                            // It's a crop
+                                            if (file.name.contains("hole")) newName = "hole_${holeStr}.png"
+                                            else newName = "comm_${commStr}.png"
+                                        } else {
+                                            // It's a full screenshot
+                                            newName = "comm_${commStr}_hole_${holeStr}.png"
+                                        }
+                                        
+                                        if (newName != file.name && newName.isNotEmpty()) {
+                                            val success = driveManager.renameFile(driveService, file.id, newName)
+                                            if (success) {
+                                                debugLog += " -> Renamed to $newName"
+                                                renamedCount++
+                                            } else {
+                                                debugLog += " -> Failed to rename."
+                                            }
+                                        } else {
+                                            debugLog += " -> Correct name already."
+                                        }
                                     }
                                     bmp.recycle()
+                                } else {
+                                    // Corrupt image
+                                    debugLog += " -> Corrupt image. Deleting."
+                                    driveManager.deleteFile(driveService, file.id)
+                                    deletedCount++
                                 }
                             } catch (e: Exception) {
-                                debugLog += "\nError: ${e.message}"
+                                debugLog += "\nError processing ${file.name}: ${e.message}"
                             }
                         }
                     }
-                    debugLog += "\nDrive Enum Complete. Found $renamedCount images."
+                    debugLog += "\nDrive Task Complete. Renamed: $renamedCount, Deleted: $deletedCount."
                 }
             } catch (e: Exception) {
                 debugLog += "\nGoogle Sign In Failed: ${e.message}"

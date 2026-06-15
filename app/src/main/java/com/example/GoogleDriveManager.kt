@@ -91,4 +91,16 @@ class GoogleDriveManager(private val context: android.content.Context) {
             }
         }
     }
+
+    suspend fun deleteFile(driveService: Drive, fileId: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                driveService.files().delete(fileId).execute()
+                true
+            } catch (e: Exception) {
+                Log.e("DriveManager", "Error deleting file", e)
+                false
+            }
+        }
+    }
 }
