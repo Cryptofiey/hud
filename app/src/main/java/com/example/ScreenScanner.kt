@@ -250,8 +250,9 @@ class ScreenScanner(
             history.removeAt(0)
         }
         
-        // Dynamically clear history: if the last few frames are ALL entirely empty, wipe everything.
-        val clearThreshold = if (history === holeHistory) windowSize else windowSize - 1
+        // Dynamically clear history: if the last few frames are entirely empty, wipe everything.
+        // For hole cards, we want them to clear out quickly when folded or new hand starts (e.g. 2 empty frames).
+        val clearThreshold = if (history === holeHistory) 2 else windowSize - 1
         if (clearThreshold > 0 && history.size >= clearThreshold && history.takeLast(clearThreshold).all { list -> list.all { it == null } }) {
             history.clear()
             confirmed.clear()
@@ -919,13 +920,13 @@ class ScreenScanner(
                 val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
                 
                 // Dynamic threshold based on region width.
-                // We use 14% for board and 35% for hole cards to merge multiple scans of the SAME card 
+                // We use 14% for board and 25% for hole cards to merge multiple scans of the SAME card 
                 // (which often detects small top-left rank AND large center rank),
                 // but small enough to NOT merge adjacent distinct cards.
                 val clusterThreshold = if (maxCards == 5) {
                     regionRect.width() * 0.14f
                 } else {
-                    regionRect.width() * 0.08f
+                    regionRect.width() * 0.25f
                 }
                 
                 for (elem in sorted) {
@@ -1090,7 +1091,7 @@ class ScreenScanner(
                 }
             }
 
-            var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, confirmedHole, windowSize = 5)
+            var smoothedHole = getSmoothedCards(holeHistory, foundHoleCardsRaw, confirmedHole, windowSize = 3)
             var smoothedComm = getSmoothedCards(commHistory, foundCommCardsRaw, confirmedComm, windowSize = 4)
             
             val smoothedAll = (smoothedHole + smoothedComm).filterNotNull()
