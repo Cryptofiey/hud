@@ -348,6 +348,148 @@ class ScreenScanner(
         }
     }
 
+    // Expose processing logic for automated testing in DebugImageActivity
+    suspend fun processGivenBitmap(context: Context, testBmp: Bitmap, hRect: android.graphics.Rect, cRect: android.graphics.Rect): Pair<List<Card?>, List<Card?>> = kotlinx.coroutines.coroutineScope {
+        val ocrBitmap = testBmp.copy(Bitmap.Config.ARGB_8888, true)
+        
+        // Emulate the first pass with Template Manager and OCR
+        val templateDeferred = async(kotlinx.coroutines.Dispatchers.Default) {
+            val tHole = mutableListOf<Pair<Card, android.graphics.Rect>>()
+            val tComm = mutableListOf<Pair<Card, android.graphics.Rect>>()
+            try {
+                // Initialize using the provided context which works in Debug mode
+                TemplateManager.init(context)
+                
+                val hWidth = Math.min(testBmp.width - hRect.left, hRect.width())
+                val hHeight = Math.min(testBmp.height - hRect.top, hRect.height())
+                if (hRect.left >= 0 && hRect.top >= 0 && hWidth > 0 && hHeight > 0) {
+                    val holeCrop = Bitmap.createBitmap(testBmp, hRect.left, hRect.top, hWidth, hHeight)
+                    val matches = TemplateManager.matchMultiple(holeCrop, 2)
+                    for (match in matches) {
+                        val gLeft = hRect.left + match.rect.left
+                        val gTop = hRect.top + match.rect.top
+                        val globalRect = android.graphics.Rect(gLeft, gTop, gLeft + match.rect.width(), gTop + match.rect.height())
+                        val cleanStr = match.text.replace(Regex("[hdcsHDCS♥♦♣♠]"), "").trim().uppercase()
+                        val rank = Rank.values().find { it.symbol.equals(cleanStr, ignoreCase = true) }
+                        if (rank != null) {
+                            val suit = robustDetectSuit(testBmp, globalRect) ?: Suit.SPADES
+                            tHole.add(Pair(Card(rank, suit), globalRect))
+                        }
+                    }
+                    holeCrop.recycle()
+                }
+
+                val cWidth = Math.min(testBmp.width - cRect.left, cRect.width())
+                val cHeight = Math.min(testBmp.height - cRect.top, cRect.height())
+                if (cRect.left >= 0 && cRect.top >= 0 && cWidth > 0 && cHeight > 0) {
+                    val commCrop = Bitmap.createBitmap(testBmp, cRect.left, cRect.top, cWidth, cHeight)
+                    val matches = TemplateManager.matchMultiple(commCrop, 5)
+                    for (match in matches) {
+                        val gLeft = cRect.left + match.rect.left
+                        val gTop = cRect.top + match.rect.top
+                        val globalRect = android.graphics.Rect(gLeft, gTop, gLeft + match.rect.width(), gTop + match.rect.height())
+                        val cleanStr = match.text.replace(Regex("[hdcsHDCS♥♦♣♠]"), "").trim().uppercase()
+                        val rank = Rank.values().find { it.symbol.equals(cleanStr, ignoreCase = true) }
+                        if (rank != null) {
+                            val suit = robustDetectSuit(testBmp, globalRect) ?: Suit.SPADES
+                            tComm.add(Pair(Card(rank, suit), globalRect))
+                        }
+                    }
+                    commCrop.recycle()
+                }
+            } catch (ignored: Exception) {}
+            Pair(tHole, tComm)
+        }
+
+        applyCardThresholding(ocrBitmap, hRect, cRect)
+        val image = com.google.mlkit.vision.common.InputImage.fromBitmap(ocrBitmap, 0)
+        val result = recognizer.process(image).await()
+        
+        val templateRes = templateDeferred.await()
+        val templateHoleCards = templateRes.first
+        val templateCommCards = templateRes.second
+        
+        val tempHoleCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
+        val tempCommCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
+
+        for (block in result.textBlocks) {
+            for (line in block.lines) {
+                for (element in line.elements) {
+                    val text = element.text.trim().uppercase()
+                    if (text.length > 2 || text.isEmpty()) continue
+                    
+                    var cleanText = text.replace("&", "8").replace("$", "8").replace("@", "Q").replace("%", "8").replace("?", "7").replace("!", "1")
+                        .replace("O", "Q").replace("0", "Q").replace("D", "Q")
+                    val rankText = cleanText.take(1)
+                    var parsedRank = Rank.values().find { it.symbol.equals(rankText, ignoreCase = true) }
+                    
+                    if (parsedRank != null) {
+                        val rect = element.boundingBox ?: continue
+                        parsedRank = refineRankWithPixelCheck(ocrBitmap, rect, parsedRank)
+                        if (hRect.contains(rect.centerX(), rect.centerY())) {
+                            val detectedSuit = robustDetectSuit(testBmp, rect) ?: Suit.SPADES
+                            tempHoleCards.add(Pair(Card(parsedRank, detectedSuit), rect))
+                        } else if (cRect.contains(rect.centerX(), rect.centerY())) {
+                            val detectedSuit = robustDetectSuit(testBmp, rect) ?: Suit.SPADES
+                            tempCommCards.add(Pair(Card(parsedRank, detectedSuit), rect))
+                        }
+                    }
+                }
+            }
+        }
+        
+        fun clusterCards(cards: List<Pair<Card, android.graphics.Rect>>, maxCards: Int, regionRect: android.graphics.Rect): MutableList<Card?> {
+            val resultList = MutableList<Card?>(maxCards) { null }
+            if (cards.isEmpty()) return resultList
+            val sorted = cards.sortedBy { it.second.centerX() }
+            val clusters = mutableListOf<MutableList<Pair<Card, android.graphics.Rect>>>()
+            val clusterThreshold = if (maxCards == 5) regionRect.width() * 0.14f else regionRect.width() * 0.25f
+            for (elem in sorted) {
+                if (clusters.isEmpty()) {
+                    clusters.add(mutableListOf(elem))
+                } else {
+                    val lastCluster = clusters.last()
+                    val lastCx = lastCluster.map { it.second.centerX() }.average()
+                    if (elem.second.centerX() - lastCx < clusterThreshold) {
+                        lastCluster.add(elem)
+                    } else {
+                        clusters.add(mutableListOf(elem))
+                    }
+                }
+            }
+            val resolvedCards = clusters.map { cluster ->
+                val primaryCard = cluster.sortedBy { it.second.top }.first().first
+                val avgX = cluster.map { it.second.centerX() }.average()
+                Triple(primaryCard, avgX, cluster.sumOf { it.second.width() * it.second.height() })
+            }
+            val topCards = resolvedCards.sortedByDescending { it.third }.take(maxCards)
+            val expectedSlotWidth = regionRect.width().toFloat() / maxCards
+            for (cardInfo in topCards) {
+                var slotIdx = ((cardInfo.second - regionRect.left) / expectedSlotWidth).toInt()
+                if (slotIdx < 0) slotIdx = 0
+                if (slotIdx >= maxCards) slotIdx = maxCards - 1
+                if (resultList[slotIdx] == null) resultList[slotIdx] = cardInfo.first
+            }
+            return resultList
+        }
+
+        val safeTempHole = tempHoleCards.filter { ocrM -> 
+            templateHoleCards.none { tmplM -> Math.abs(ocrM.second.centerX() - tmplM.second.centerX()) < 30 }
+        }.toMutableList()
+        safeTempHole.addAll(templateHoleCards)
+        
+        val safeTempComm = tempCommCards.filter { ocrM -> 
+            templateCommCards.none { tmplM -> Math.abs(ocrM.second.centerX() - tmplM.second.centerX()) < 30 }
+        }.toMutableList()
+        safeTempComm.addAll(templateCommCards)
+
+        val rawComm = clusterCards(safeTempComm, 5, cRect)
+        val rawHole = clusterCards(safeTempHole, 2, hRect)
+
+        ocrBitmap.recycle()
+        Pair(rawHole, rawComm)
+    }
+
     private suspend fun processLatestImage(): Boolean {
         var image: Image? = null
         var ocrBitmap: Bitmap? = null

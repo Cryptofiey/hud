@@ -8,9 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -18,33 +16,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
 import com.example.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.tasks.await
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Rect
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
 class DebugImageActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        setContent {
-            MyApplicationTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    DebugScreen()
-                }
-            }
-        }
+        setContent { MyApplicationTheme { Surface { DebugScreen() } } }
     }
 }
 
@@ -52,269 +35,136 @@ class DebugImageActivity : ComponentActivity() {
 fun DebugScreen() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-    var loadedBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var resultBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var debugLog by remember { mutableStateOf("Select a cropped card image to start auto-tuning.") }
-    var optimalThreshold by remember { mutableStateOf<Int?>(null) }
-    
-    var manualTemplateText by remember { mutableStateOf("") }
-    var isHoleTemplate by remember { mutableStateOf(true) }
-    
-    val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
-        selectedImageUri = uri
-        uri?.let {
-            coroutineScope.launch {
-                try {
-                    val stream = context.contentResolver.openInputStream(it)
-                    val bitmap = BitmapFactory.decodeStream(stream)
-                    stream?.close()
+    var debugLog by remember { mutableStateOf("AI Server Debugger v2.0 Ready.\n\nSelect a folder below depending on your task.") }
+
+    val templateLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch(Dispatchers.IO) {
+            debugLog = "Starting Auto-Template Generation from folder...\n"
+            var count = 0
+            val dir = DocumentFile.fromTreeUri(context, uri)
+            dir?.listFiles()?.forEach { file ->
+                if (file.name?.endsWith(".png") == true || file.name?.endsWith(".jpg") == true) {
+                    val bmp = decodeUri(context, file.uri) ?: return@forEach
+                    val expectedRegex = Regex("([2-9TJQKA][hdcs])", RegexOption.IGNORE_CASE)
+                    val matches = expectedRegex.findAll(file.name ?: "")
+                    val cards = matches.map { it.value }.toList()
                     
-                    if (bitmap != null) {
-                        loadedBitmap = bitmap
-                        resultBitmap = bitmap
-                        debugLog = "Image loaded: ${bitmap.width}x${bitmap.height}\nTap 'Auto-Tune' to find optimal OCR parameters."
-                    } else {
-                        debugLog = "Failed to decode image."
+                    if (cards.size in 2..5) {
+                        debugLog += "\nProcessing ${file.name} -> expected ${cards.size} cards: $cards"
+                        val isHole = file.name!!.contains("hole", ignoreCase = true) || cards.size == 2
+                        
+                        val sliceWidth = bmp.width / cards.size
+                        for (i in cards.indices) {
+                            val cardStr = cards[i]
+                            val slice = Bitmap.createBitmap(bmp, i * sliceWidth, 0, sliceWidth, bmp.height)
+                            // We save each slice as the template mask with its assigned value
+                            TemplateManager.saveTemplate(context, slice, cardStr, isHole)
+                            slice.recycle()
+                            count++
+                        }
                     }
-                } catch (e: Exception) {
-                    debugLog = "Error: ${e.message}"
+                    bmp.recycle()
+                }
+            }
+            debugLog += "\n\nDONE! Generated $count templates."
+        }
+    }
+
+    val testLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        coroutineScope.launch(Dispatchers.Main) {
+            debugLog = "Starting Auto-Validation Test Suite...\n"
+            var passed = 0
+            var failed = 0
+            
+            withContext(Dispatchers.IO) {
+                val dir = DocumentFile.fromTreeUri(context, uri)
+                dir?.listFiles()?.forEach { file ->
+                    if (file.name?.endsWith(".png") == true || file.name?.endsWith(".jpg") == true) {
+                        val bmp = decodeUri(context, file.uri) ?: return@forEach
+                        val expectedRegex = Regex("([2-9TJQKA][hdcs])", RegexOption.IGNORE_CASE)
+                        val matches = expectedRegex.findAll(file.name ?: "")
+                        val expectedCards = matches.map { it.value.lowercase() }.toList()
+
+                        debugLog += "\n[TEST] ${file.name}"
+                        
+                        val isHole = file.name!!.contains("hole", ignoreCase = true) || expectedCards.size == 2
+                        
+                        val hRect = if (isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
+                        val cRect = if (!isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
+
+                        val hudService = PokerHudService.instance
+                        if (hudService == null) {
+                            withContext(Dispatchers.Main) {
+                                debugLog += "\nERROR: HUD Service is not running! Start it first!"
+                            }
+                            return@forEach
+                        }
+                        
+                        val result = ScreenScanner(hudService, android.content.Intent(), 0).processGivenBitmap(context, bmp, hRect, cRect)
+                        val (detectedHole, detectedComm) = result
+                        
+                        val detectedStr = (detectedHole.filterNotNull().map { it.toString().lowercase() } + 
+                                          detectedComm.filterNotNull().map { it.toString().lowercase() })
+                        
+                        // We check if all expected cards are in the detected list and vice versa
+                        val expectedSet = expectedCards.toSet()
+                        val detectedSet = detectedStr.toSet()
+                        
+                        val allMatch = expectedSet == detectedSet && expectedCards.size == detectedStr.size
+                        
+                        withContext(Dispatchers.Main) {
+                            if (allMatch) {
+                                debugLog += " -> PASS"
+                                passed++
+                            } else {
+                                debugLog += " -> FAIL!\n   Expected: $expectedCards\n   Detected: $detectedStr"
+                                failed++
+                            }
+                        }
+                        bmp.recycle()
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    debugLog += "\n\n=== TEST REPORT ===\nTotal: ${passed + failed}\nPassed: $passed\nFailed: $failed"
                 }
             }
         }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Poker Card OCR Auto-Tuner", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(8.dp))
+        Text("AI Automated Server Debugger", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(16.dp))
         
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = manualTemplateText,
-                onValueChange = { manualTemplateText = it },
-                label = { Text("Target Single Card (e.g. 'A')") },
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(Modifier.width(8.dp))
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Checkbox(checked = isHoleTemplate, onCheckedChange = { isHoleTemplate = it })
-                Text("Hole?")
-            }
+        Button(onClick = { templateLauncher.launch(Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth()) {
+            Text("1. Auto-Template Generator (Select Folder)")
         }
         
-        Spacer(Modifier.height(8.dp))
-        
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { launcher.launch("image/*") }, modifier = Modifier.weight(1f)) {
-                Text("Select Image")
-            }
-            Button(
-                onClick = {
-                    if (loadedBitmap != null && manualTemplateText.isNotBlank()) {
-                        debugLog = "Tuning started...\nTrying various brightness/contrast thresholds."
-                        optimalThreshold = null
-                        coroutineScope.launch {
-                            tuneCardRecognition(loadedBitmap!!, manualTemplateText) { processedBmp, log, bestThresh ->
-                                resultBitmap = processedBmp
-                                debugLog = log
-                                if (bestThresh != null) optimalThreshold = bestThresh
-                            }
-                        }
-                    }
-                },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                enabled = loadedBitmap != null && manualTemplateText.isNotBlank()
-            ) {
-                Text("Auto-Tune OCR")
-            }
+        Button(onClick = { testLauncher.launch(Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63))) {
+            Text("2. Auto-Validation Tester (Select Folder)")
         }
         
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(16.dp))
         
-        Button(
-            onClick = {
-                if (loadedBitmap != null && manualTemplateText.isNotBlank()) {
-                    TemplateManager.saveTemplate(context, loadedBitmap!!, manualTemplateText, isHoleTemplate)
-                    resultBitmap = loadedBitmap // Show them the cropped pattern we saved
-                    debugLog = "SUCCESS: Saved SINGLE CARD template override for '${manualTemplateText}'!\nThe scanner will now slide this exact crop from left to right."
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
-            enabled = loadedBitmap != null && manualTemplateText.isNotBlank()
-        ) {
-            Text("Save as Visual Template Override")
-        }
-        
-        Spacer(Modifier.height(8.dp))
-        
-        if (optimalThreshold != null) {
-            Button(
-                onClick = {
-                    optimalThreshold?.let { thresh ->
-                        PreferencesManager(context).saveOcrThreshold(thresh)
-                        ScannerConfig.ocrThreshold = thresh
-                        debugLog += "\n✔️ Threshold $thresh saved as default!"
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5))
-            ) {
-                Text("Save Threshold $optimalThreshold as Default")
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-        
-        if (resultBitmap != null) {
-            Image(
-                bitmap = resultBitmap!!.asImageBitmap(),
-                contentDescription = "Debug Result",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(450.dp)
-                    .background(Color.DarkGray)
-            )
-        } else {
-            Box(modifier = Modifier.fillMaxWidth().height(450.dp).background(Color.DarkGray))
-        }
-        
-        Spacer(Modifier.height(8.dp))
         Text(
             text = debugLog, 
             style = MaterialTheme.typography.bodySmall, 
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                .background(Color(0xFFE0E0E0))
+                .padding(8.dp)
                 .verticalScroll(rememberScrollState())
         )
     }
 }
 
-private suspend fun tuneCardRecognition(
-    originalBitmap: Bitmap, 
-    expectedTarget: String, 
-    onProgress: (Bitmap, String, Int?) -> Unit
-) {
-    withContext(Dispatchers.Default) {
-        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        val logBuilder = StringBuilder()
-        
-        val thresholds = listOf(130, 150, 170, 180, 195, 210, 220, 230)
-        var successBitmap: Bitmap? = null
-        var foundMatches = 0
-        var optimalThresh: Int? = null
-        
-        val isSuitTarget = expectedTarget in listOf("Spades", "Hearts", "Diamonds", "Clubs")
-        
-        for (thresh in thresholds) {
-            val testBmp = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
-            val pixels = IntArray(testBmp.width * testBmp.height)
-            testBmp.getPixels(pixels, 0, testBmp.width, 0, 0, testBmp.width, testBmp.height)
-            
-            var redInk = 0
-            var greenInk = 0
-            var blueInk = 0
-            
-            // Loop 1: Apply standard threshold and ink count
-            for (i in pixels.indices) {
-                val p = pixels[i]
-                val r = android.graphics.Color.red(p)
-                val g = android.graphics.Color.green(p)
-                val b = android.graphics.Color.blue(p)
-                
-                // Color profiling based on robustDetectSuit logic
-                val isRed = (r > g + 25 && r > b + 25 && r > 50 && g < 170 && b < 170)
-                val isGreen = (g > r + 20 && g > b + 20 && g > 50 && r < 170 && b < 170)
-                val isBlue = (b > r + 25 && b > g + 20 && b > 50 && r < 170 && g < 170)
-                
-                if (isRed) redInk++
-                else if (isGreen) greenInk++
-                else if (isBlue) blueInk++
-                
-                // OCR Threshold mapping
-                if (r > thresh && g > thresh && b > thresh) {
-                    pixels[i] = android.graphics.Color.BLACK // Light backgrounds -> BLACK text
-                } else {
-                    pixels[i] = android.graphics.Color.WHITE // Dark inks/shadows -> WHITE background
-                }
-            }
-            testBmp.setPixels(pixels, 0, testBmp.width, 0, 0, testBmp.width, testBmp.height)
-            
-            // Determine suit
-            val maxChroma = maxOf(redInk, greenInk, blueInk)
-            val detectedSuit = if (maxChroma >= 5) {
-                if (redInk == maxChroma) "Hearts"
-                else if (greenInk == maxChroma) "Clubs"
-                else if (blueInk == maxChroma) "Diamonds"
-                else "Spades"
-            } else {
-                "Spades"
-            }
-            
-            try {
-                // Run OCR
-                val image = InputImage.fromBitmap(testBmp, 0)
-                val result = recognizer.process(image).await()
-                
-                var ocrTextFull = ""
-                for (block in result.textBlocks) {
-                    for (line in block.lines) {
-                        for (element in line.elements) {
-                            var text = element.text.trim().uppercase(java.util.Locale.US)
-                            // Replacements
-                            text = text.replace("&", "8").replace("$", "8").replace("@", "Q").replace("%", "8").replace("?", "7").replace("!", "1")
-                            text = text.replace("O", "Q").replace("0", "Q").replace("D", "Q") // common Q failures
-                            ocrTextFull += text + " "
-                        }
-                    }
-                }
-                
-                logBuilder.appendLine("Trying threshold $thresh: Detect Suit=$detectedSuit, OCR Text='$ocrTextFull'")
-                
-                var success = false
-                if (isSuitTarget) {
-                    if (detectedSuit.equals(expectedTarget, ignoreCase = true)) success = true
-                } else {
-                    // Try to match rank or full combination
-                    val targetParts = expectedTarget.split(" ")
-                    var partsMatched = 0
-                    for (part in targetParts) {
-                        val simplePart = part.replace("h","").replace("d","").replace("c","").replace("s","")
-                            .replace("H","").replace("D","").replace("C","").replace("S","") 
-                        if (ocrTextFull.contains(simplePart, ignoreCase = true)) {
-                            partsMatched++
-                        }
-                    }
-                    if (partsMatched == targetParts.size && targetParts.isNotEmpty()) {
-                        success = true
-                    }
-                }
-                
-                if (success) {
-                    logBuilder.appendLine(">>> SUCCESS! Target $expectedTarget matched at Threshold $thresh.")
-                    successBitmap = testBmp
-                    foundMatches++
-                    optimalThresh = thresh
-                    break // Optional: we can stop on first success
-                }
-                
-                withContext(Dispatchers.Main) {
-                    onProgress(testBmp, logBuilder.toString(), null)
-                }
-            } catch (e: Exception) {
-                logBuilder.appendLine("Error at thresh $thresh: ${e.message}")
-            }
-        }
-        
-        logBuilder.appendLine("--- Auto-Tune Complete ---")
-        if (foundMatches == 0) {
-            logBuilder.appendLine("Could not find match for $expectedTarget.")
-        }
-        
-        withContext(Dispatchers.Main) {
-            onProgress(successBitmap ?: originalBitmap, logBuilder.toString(), optimalThresh)
-        }
-    }
+fun decodeUri(context: android.content.Context, uri: Uri): Bitmap? {
+    return try {
+         context.contentResolver.openInputStream(uri)?.use { stream ->
+             BitmapFactory.decodeStream(stream)
+         }
+    } catch(e: Exception) { null }
 }
 
