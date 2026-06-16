@@ -44,7 +44,8 @@ fun DebugScreen() {
             var count = 0
             val dir = DocumentFile.fromTreeUri(context, uri)
             dir?.listFiles()?.forEach { file ->
-                if (file.name?.endsWith(".png") == true || file.name?.endsWith(".jpg") == true) {
+                val nameLower = file.name?.lowercase() ?: ""
+                if (nameLower.endsWith(".png") || nameLower.endsWith(".jpg") || nameLower.endsWith(".jpeg")) {
                     val bmp = decodeUri(context, file.uri)
                     if (bmp == null) return@forEach
                     val expectedRegex = Regex("([2-9TJQKA][hdcs])", RegexOption.IGNORE_CASE)
@@ -94,11 +95,22 @@ fun DebugScreen() {
                     outDirPublic = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PC$pcIndex")
                 }
                 outDirPublic.mkdirs()
+
+                // Create subdirectory inside the user selected folder via SAF to guarantee write access
+                var safSubdirName = "PC$pcIndex"
+                var safSubdir = dir?.findFile(safSubdirName)
+                while (safSubdir != null) {
+                    pcIndex++
+                    safSubdirName = "PC$pcIndex"
+                    safSubdir = dir?.findFile(safSubdirName)
+                }
+                val publicCropDir = dir?.createDirectory(safSubdirName)
                 
                 val scanner = ScreenScanner(context, null, 0)
 
                 dir?.listFiles()?.forEach { file ->
-                    if (file.name?.endsWith(".png") == true || file.name?.endsWith(".jpg") == true) {
+                    val nameLower = file.name?.lowercase() ?: ""
+                    if (nameLower.endsWith(".png") || nameLower.endsWith(".jpg") || nameLower.endsWith(".jpeg")) {
                         val bmp = decodeUri(context, file.uri)
                         if (bmp == null) return@forEach
                         
@@ -151,13 +163,30 @@ fun DebugScreen() {
                         val fileHoleInt = java.io.File(outDirInternal, "${holeName}.png")
                         java.io.FileOutputStream(fileHoleInt).use { holeCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
 
+                        // Save to the SAF subdirectory we created inside the user-selected folder
+                        try {
+                            publicCropDir?.createFile("image/png", "${commName}.png")?.let { docFile ->
+                                context.contentResolver.openOutputStream(docFile.uri)?.use { out ->
+                                    commCropTotal.compress(Bitmap.CompressFormat.PNG, 100, out)
+                                }
+                            }
+                            publicCropDir?.createFile("image/png", "${holeName}.png")?.let { docFile ->
+                                context.contentResolver.openOutputStream(docFile.uri)?.use { out ->
+                                    holeCropTotal.compress(Bitmap.CompressFormat.PNG, 100, out)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+
+                        // Try to save to public Downloads as legacy backup
                         try {
                             val fileCommPub = java.io.File(outDirPublic, "${commName}.png")
                             java.io.FileOutputStream(fileCommPub).use { commCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
                             val fileHolePub = java.io.File(outDirPublic, "${holeName}.png")
                             java.io.FileOutputStream(fileHolePub).use { holeCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
                         } catch (e: Exception) {
-                            // Ignore public storage errors
+                            // Ignore legacy public storage errors
                         }
                         
                         commCropTotal.recycle()
@@ -174,7 +203,7 @@ fun DebugScreen() {
                 withContext(Dispatchers.Main) {
                     debugLog += "\n\n🎉 Нарезка окончена! Сохранено $crCount парных фото.\n"
                     debugLog += "Сохранено во внутреннюю память для Шага 2.\n"
-                    debugLog += "Также выгружено на телефон в Загрузки.\n"
+                    debugLog += "Также выгружено в выбранную папку в подпапку: $safSubdirName\n"
                 }
             }
         }
@@ -194,7 +223,8 @@ fun DebugScreen() {
             withContext(Dispatchers.IO) {
                 files.forEach { (fileName, fileUri) ->
                     try {
-                        if (fileName.endsWith(".png") == true || fileName.endsWith(".jpg") == true) {
+                        val nameLower = fileName.lowercase()
+                        if (nameLower.endsWith(".png") || nameLower.endsWith(".jpg") || nameLower.endsWith(".jpeg")) {
                             val bmp = decodeUri(context, fileUri)
                             if (bmp == null) return@forEach
                             
