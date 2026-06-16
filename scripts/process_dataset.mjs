@@ -12,11 +12,11 @@ import path from 'path';
  * 4. Deletes if cards aren't clear.
  */
 
-const API_KEY = process.env.GEMINI_API_KEY;
+const API_KEY = "AIzaSyCs53i6-yYHYEJ1mx06pVaNQbKl-3bIlxw";
 const TARGET_DIR = process.argv[2];
 
 if (!API_KEY) {
-    console.error("Error: GEMINI_API_KEY environment variable is not set.");
+    console.error("Error: API_KEY is missing.");
     process.exit(1);
 }
 
@@ -25,7 +25,7 @@ if (!TARGET_DIR || !fs.existsSync(TARGET_DIR)) {
     process.exit(1);
 }
 
-const MODEL = 'gemini-2.0-flash';
+const MODEL = 'gemini-2.0-flash-lite';
 
 async function identifyCards(imagePath) {
     const imageData = fs.readFileSync(imagePath).toString('base64');
@@ -82,7 +82,7 @@ async function identifyCards(imagePath) {
 
 async function run() {
     const allFiles = fs.readdirSync(TARGET_DIR);
-    const files = allFiles.filter(f => f.match(/\.(jpg|jpeg|png)$/i));
+    const files = allFiles.filter(f => f.match(/\.(jpg|jpeg|png)$/i)).slice(0, 2);
     
     console.log(`Scanning ${files.length} files in ${TARGET_DIR}...`);
 
@@ -90,8 +90,8 @@ async function run() {
         const filePath = path.join(TARGET_DIR, file);
         console.log(`\nProcessing: ${file}`);
         
-        // Add delay for free tier RPM limit (approx 4 seconds between requests for ~15 RPM safely)
-        await new Promise(r => setTimeout(r, 4000));
+        // Add delay for free tier RPM limit (approx 20 seconds)
+        await new Promise(r => setTimeout(r, 20000));
 
         const result = await identifyCards(filePath);
         if (!result) {
