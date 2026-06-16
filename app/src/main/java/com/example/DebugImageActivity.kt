@@ -21,6 +21,10 @@ import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.example.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.Dispatchers
+<<<<<<< HEAD
+=======
+import kotlinx.coroutines.delay
+>>>>>>> origin/main
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -463,10 +467,20 @@ fun DebugScreen() {
         
         Spacer(Modifier.height(16.dp))
 
+<<<<<<< HEAD
         
         Text(
             text = debugLog, 
             style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF00FF00), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), 
+=======
+        // Terminal Log Console
+        Text(
+            text = debugLog, 
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = Color(0xFF00FF00), 
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            ), 
+>>>>>>> origin/main
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
