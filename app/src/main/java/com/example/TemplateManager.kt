@@ -108,7 +108,7 @@ object TemplateManager {
                     if (mse < bestMseLoc) bestMseLoc = mse
                 }
                 
-                if (bestMseLoc < 1500.0f) { 
+                if (bestMseLoc < ScannerConfig.templateMseThreshold) { 
                     candidates.add(MatchCandidate(x, template.text, bestMseLoc, tW, tH))
                 }
             }

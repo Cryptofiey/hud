@@ -70,6 +70,12 @@ object ScannerConfig {
     val isProjectionGranted = MutableStateFlow(false)
     var activeProjection: android.media.projection.MediaProjection? = null
     var ocrThreshold: Int = 195 // Default value, will be overwritten by load
+    
+    // AI self-healing and Firebase configuration
+    var templateMseThreshold: Float = 1500.0f
+    var aiAutopilotEnabled: Boolean = false
+    var firebaseDbUrl: String = "https://pokerbot-ai-default-rtdb.firebaseio.com"
+    var selfHealedCount: Int = 0
 }
 
 fun Context.findActivity(): Activity? {

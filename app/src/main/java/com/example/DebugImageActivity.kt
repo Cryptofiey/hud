@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.example.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -221,16 +222,22 @@ fun DebugScreen() {
         }
     }
 
-    fun runTestsOnFileUris(files: List<Pair<String, android.net.Uri>>, clearLog: Boolean = true) {
+    fun runTestsOnFileUris(
+        files: List<Pair<String, android.net.Uri>>, 
+        clearLog: Boolean = true,
+        runCount: Int = 0,
+        healedExplanation: String = ""
+    ) {
         coroutineScope.launch(Dispatchers.Main) {
             if (clearLog) debugLog = ""
-            debugLog += "Starting Auto-Validation Test Suite (Server AI Mode)...\n"
+            debugLog += "Starting Auto-Validation Test Suite (Server AI Mode) [Run #${runCount + 1}]...\n"
             var passed = 0
             var failed = 0
             var missingFirst = 0
             var missingRandom = 0
             var missingAll = 0
             var slowStable = 0
+            val failureSummaries = mutableListOf<String>()
             
             withContext(Dispatchers.IO) {
                 files.forEach { (fileName, fileUri) ->
@@ -349,6 +356,9 @@ fun DebugScreen() {
                                     debugLog += "\n   Raw Detected: $rawStrList"
                                     failed++
                                     
+                                    val failDetails = "File: $fileName | Expected: $expectedCards | Detected: $rawStrList | Diagnostics: $scanInfo"
+                                    failureSummaries.add(failDetails)
+                                    
                                     if (nonNulls == 0 && expectedSize > 0) {
                                         debugLog += "\n ⚠️ ROOT ISSUE: Not finding cards at all (0 detected)."
                                         missingAll++
@@ -394,6 +404,46 @@ fun DebugScreen() {
                     } catch (e: Exception) {
                         debugLog += "\nFailed to save report: ${e.message}"
                     }
+
+                    // --- AUTOPILOT / SELF-HEALING AI PORTION ---
+                    if (failed > 0 && ScannerConfig.aiAutopilotEnabled && runCount < 1) {
+                        debugLog += "\n\n🤖 [AI Autopilot] Mismatches detected. Triggering Gemini Self-Healing API, Please wait..."
+                        val failuresStr = failureSummaries.joinToString("\n")
+                        
+                        coroutineScope.launch(Dispatchers.Main) {
+                            val healingRes = PokerAiAutomation.runAiHealing(context, failuresStr)
+                            if (healingRes != null && healingRes.success) {
+                                debugLog += "\n\n🤖 [AI Autopilot] Gemini Healing Succeeded!"
+                                debugLog += "\n   New templateMseThreshold: ${healingRes.suggestedMseThreshold}"
+                                debugLog += "\n   New ocrThreshold: ${healingRes.suggestedOcrThreshold}"
+                                debugLog += "\n   Explanation: ${healingRes.explanation}"
+                                debugLog += "\n🤖 [AI Autopilot] Automatically re-running validation with calibrated parameters..."
+                                
+                                runTestsOnFileUris(files, clearLog = false, runCount = runCount + 1, healedExplanation = healingRes.explanation)
+                            } else {
+                                debugLog += "\n🤖 [AI Autopilot] Gemini Healing failed: ${healingRes?.explanation ?: "Unknown error"}"
+                                val firebaseStatus = PokerAiAutomation.uploadTestReportToFirebase(
+                                    context, passed + failed, passed, failed, debugLog, isSelfHealed = false
+                                )
+                                debugLog += "\n\n☁️ [Firebase Sync] $firebaseStatus"
+                            }
+                        }
+                    } else {
+                        // Success or recursive fallback completed - upload outcomes to Firebase
+                        coroutineScope.launch(Dispatchers.Main) {
+                            debugLog += "\n\n☁️ [Firebase Sync] Syncing test report to configured database..."
+                            val firebaseStatus = PokerAiAutomation.uploadTestReportToFirebase(
+                                context, 
+                                totalTests = passed + failed, 
+                                passedCount = passed, 
+                                failedCount = failed, 
+                                logs = debugLog, 
+                                isSelfHealed = (runCount > 0),
+                                explanation = healedExplanation
+                            )
+                            debugLog += "\n☁️ [Firebase Sync] $firebaseStatus"
+                        }
+                    }
                 }
             }
         }
@@ -434,39 +484,150 @@ fun DebugScreen() {
         scrollState.animateScrollTo(scrollState.maxValue)
     }
 
+    // Dynamic settings state
+    var autopilotVal by remember { mutableStateOf(ScannerConfig.aiAutopilotEnabled) }
+    var dbUrlVal by remember { mutableStateOf(ScannerConfig.firebaseDbUrl) }
+
+    val sharedPrefs = context.getSharedPreferences("poker_ai_debug_prefs", android.content.Context.MODE_PRIVATE)
+
+    // Load persisted settings and implement auto-test launch
+    LaunchedEffect(Unit) {
+        autopilotVal = sharedPrefs.getBoolean("ai_autopilot", true)
+        dbUrlVal = sharedPrefs.getString("firebase_db_url", "https://pokerbot-ai-default-rtdb.firebaseio.com") ?: "https://pokerbot-ai-default-rtdb.firebaseio.com"
+        
+        ScannerConfig.aiAutopilotEnabled = autopilotVal
+        ScannerConfig.firebaseDbUrl = dbUrlVal
+        
+        // Auto trigger after 1.5s
+        delay(1500)
+        debugLog += "\n🤖 [AI Autopilot] Automatically initiating internal verification tests..."
+        runInternalTester()
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("AI Automated Server Debugger", style = MaterialTheme.typography.titleLarge)
-        
-        Spacer(Modifier.height(16.dp))
-        
-        Button(onClick = { cropLauncher.launch(android.net.Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))) {
+        Text(
+            text = "Poker Automation & AI Autopilot", 
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White
+        )
+        Spacer(Modifier.height(8.dp))
+
+        // AI / Firebase Control Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "AI Autopilot (Self-Healing)", 
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Switch(
+                        checked = autopilotVal,
+                        onCheckedChange = { checked ->
+                            autopilotVal = checked
+                            sharedPrefs.edit().putBoolean("ai_autopilot", checked).apply()
+                            ScannerConfig.aiAutopilotEnabled = checked
+                        }
+                    )
+                }
+                
+                Spacer(Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = dbUrlVal,
+                    onValueChange = { url ->
+                        dbUrlVal = url
+                        sharedPrefs.edit().putString("firebase_db_url", url).apply()
+                        ScannerConfig.firebaseDbUrl = url
+                    },
+                    label = { Text("Firebase RTDB URL") },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    singleLine = true
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // Real-time Parameters readout
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "MSE Threshold: ${ScannerConfig.templateMseThreshold}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                    Text(
+                        text = "OCR Threshold: ${ScannerConfig.ocrThreshold}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                    Text(
+                        text = "Healed: ${ScannerConfig.selfHealedCount}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF4CAF50)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Action Buttons Grid
+        Button(
+            onClick = { cropLauncher.launch(android.net.Uri.parse("content://")) }, 
+            modifier = Modifier.fillMaxWidth(), 
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+        ) {
             Text("1. Нарезка фото-кадров (Auto-Crop)")
         }
 
-        Spacer(Modifier.height(8.dp))
-        
-        Button(onClick = { runInternalTester() }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63))) {
+        Spacer(Modifier.height(6.dp))
+
+        Button(
+            onClick = { runInternalTester() }, 
+            modifier = Modifier.fillMaxWidth(), 
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63))
+        ) {
             Text("2. Запуск тестера (Внутренние фото Шага 1)")
         }
-        
-        Spacer(Modifier.height(8.dp))
-        
-        Button(onClick = { testLauncher.launch(android.net.Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0))) {
+
+        Spacer(Modifier.height(6.dp))
+
+        Button(
+            onClick = { testLauncher.launch(android.net.Uri.parse("content://")) }, 
+            modifier = Modifier.fillMaxWidth(), 
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0))
+        ) {
             Text("3. Тестер из папки (Выбрать любую)")
         }
-        
-        Spacer(Modifier.height(8.dp))
 
-        Button(onClick = { templateLauncher.launch(android.net.Uri.parse("content://")) }, modifier = Modifier.fillMaxWidth()) {
+        Spacer(Modifier.height(6.dp))
+
+        Button(
+            onClick = { templateLauncher.launch(android.net.Uri.parse("content://")) }, 
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text("4. Генератор шаблонов (Опционально)")
         }
-        
-        Spacer(Modifier.height(16.dp))
 
-        
+        Spacer(Modifier.height(12.dp))
+
+        // Terminal Log Console
         Text(
             text = debugLog, 
-            style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF00FF00), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), 
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = Color(0xFF00FF00), 
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            ), 
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
