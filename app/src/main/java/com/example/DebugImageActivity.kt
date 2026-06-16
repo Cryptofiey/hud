@@ -174,7 +174,7 @@ fun DebugScreen() {
                 withContext(Dispatchers.Main) {
                     debugLog += "\n\n🎉 Нарезка окончена! Сохранено $crCount парных фото.\n"
                     debugLog += "Сохранено во внутреннюю память для Шага 2.\n"
-                    debugLog += "Также копия направлена в Downloads/PC$pcIndex"
+                    debugLog += "Также выгружено на телефон в Загрузки.\n"
                 }
             }
         }
@@ -193,56 +193,145 @@ fun DebugScreen() {
             
             withContext(Dispatchers.IO) {
                 files.forEach { (fileName, fileUri) ->
-                    if (fileName.endsWith(".png") == true || fileName.endsWith(".jpg") == true) {
-                        val bmp = decodeUri(context, fileUri)
-                        if (bmp == null) return@forEach
-                        val expectedRegex = Regex("([2-9TJQKA][hdcs])", RegexOption.IGNORE_CASE)
-                        val matches = expectedRegex.findAll(fileName ?: "")
-                        val expectedCards = matches.map { it.value.lowercase() }.toList()
-
-                        withContext(Dispatchers.Main) {
-                            debugLog += "\n-----------------------------------"
-                            debugLog += "\n[TEST] ${fileName}\nExpected: $expectedCards"
-                        }
-                        
-                        val isHole = fileName.contains("hole", ignoreCase = true) || expectedCards.size <= 2
-                        
-                        val hRect = if (isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
-                        val cRect = if (!isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
-
-                        val scanner = ScreenScanner(context, null, 0)
-                        val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
-                        val (detectedHole, detectedComm) = result
-                        val activeRawList = if (isHole) detectedHole else detectedComm
-                        
-                        val nonNulls = activeRawList.count { it != null }
-                        val rawStr = activeRawList.filterNotNull().map { it.toString().lowercase() }
-                        val allMatch = expectedCards.size == rawStr.size && expectedCards.toSet() == rawStr.toSet()
-
-                        withContext(Dispatchers.Main) {
-                            if (allMatch) {
-                                debugLog += "\n ✅ PASS - Immediate Hit."
-                                passed++
-                            } else {
-                                debugLog += "\n ❌ FAIL - Incorrect detection."
-                                debugLog += "\n   Raw Detected: $rawStr"
-                                failed++
+                    try {
+                        if (fileName.endsWith(".png") == true || fileName.endsWith(".jpg") == true) {
+                            val bmp = decodeUri(context, fileUri)
+                            if (bmp == null) return@forEach
+                            
+                            val isDatasetRenamed = fileName.startsWith("comm_", ignoreCase = true) && fileName.contains("_hole_", ignoreCase = true)
+                            val expectedCards = mutableListOf<String>()
+                            val expectedHole = mutableListOf<String>()
+                            val expectedComm = mutableListOf<String>()
+                            
+                            val isHole: Boolean
+                            val hRect: android.graphics.Rect
+                            val cRect: android.graphics.Rect
+                            
+                            val expectedRegex = Regex("((?:10|[2-9TJQKA])[hdcs])", RegexOption.IGNORE_CASE)
+                            
+                            if (isDatasetRenamed) {
+                                val commPart = fileName.substringAfter("comm_").substringBefore("_hole_")
+                                val holePart = fileName.substringAfter("_hole_").substringBeforeLast(".")
                                 
-                                if (nonNulls == 0 && expectedCards.isNotEmpty()) {
-                                    debugLog += "\n ⚠️ ROOT ISSUE: Not finding cards at all (0 detected)."
-                                    missingAll++
-                                } else if (activeRawList.firstOrNull() == null && expectedCards.isNotEmpty()) {
-                                    debugLog += "\n ⚠️ ROOT ISSUE: Skipping first card."
-                                    missingFirst++
-                                } else if (nonNulls < expectedCards.size) {
-                                    debugLog += "\n ⚠️ ROOT ISSUE: Skipping random internal card(s)."
-                                    missingRandom++
+                                val commMatches = expectedRegex.findAll(commPart).map { it.value.lowercase() }.toList()
+                                val holeMatches = expectedRegex.findAll(holePart).map { it.value.lowercase() }.toList()
+                                
+                                expectedComm.addAll(commMatches)
+                                expectedHole.addAll(holeMatches)
+                                
+                                if (commMatches.isNotEmpty() && holeMatches.isEmpty()) {
+                                    // Community cards crop only
+                                    isHole = false
+                                    expectedCards.addAll(commMatches)
+                                    hRect = android.graphics.Rect(0, 0, 0, 0)
+                                    cRect = android.graphics.Rect(0, 0, bmp.width, bmp.height)
+                                } else if (commMatches.isEmpty() && holeMatches.isNotEmpty()) {
+                                    // Hole cards crop only
+                                    isHole = true
+                                    expectedCards.addAll(holeMatches)
+                                    hRect = android.graphics.Rect(0, 0, bmp.width, bmp.height)
+                                    cRect = android.graphics.Rect(0, 0, 0, 0)
+                                } else {
+                                    // Full screenshot (both present)
+                                    isHole = false
+                                    expectedCards.addAll(commMatches)
+                                    expectedCards.addAll(holeMatches)
+                                    
+                                    val w = bmp.width
+                                    val h = bmp.height
+                                    val cLeft = (w * 0.10f).toInt()
+                                    val cTop = (h * 0.40f).toInt()
+                                    val cRight = cLeft + (w * 0.80f).toInt()
+                                    val cBottom = cTop + (h * 0.14f).toInt()
+                                    
+                                    val hLeft = (w * 0.35f).toInt()
+                                    val hTop = (h * 0.65f).toInt()
+                                    val hRight = hLeft + (w * 0.35f).toInt()
+                                    val hBottom = hTop + (h * 0.14f).toInt()
+                                    
+                                    cRect = android.graphics.Rect(cLeft, cTop, cRight, cBottom)
+                                    hRect = android.graphics.Rect(hLeft, hTop, hRight, hBottom)
+                                }
+                            } else {
+                                val matches = expectedRegex.findAll(fileName).map { it.value.lowercase() }.toList()
+                                expectedCards.addAll(matches)
+                                isHole = fileName.contains("hole", ignoreCase = true) || expectedCards.size <= 2
+                                hRect = if (isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
+                                cRect = if (!isHole) android.graphics.Rect(0, 0, bmp.width, bmp.height) else android.graphics.Rect(0, 0, 0, 0)
+                            }
+
+                            withContext(Dispatchers.Main) {
+                                debugLog += "\n-----------------------------------"
+                                debugLog += "\n[TEST] ${fileName}\nExpected: $expectedCards"
+                            }
+
+                            val scanner = ScreenScanner(context, null, 0)
+                            val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
+                            val (detectedHole, detectedComm) = result
+                            
+                            val allMatch: Boolean
+                            val rawStrList = mutableListOf<String>()
+                            val nonNulls: Int
+                            val expectedSize: Int
+                            val activeRawList: List<com.example.Card?>
+                            
+                            if (isDatasetRenamed && expectedComm.isNotEmpty() && expectedHole.isNotEmpty()) {
+                                val rawHoleStr = detectedHole.filterNotNull().map { it.toString().lowercase() }
+                                val rawCommStr = detectedComm.filterNotNull().map { it.toString().lowercase() }
+                                rawStrList.addAll(rawHoleStr)
+                                rawStrList.addAll(rawCommStr)
+                                
+                                val holeMatch = expectedHole.size == rawHoleStr.size && expectedHole.toSet() == rawHoleStr.toSet()
+                                val commMatch = expectedComm.size == rawCommStr.size && expectedComm.toSet() == rawCommStr.toSet()
+                                allMatch = holeMatch && commMatch
+                                nonNulls = detectedHole.count { it != null } + detectedComm.count { it != null }
+                                expectedSize = expectedCards.size
+                                activeRawList = detectedHole + detectedComm
+                            } else {
+                                activeRawList = if (isHole) detectedHole else detectedComm
+                                nonNulls = activeRawList.count { it != null }
+                                val rawStr = activeRawList.filterNotNull().map { it.toString().lowercase() }
+                                rawStrList.addAll(rawStr)
+                                allMatch = expectedCards.size == rawStr.size && expectedCards.toSet() == rawStr.toSet()
+                                expectedSize = expectedCards.size
+                            }
+
+                            withContext(Dispatchers.Main) {
+                                if (allMatch) {
+                                    debugLog += "\n ✅ PASS - Immediate Hit."
+                                    passed++
+                                } else {
+                                    debugLog += "\n ❌ FAIL - Incorrect detection."
+                                    debugLog += "\n   Raw Detected: $rawStrList"
+                                    failed++
+                                    
+                                    if (nonNulls == 0 && expectedSize > 0) {
+                                        debugLog += "\n ⚠️ ROOT ISSUE: Not finding cards at all (0 detected)."
+                                        missingAll++
+                                    } else if (activeRawList.firstOrNull() == null && expectedSize > 0) {
+                                        debugLog += "\n ⚠️ ROOT ISSUE: Skipping first card."
+                                        missingFirst++
+                                    } else if (nonNulls < expectedSize) {
+                                        debugLog += "\n ⚠️ ROOT ISSUE: Skipping random internal card(s)."
+                                        missingRandom++
+                                    }
                                 }
                             }
+                            bmp.recycle()
                         }
-                        bmp.recycle()
+                    } catch (e: Throwable) {
+                        e.printStackTrace()
+                        val sw = java.io.StringWriter()
+                        e.printStackTrace(java.io.PrintWriter(sw))
+                        val stackStr = sw.toString().split("\n").take(5).joinToString("\n")
+                        withContext(Dispatchers.Main) {
+                            debugLog += "\n ❌ CRASH on $fileName"
+                            debugLog += "\n   Error: ${e.javaClass.simpleName}: ${e.message}"
+                            debugLog += "\n   Stack: $stackStr"
+                        }
                     }
                 }
+                
                 withContext(Dispatchers.Main) {
                     debugLog += "\n\n=== AI DEBUG REPORT ==="
                     debugLog += "\nTotal Tests: ${passed + failed}"
