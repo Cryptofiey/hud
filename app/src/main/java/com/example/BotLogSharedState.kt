@@ -1,14 +1,23 @@
 package com.example
 
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import android.util.Log
 
 data class LogEntry(val timestamp: Long, val tag: String, val message: String)
 
 object BotLogSharedState {
-    val isBotLogWidgetRunning = MutableStateFlow(false)
     val isLogServerRunning = MutableStateFlow(false)
     val widgetRect = MutableStateFlow<android.graphics.Rect?>(null)
     
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private val firebaseDbUrl = BuildConfig.FIREBASE_DB_URL
+
     // Timed log history for diagnostics
     val logsHistory = java.util.Collections.synchronizedList(mutableListOf<LogEntry>())
     
@@ -25,10 +34,42 @@ object BotLogSharedState {
     
     val logL4 = MutableStateFlow("")
     val logBot = MutableStateFlow("") // L5
+
+    private fun pushToFirebase(tag: String, msg: String, timestamp: Long) {
+        if (firebaseDbUrl.isEmpty() || firebaseDbUrl.contains("your-project-id")) return
+        scope.launch {
+            try {
+                val url = URL("$firebaseDbUrl/logs.json")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                
+                val json = JSONObject()
+                json.put("timestamp", timestamp)
+                json.put("tag", tag)
+                json.put("message", msg)
+                
+                conn.outputStream.use { os ->
+                    val input = json.toString().toByteArray(Charsets.UTF_8)
+                    os.write(input, 0, input.size)
+                }
+                
+                if (conn.responseCode !in 200..299) {
+                    Log.e("BotLogSharedState", "Firebase push failed: ${conn.responseCode}")
+                }
+                conn.disconnect()
+            } catch (e: Exception) {
+                Log.e("BotLogSharedState", "Error pushing log: ${e.message}")
+            }
+        }
+    }
     
     private fun addHistory(tag: String, msg: String) {
         val now = System.currentTimeMillis()
         logsHistory.add(LogEntry(now, tag, msg))
+        pushToFirebase(tag, msg, now)
+        
         // Keep full session logs in memory up to 500000 lines to satisfy user request for complete export
         if (logsHistory.size > 500000) {
             try {

@@ -532,7 +532,6 @@ fun SettingsLayout(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     val isHudOverlayRunning by PokerHudSharedState.isHudOverlayRunning.collectAsStateWithLifecycle()
-                    val isBotLogWidgetRunning by BotLogSharedState.isBotLogWidgetRunning.collectAsStateWithLifecycle()
                     
                     SettingsToggleCard(
                         title = "HUD Overlay",
@@ -569,87 +568,7 @@ fun SettingsLayout(
                         onMoreInfo = { onMoreInfoClicked("HUD Overlay controls and permissions") }
                     )
 
-                    SettingsToggleCard(
-                        title = "🤖 Bot Log Widget",
-                        description = "Activate or Stop the floating log tracker for bot L/M levels.",
-                        checked = isBotLogWidgetRunning,
-                        onCheckedChange = { start -> 
-                            val activity = context.findActivity() as? MainActivity
-                            if (start) {
-                                val ok = activity?.checkAndRequestOverlayPermission(context) ?: true
-                                if (ok) {
-                                    try {
-                                        val serviceIntent = Intent(context, BotLogWidgetService::class.java)
-                                        ContextCompat.startForegroundService(context, serviceIntent)
-                                        BotLogSharedState.isBotLogWidgetRunning.value = true
-                                        Toast.makeText(context, "Bot Log Widget Started", Toast.LENGTH_SHORT).show()
-                                    } catch (e: Exception) {
-                                        Log.e("MainActivity", "Failed to start BotLogWidgetService: ${e.message}", e)
-                                        Toast.makeText(context, "Error starting widget: ${e.message}", Toast.LENGTH_LONG).show()
-                                    }
-                                } else {
-                                    Toast.makeText(context, "Please grant Overlay Permissions first!", Toast.LENGTH_LONG).show()
-                                }
-                            } else {
-                                try {
-                                    val stopIntent = Intent(context, BotLogWidgetService::class.java).apply {
-                                        action = "STOP"
-                                    }
-                                    context.startService(stopIntent)
-                                    BotLogSharedState.isBotLogWidgetRunning.value = false
-                                    Toast.makeText(context, "Bot Log Widget Stopped", Toast.LENGTH_SHORT).show()
-                                } catch (e: Exception) {
-                                    Log.e("MainActivity", "Failed to stop BotLogWidgetService: ${e.message}", e)
-                                }
-                            }
-                        },
-                        onMoreInfo = { onMoreInfoClicked("Bot Log Widget") }
-                    )
-
-                    // Add Local Web Server Toggle
-                    var localIpAddress by remember { mutableStateOf("127.0.0.1") }
-                    LaunchedEffect(Unit) {
-                        try {
-                            val interfaces = NetworkInterface.getNetworkInterfaces()
-                            while (interfaces.hasMoreElements()) {
-                                val intf = interfaces.nextElement()
-                                val addrs = intf.inetAddresses
-                                while (addrs.hasMoreElements()) {
-                                    val addr = addrs.nextElement()
-                                    if (!addr.isLoopbackAddress && addr is Inet4Address) {
-                                        localIpAddress = addr.hostAddress ?: "127.0.0.1"
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Log.e("MainActivity", "Error getting IP", e)
-                        }
-                    }
-                    val isLogServerRunning by BotLogSharedState.isLogServerRunning.collectAsStateWithLifecycle()
-                    SettingsToggleCard(
-                        title = "🤖 Remote Bot Dashboard (Web)",
-                        description = if (isLogServerRunning) "Dashboard active at: http://$localIpAddress:8080" else "Start a local web server to view bot logs on another device (PC) without blocking the phone screen.",
-                        checked = isLogServerRunning,
-                        onCheckedChange = { start ->
-                            if (start) {
-                                LocalLogServer.start(context)
-                                BotLogSharedState.isLogServerRunning.value = true
-                                val url = "http://$localIpAddress:8080"
-                                Toast.makeText(context, "Dashboard available at $url", Toast.LENGTH_LONG).show()
-                                try {
-                                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                    context.startActivity(browserIntent)
-                                } catch (e: Exception) {
-                                    Log.e("MainActivity", "Failed to open browser", e)
-                                }
-                            } else {
-                                LocalLogServer.stop()
-                                BotLogSharedState.isLogServerRunning.value = false
-                                Toast.makeText(context, "Dashboard server stopped.", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onMoreInfo = { onMoreInfoClicked("Start this to view the bot's L1-L5 logs on your PC. Phone and PC must be on the same Wi-Fi. This avoids overlaying the log widget on your poker table and solves all blocking issues!") }
-                    )
+                    // Bot Logs have been moved to server.
 
                     // Option Card 1: Winning Probabilities
                     val winProbMaxHands by PokerHudSharedState.winProbMaxHands.collectAsStateWithLifecycle()
@@ -892,93 +811,6 @@ fun SettingsLayout(
                                         )
                                     )
                                 }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Option Card: Accessibility Service for Instant Debug Capturing
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF0F0F0F))
-                            .border(BorderStroke(1.2.dp, Color(0xFFE57373)), RoundedCornerShape(10.dp))
-                            .padding(14.dp)
-                    ) {
-                        Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "📷 Instant Debug Capture",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
-                                )
-                                
-                                val isDebugConnected = DebugCaptureService.instance != null
-                                
-                                if (!isDebugConnected) {
-                                    Button(
-                                        onClick = {
-                                            context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE57373)),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                        modifier = Modifier.height(24.dp)
-                                    ) {
-                                        Text("ENABLE SHORTCUT", fontSize = 9.sp, color = Color.White)
-                                    }
-                                } else {
-                                    Button(
-                                        onClick = {},
-                                        enabled = false,
-                                        colors = ButtonDefaults.buttonColors(
-                                            disabledContainerColor = Color(0x334CAF50),
-                                            disabledContentColor = Color(0xFF4CAF50)
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                        modifier = Modifier.height(24.dp)
-                                    ) {
-                                        Text("SHORTCUT ACTIVE", fontSize = 9.sp)
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Creates a second native system shortcut button on screen. Tapping it captures play logs and screenshots instantly, bundling them into your device's Downloads/PokerBotDebug folder automatically.",
-                                color = Color(0xFFEEEEEE),
-                                fontSize = 9.sp,
-                                lineHeight = 11.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        DebugLogManager.triggerDiagnosticCapture(context)
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F)),
-                                modifier = Modifier.fillMaxWidth().height(28.dp),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Text("ТЕСТ СНИМКА (CAPTURE SNAPSHOT TEST)", fontSize = 9.sp, color = Color.White)
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = {
-                                    val intent = Intent(context, DebugImageActivity::class.java)
-                                    context.startActivity(intent)
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                                modifier = Modifier.fillMaxWidth().height(28.dp),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Text("ДЕБАГЕР РАСПОЗНАВАНИЯ КАРТ (IMAGE DEBUGGER)", fontSize = 9.sp, color = Color.White)
                             }
                         }
                     }

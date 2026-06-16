@@ -28,11 +28,6 @@
             </intent-filter>
         </activity>
         
-        <activity android:name=".DebugImageActivity"
-                  android:exported="false"
-                  android:label="Debugger"
-                  android:theme="@style/Theme.MyApplication" />
-
         <service
             android:name=".PokerHudService"
             android:enabled="true"
@@ -42,17 +37,6 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Overlay tool for displaying statistical computations and logs on request" />
-        </service>
-
-        <service
-            android:name=".BotLogWidgetService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="specialUse"
-            tools:ignore="ForegroundServicePermission">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Overlay tool for displaying statistical computations and bot logs" />
         </service>
 
         <receiver
@@ -81,19 +65,7 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <service
-            android:name=".DebugCaptureService"
-            android:enabled="true"
-            android:exported="true"
-            android:icon="@drawable/ic_accessibility_camera"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/debug_capture_service_config" />
-        </service>
+
 
     </application>
 

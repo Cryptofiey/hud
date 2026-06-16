@@ -1011,7 +1011,7 @@ class ScreenScanner(
             
             // Periodically save screenshot if bot has actions available
             if (actionButtonsMap.isNotEmpty() || transitionButtonsMap.isNotEmpty()) {
-                DebugLogManager.savePeriodicScreenshot(cleanBitmap!!, context)
+                // Debug tracking moved to server.
             }
 
             commElements.sortBy { it.boundingBox?.left ?: 0 }
