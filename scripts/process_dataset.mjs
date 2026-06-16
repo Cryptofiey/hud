@@ -23,19 +23,21 @@ if (!TARGET_DIR || !fs.existsSync(TARGET_DIR)) {
     process.exit(1);
 }
 
-const MODEL = 'gemini-3.5-flash'; 
+const MODEL = 'gemini-flash-latest'; 
 
 async function identifyCards(imagePath) {
     const imageData = fs.readFileSync(imagePath).toString('base64');
     
+    // Add a significant delay between requests to avoid rate limits on free tier
+    await new Promise(resolve => setTimeout(resolve, 15000));
+    
     const prompt = `
         Identify poker cards in this image. 
-        Return ONLY a JSON object with this structure:
+        Return ONLY a JSON object:
         {
             "hole": "2hKd", 
             "comm": "3s5c9h",
-            "quality": "good" | "poor",
-            "reason": "..." 
+            "quality": "good" | "poor"
         }
     `;
 
@@ -47,10 +49,7 @@ async function identifyCards(imagePath) {
                 { text: prompt },
                 { inlineData: { mimeType: "image/jpeg", data: imageData } }
             ]
-        }],
-        generationConfig: {
-            responseMimeType: "application/json"
-        }
+        }]
     };
 
     try {
@@ -73,11 +72,10 @@ async function identifyCards(imagePath) {
 }
 
 async function run() {
-    const files = fs.readdirSync(TARGET_DIR);
-    console.log(`Scanning ${files.length} files in ${TARGET_DIR}...`);
+    const files = fs.readdirSync(TARGET_DIR).filter(f => f.match(/\.(jpg|jpeg|png)$/i)).slice(0, 2);
+    console.log(`Scanning ${files.length} files in ${TARGET_DIR} (Limited for test)...`);
 
     for (const file of files) {
-        if (!file.match(/\.(jpg|jpeg|png)$/i)) continue;
 
         const filePath = path.join(TARGET_DIR, file);
         console.log(`\nProcessing: ${file}`);
