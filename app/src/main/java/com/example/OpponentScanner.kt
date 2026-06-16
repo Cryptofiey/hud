@@ -119,8 +119,8 @@ object OpponentScanner {
         return true
     }
 
-    fun scan(result: Text, cleanBitmap: Bitmap, hudRects: List<Rect> = listOf(), commRect: Rect? = null, holeRect: Rect? = null): List<OpponentState> {
-        if (PokerHudSharedState.appScreenContext.value != AppScreenState.COINPOKER_TABLE) {
+    fun scan(result: Text?, cleanBitmap: Bitmap, hudRects: List<Rect> = listOf(), commRect: Rect? = null, holeRect: Rect? = null): List<OpponentState> {
+        if (result == null || PokerHudSharedState.appScreenContext.value != AppScreenState.COINPOKER_TABLE) {
             return emptyList()
         }
         val candidates = mutableListOf<OpponentState>()

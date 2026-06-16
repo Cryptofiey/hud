@@ -404,7 +404,6 @@ class ScreenScanner(
 
         applyCardThresholding(ocrBitmap, hRect, cRect)
         val image = com.google.mlkit.vision.common.InputImage.fromBitmap(ocrBitmap, 0)
-        val result = Tasks.await(recognizer.process(image))
         
         val templateRes = templateDeferred.await()
         val templateHoleCards = templateRes.first
@@ -413,30 +412,35 @@ class ScreenScanner(
         val tempHoleCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
         val tempCommCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
 
-        result.textBlocks.forEach { block ->
-            block.lines.forEach { line ->
-                line.elements.forEach { element ->
-                    val text = element.text.trim().uppercase()
-                    if (text.length > 2 || text.isEmpty()) return@forEach
-                    
-                    var cleanText = text.replace("&", "8").replace("$", "8").replace("@", "Q").replace("%", "8").replace("?", "7").replace("!", "1")
-                        .replace("O", "Q").replace("0", "Q").replace("D", "Q")
-                    val rankText = cleanText.take(1)
-                    var parsedRank = Rank.values().find { it.symbol.equals(rankText, ignoreCase = true) }
-                    
-                    if (parsedRank != null) {
-                        val rect = element.boundingBox ?: return@forEach
-                        parsedRank = refineRankWithPixelCheck(ocrBitmap, rect, parsedRank)
-                        if (hRect.contains(rect.centerX(), rect.centerY())) {
-                            val detectedSuit = robustDetectSuit(testBmp, rect) ?: Suit.SPADES
-                            tempHoleCards.add(Pair(Card(parsedRank, detectedSuit), rect))
-                        } else if (cRect.contains(rect.centerX(), rect.centerY())) {
-                            val detectedSuit = robustDetectSuit(testBmp, rect) ?: Suit.SPADES
-                            tempCommCards.add(Pair(Card(parsedRank, detectedSuit), rect))
+        try {
+            val result = Tasks.await(recognizer.process(image), 5, java.util.concurrent.TimeUnit.SECONDS)
+            result.textBlocks.forEach { block ->
+                block.lines.forEach { line ->
+                    line.elements.forEach { element ->
+                        val text = element.text.trim().uppercase()
+                        if (text.length > 2 || text.isEmpty()) return@forEach
+                        
+                        var cleanText = text.replace("&", "8").replace("$", "8").replace("@", "Q").replace("%", "8").replace("?", "7").replace("!", "1")
+                            .replace("O", "Q").replace("0", "Q").replace("D", "Q")
+                        val rankText = cleanText.take(1)
+                        var parsedRank = Rank.values().find { it.symbol.equals(rankText, ignoreCase = true) }
+                        
+                        if (parsedRank != null) {
+                            val rect = element.boundingBox ?: return@forEach
+                            parsedRank = refineRankWithPixelCheck(ocrBitmap, rect, parsedRank)
+                            if (hRect.contains(rect.centerX(), rect.centerY())) {
+                                val detectedSuit = robustDetectSuit(testBmp, rect) ?: Suit.SPADES
+                                tempHoleCards.add(Pair(Card(parsedRank, detectedSuit), rect))
+                            } else if (cRect.contains(rect.centerX(), rect.centerY())) {
+                                val detectedSuit = robustDetectSuit(testBmp, rect) ?: Suit.SPADES
+                                tempCommCards.add(Pair(Card(parsedRank, detectedSuit), rect))
+                            }
                         }
                     }
                 }
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
         
         fun clusterCards(cards: List<Pair<Card, android.graphics.Rect>>, maxCards: Int, regionRect: android.graphics.Rect): MutableList<Card?> {
@@ -635,7 +639,12 @@ class ScreenScanner(
                 applyCardThresholding(ocrBitmap!!, activeHoleRect, activeCommRect)
                 
                 val inputImage = InputImage.fromBitmap(ocrBitmap!!, 0)
-                val ocrRes = Tasks.await(recognizer.process(inputImage))
+                val ocrRes = try {
+                    Tasks.await(recognizer.process(inputImage), 5, java.util.concurrent.TimeUnit.SECONDS)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
+                }
                 val templateRes = templateDeferred.await()
                 Pair(templateRes, ocrRes)
             }
@@ -663,7 +672,7 @@ class ScreenScanner(
 
             var scannedPotSize: Float? = null
             
-            val fullScanText = result.text.uppercase()
+            val fullScanText = result?.text?.uppercase() ?: ""
             
             // Abort processing immediately if we are viewing our own settings screen or Android launcher
             if (fullScanText.contains("POKER EQUITY HUD") || fullScanText.contains("ADVISOR ADVANCED FEATURES") || fullScanText.contains("CALIBRATION BOUNDING BOXES")) {
@@ -700,7 +709,7 @@ class ScreenScanner(
             }
 
             val linesList = mutableListOf<com.google.mlkit.vision.text.Text.Line>()
-            result.textBlocks.forEach { block ->
+            result?.textBlocks?.forEach { block ->
                 block.lines.forEach { line ->
                     linesList.add(line)
                 }
@@ -742,7 +751,7 @@ class ScreenScanner(
             val heroActionOptions = mutableSetOf<String>()
             var hasPreactions = false
 
-            for (block in result.textBlocks) {
+            for (block in result?.textBlocks ?: emptyList()) {
                 for (line in block.lines) {
                     val lineBox = line.boundingBox
                     if (lineBox != null && lineBox.width() >= 10 && lineBox.height() >= 10) {
@@ -1389,7 +1398,7 @@ class ScreenScanner(
             var dealerPlayer: OpponentState? = null
             for (player in seatedPlayers) {
                 val box = player.boundingBox ?: continue
-                if (hasDealerButton(cleanBitmap!!, box, result.textBlocks)) {
+                if (hasDealerButton(cleanBitmap!!, box, result?.textBlocks ?: emptyList())) {
                     dealerPlayer = player
                     break
                 }
@@ -1489,7 +1498,7 @@ class ScreenScanner(
             }
 
             val rawBoxes = if (PokerHudSharedState.showScannerBoxes.value) {
-                result.textBlocks.flatMap { block ->
+                result?.textBlocks?.flatMap { block ->
                     block.lines.mapNotNull { line ->
                         val rect = line.boundingBox
                         if (rect == null) null
@@ -1605,7 +1614,7 @@ class ScreenScanner(
                     smallBlind = parsedSB,
                     bigBlind = parsedBB,
                     tournamentStage = parsedStage,
-                    isBbDisplay = Regex("([0-9.,]+)\\s*(BB|ББ)").containsMatchIn(result.text.uppercase())
+                    isBbDisplay = Regex("([0-9.,]+)\\s*(BB|ББ)").containsMatchIn(fullScanText)
                 )
             )
             

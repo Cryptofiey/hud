@@ -6,7 +6,8 @@ import com.google.mlkit.vision.text.Text
 object ProfileScanner {
     // Looks through the recognized text to find a profile screen.
     // We detect a profile if we see the words "Profile", "VPIP", "PFR", etc.
-    fun scan(result: Text, cleanBitmap: Bitmap, hudRects: List<android.graphics.Rect> = listOf()): PlayerStats? {
+    fun scan(result: Text?, cleanBitmap: Bitmap, hudRects: List<android.graphics.Rect> = listOf()): PlayerStats? {
+        if (result == null) return null
         val screenH = cleanBitmap.height
         val blocks = result.textBlocks.filter { block ->
             val b = block.boundingBox
