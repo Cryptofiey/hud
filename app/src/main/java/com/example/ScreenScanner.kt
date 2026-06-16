@@ -86,8 +86,8 @@ class ScreenScanner(
     }
 
     companion object {
-        val recognizer by lazy {
-            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        val recognizer: com.google.mlkit.vision.text.TextRecognizer? by lazy {
+            null
         }
     }
     
@@ -422,9 +422,9 @@ class ScreenScanner(
         val tempCommCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
 
         try {
-            val result = Tasks.await(recognizer.process(image), 5, java.util.concurrent.TimeUnit.SECONDS)
-            debugLogInfo += "OCR Result text: [${result.text.replace("\n", " \" ")}]\n"
-            result.textBlocks.forEach { block ->
+            val result = if (recognizer != null) Tasks.await(recognizer!!.process(image), 5, java.util.concurrent.TimeUnit.SECONDS) else null
+            debugLogInfo += "OCR Result text: [${result?.text?.replace("\n", " \" ") ?: "NULL"}]\n"
+            result?.textBlocks?.forEach { block ->
                 block.lines.forEach { line ->
                     line.elements.forEach { element ->
                         val text = element.text.trim().uppercase()
@@ -652,13 +652,7 @@ class ScreenScanner(
                 ocrBitmap = cleanBitmap!!.copy(Bitmap.Config.ARGB_8888, true)
                 applyCardThresholding(ocrBitmap!!, activeHoleRect, activeCommRect)
                 
-                val inputImage = InputImage.fromBitmap(ocrBitmap!!, 0)
-                val ocrRes = try {
-                    Tasks.await(recognizer.process(inputImage), 5, java.util.concurrent.TimeUnit.SECONDS)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    null
-                }
+                val ocrRes: com.google.mlkit.vision.text.Text? = null
                 val templateRes = templateDeferred.await()
                 Pair(templateRes, ocrRes)
             }

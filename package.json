@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@viniciustrindade/gdownjs": "^1.0.0"
+    "@viniciustrindade/gdownjs": "^1.0.0",
+    "jimp": "^1.6.1"
   }
 }
