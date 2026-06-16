@@ -9,7 +9,11 @@ import java.io.FileOutputStream
 
 object TemplateManager {
     
+<<<<<<< HEAD
     private val templates = mutableListOf<Template>()
+=======
+    val templates = mutableListOf<Template>()
+>>>>>>> origin/main
     private var isInitialized = false
 
     class Template(
@@ -76,6 +80,11 @@ object TemplateManager {
 
     data class MatchResult(val text: String, val rect: android.graphics.Rect)
 
+<<<<<<< HEAD
+=======
+    class MatchCandidate(val x: Int, val text: String, val mse: Float, val tW: Int, val tH: Int)
+
+>>>>>>> origin/main
     // Returns a list of matches found from left to right
     fun matchMultiple(inputBmp: Bitmap, maxCards: Int): List<MatchResult> {
         if (templates.isEmpty()) return emptyList()
@@ -87,8 +96,12 @@ object TemplateManager {
         val inputPixels = IntArray(inputW * inputH)
         inputBmp.getPixels(inputPixels, 0, inputW, 0, 0, inputW, inputH)
         
+<<<<<<< HEAD
         val foundCards = mutableListOf<Triple<Int, String, android.graphics.Rect>>() // X coord, Card Text, Rect
         val matchedRegions = mutableListOf<IntRange>()
+=======
+        val candidates = mutableListOf<MatchCandidate>()
+>>>>>>> origin/main
         
         for (template in templates) {
             val tW = template.w
@@ -101,24 +114,50 @@ object TemplateManager {
             val xStep = 2 // slide every 2 pixels
             
             for (x in 0..maxX step xStep) {
+<<<<<<< HEAD
                 if (matchedRegions.any { x in it }) continue
                 
+=======
+>>>>>>> origin/main
                 var bestMseLoc = Float.MAX_VALUE
                 for (y in 0..maxY step yStep) {
                     val mse = computeMseFast(inputPixels, inputW, x, y, template.pixels, tW, tH)
                     if (mse < bestMseLoc) bestMseLoc = mse
                 }
                 
+<<<<<<< HEAD
                 if (bestMseLoc < 500.0f) { 
                     val rect = android.graphics.Rect(x, 0, x + tW, tH)
                     foundCards.add(Triple(x, template.text, rect))
                     matchedRegions.add(x until (x + tW - tW / 4))
+=======
+                if (bestMseLoc < 1500.0f) { 
+                    candidates.add(MatchCandidate(x, template.text, bestMseLoc, tW, tH))
+>>>>>>> origin/main
                 }
             }
         }
         
+<<<<<<< HEAD
         foundCards.sortBy { it.first }
         return foundCards.take(maxCards).map { MatchResult(it.second, it.third) }
+=======
+        // Resolve overlaps keeping the lowest MSE candidates
+        candidates.sortBy { it.mse }
+        val accepted = mutableListOf<MatchCandidate>()
+        for (cand in candidates) {
+            val spaceThreshold = cand.tW * 0.75f
+            val overlaps = accepted.any { acc ->
+                Math.abs(acc.x - cand.x) < spaceThreshold
+            }
+            if (!overlaps) {
+                accepted.add(cand)
+            }
+        }
+        
+        accepted.sortBy { it.x }
+        return accepted.take(maxCards).map { MatchResult(it.text, android.graphics.Rect(it.x, 0, it.x + it.tW, it.tH)) }
+>>>>>>> origin/main
     }
 
     private fun computeMseFast(
