@@ -12,7 +12,7 @@ import path from 'path';
  * 4. Deletes if cards aren't clear.
  */
 
-const API_KEY = process.env.GEMINI_API_KEY;
+const API_KEY = process.env.GEMINI_API_KEY || "";
 const TARGET_DIR = process.argv[2];
 
 if (!API_KEY) {
@@ -25,7 +25,7 @@ if (!TARGET_DIR || !fs.existsSync(TARGET_DIR)) {
     process.exit(1);
 }
 
-const MODEL = 'gemini-flash-latest';
+const MODEL = 'gemini-flash-lite-latest';
 
 async function identifyCards(imagePath) {
     const imageData = fs.readFileSync(imagePath).toString('base64');
@@ -73,6 +73,10 @@ async function identifyCards(imagePath) {
             return JSON.parse(json.candidates[0].content.parts[0].text);
         } else {
             console.error(`  [ERROR] API Response: ${JSON.stringify(json)}`);
+            if (json.error && json.error.code === 429) {
+                console.log("  [WAIT] Rate limit hit. Waiting 60s...");
+                await new Promise(r => setTimeout(r, 60000));
+            }
         }
     } catch (e) {
         console.error(`  [ERROR] Fetch for ${imagePath}:`, e.message);
@@ -82,7 +86,7 @@ async function identifyCards(imagePath) {
 
 async function run() {
     const allFiles = fs.readdirSync(TARGET_DIR);
-    const files = allFiles.filter(f => f.match(/\.(jpg|jpeg|png)$/i));
+    const files = allFiles.filter(f => f.match(/\.(jpg|jpeg|png)$/i) && !f.startsWith('.'));
     
     console.log(`Scanning ${files.length} files in ${TARGET_DIR}...`);
 
@@ -95,8 +99,8 @@ async function run() {
         const filePath = path.join(TARGET_DIR, file);
         console.log(`\nProcessing: ${file}`);
         
-        // Add delay for free tier RPM limit (approx 6 seconds to be safe)
-        await new Promise(r => setTimeout(r, 6000));
+        // Add delay for free tier RPM limit (6 seconds to be safe)
+        await new Promise(r => setTimeout(r, 60000 / 12)); // 12 RPM max safe
 
         const result = await identifyCards(filePath);
         if (!result) {
