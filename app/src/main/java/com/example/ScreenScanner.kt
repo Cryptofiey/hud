@@ -412,7 +412,6 @@ class ScreenScanner(
         }
 
         applyCardThresholding(ocrBitmap, hRect, cRect)
-        val image = com.google.mlkit.vision.common.InputImage.fromBitmap(ocrBitmap, 0)
         
         val templateRes = templateDeferred.await()
         val templateHoleCards = templateRes.first
@@ -422,7 +421,10 @@ class ScreenScanner(
         val tempCommCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
 
         try {
-            val result = if (recognizer != null) Tasks.await(recognizer!!.process(image), 5, java.util.concurrent.TimeUnit.SECONDS) else null
+            val result = if (recognizer != null) {
+                val image = com.google.mlkit.vision.common.InputImage.fromBitmap(ocrBitmap, 0)
+                Tasks.await(recognizer!!.process(image), 5, java.util.concurrent.TimeUnit.SECONDS)
+            } else null
             debugLogInfo += "OCR Result text: [${result?.text?.replace("\n", " \" ") ?: "NULL"}]\n"
             result?.textBlocks?.forEach { block ->
                 block.lines.forEach { line ->
