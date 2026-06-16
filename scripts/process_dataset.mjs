@@ -25,7 +25,7 @@ if (!TARGET_DIR || !fs.existsSync(TARGET_DIR)) {
     process.exit(1);
 }
 
-const MODEL = 'gemini-2.0-flash-lite';
+const MODEL = 'gemini-2.5-flash';
 
 async function identifyCards(imagePath) {
     const imageData = fs.readFileSync(imagePath).toString('base64');
@@ -82,7 +82,7 @@ async function identifyCards(imagePath) {
 
 async function run() {
     const allFiles = fs.readdirSync(TARGET_DIR);
-    const files = allFiles.filter(f => f.match(/\.(jpg|jpeg|png)$/i)).slice(0, 2);
+    const files = allFiles.filter(f => f.match(/\.(jpg|jpeg|png)$/i));
     
     console.log(`Scanning ${files.length} files in ${TARGET_DIR}...`);
 
@@ -90,8 +90,8 @@ async function run() {
         const filePath = path.join(TARGET_DIR, file);
         console.log(`\nProcessing: ${file}`);
         
-        // Add delay for free tier RPM limit (approx 20 seconds)
-        await new Promise(r => setTimeout(r, 20000));
+        // Add delay for free tier RPM limit (approx 12 seconds to be safe)
+        await new Promise(r => setTimeout(r, 12000));
 
         const result = await identifyCards(filePath);
         if (!result) {
