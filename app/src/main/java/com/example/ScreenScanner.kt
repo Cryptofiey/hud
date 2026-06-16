@@ -425,6 +425,7 @@ class ScreenScanner(
                 val image = com.google.mlkit.vision.common.InputImage.fromBitmap(ocrBitmap, 0)
                 Tasks.await(recognizer!!.process(image), 5, java.util.concurrent.TimeUnit.SECONDS)
             } else null
+            
             debugLogInfo += "OCR Result text: [${result?.text?.replace("\n", " \" ") ?: "NULL"}]\n"
             result?.textBlocks?.forEach { block ->
                 block.lines.forEach { line ->
