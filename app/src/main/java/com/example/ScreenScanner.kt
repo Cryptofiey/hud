@@ -94,6 +94,8 @@ class ScreenScanner(
     private val scope = CoroutineScope(Dispatchers.Default + Job())
     private var scanJob: Job? = null
     
+    var debugLogInfo = ""
+    
     var requestProfileScan = stopAfterProfileScan // if true initially, immediately run profile scan
     val isScanning = MutableStateFlow(false)
     val scanStatus = MutableStateFlow("Scanner idle.")
@@ -351,6 +353,10 @@ class ScreenScanner(
 
     // Expose processing logic for automated testing in DebugImageActivity
     suspend fun processGivenBitmap(context: Context, testBmp: Bitmap, hRect: android.graphics.Rect, cRect: android.graphics.Rect): Pair<List<Card?>, List<Card?>> = kotlinx.coroutines.coroutineScope {
+        debugLogInfo = ""
+        debugLogInfo += "[DIAGNOSTICS] Input: ${testBmp.width}x${testBmp.height} | hRect=$hRect, cRect=$cRect\n"
+        debugLogInfo += "Templates in memory: ${TemplateManager.templates.size}\n"
+
         val ocrBitmap = testBmp.copy(Bitmap.Config.ARGB_8888, true)
         
         // Emulate the first pass with Template Manager and OCR
@@ -398,7 +404,10 @@ class ScreenScanner(
                     }
                     commCrop.recycle()
                 }
-            } catch (ignored: Exception) {}
+                debugLogInfo += "Template Matches -> Hole: ${tHole.map { it.first.toString() }}, Comm: ${tComm.map { it.first.toString() }}\n"
+            } catch (e: Exception) {
+                debugLogInfo += "Template Matching Error: ${e.message}\n"
+            }
             Pair(tHole, tComm)
         }
 
@@ -414,6 +423,7 @@ class ScreenScanner(
 
         try {
             val result = Tasks.await(recognizer.process(image), 5, java.util.concurrent.TimeUnit.SECONDS)
+            debugLogInfo += "OCR Result text: [${result.text.replace("\n", " \" ")}]\n"
             result.textBlocks.forEach { block ->
                 block.lines.forEach { line ->
                     line.elements.forEach { element ->
@@ -439,8 +449,10 @@ class ScreenScanner(
                     }
                 }
             }
+            debugLogInfo += "OCR Matches -> Hole: ${tempHoleCards.map { it.first.toString() }}, Comm: ${tempCommCards.map { it.first.toString() }}\n"
         } catch (e: Exception) {
             e.printStackTrace()
+            debugLogInfo += "OCR Exception: ${e.javaClass.simpleName} - ${e.message}\n"
         }
         
         fun clusterCards(cards: List<Pair<Card, android.graphics.Rect>>, maxCards: Int, regionRect: android.graphics.Rect): MutableList<Card?> {
@@ -492,6 +504,8 @@ class ScreenScanner(
 
         val rawComm = clusterCards(safeTempComm, 5, cRect)
         val rawHole = clusterCards(safeTempHole, 2, hRect)
+
+        debugLogInfo += "Final rawHole: $rawHole | rawComm: $rawComm\n"
 
         ocrBitmap.recycle()
         Pair(rawHole, rawComm)

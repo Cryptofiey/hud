@@ -298,6 +298,7 @@ fun DebugScreen() {
                             val scanner = ScreenScanner(context, null, 0)
                             val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
                             val (detectedHole, detectedComm) = result
+                            val scanInfo = scanner.debugLogInfo
                             
                             val allMatch: Boolean
                             val rawStrList = mutableListOf<String>()
@@ -327,6 +328,7 @@ fun DebugScreen() {
                             }
 
                             withContext(Dispatchers.Main) {
+                                debugLog += "\n$scanInfo"
                                 if (allMatch) {
                                     debugLog += "\n ✅ PASS - Immediate Hit."
                                     passed++

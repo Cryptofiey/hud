@@ -9,7 +9,7 @@ import java.io.FileOutputStream
 
 object TemplateManager {
     
-    private val templates = mutableListOf<Template>()
+    val templates = mutableListOf<Template>()
     private var isInitialized = false
 
     class Template(
