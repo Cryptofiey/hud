@@ -21,13 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import com.example.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.Dispatchers
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-import kotlinx.coroutines.delay
->>>>>>> origin/main
->>>>>>> origin/main
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -55,11 +48,7 @@ fun DebugScreen() {
                 if (nameLower.endsWith(".png") || nameLower.endsWith(".jpg") || nameLower.endsWith(".jpeg")) {
                     val bmp = decodeUri(context, file.uri)
                     if (bmp == null) return@forEach
-<<<<<<< HEAD
                     val expectedRegex = Regex("([2-9TJQKA][hdcs])", RegexOption.IGNORE_CASE)
-=======
-                    val expectedRegex = Regex("((?:10|[2-9TJQKA])[hdcs])", RegexOption.IGNORE_CASE)
->>>>>>> origin/main
                     val matches = expectedRegex.findAll(file.name ?: "")
                     val cards = matches.map { it.value }.toList()
                     
@@ -122,7 +111,6 @@ fun DebugScreen() {
                 dir?.listFiles()?.forEach { file ->
                     val nameLower = file.name?.lowercase() ?: ""
                     if (nameLower.endsWith(".png") || nameLower.endsWith(".jpg") || nameLower.endsWith(".jpeg")) {
-<<<<<<< HEAD
                         val bmp = decodeUri(context, file.uri)
                         if (bmp == null) return@forEach
                         
@@ -209,106 +197,6 @@ fun DebugScreen() {
                             debugLog += "\n✅ Cropped ${file.name} -> $commName.png, $holeName.png"
                         }
                         crCount++
-=======
-                        try {
-                            val bmp = decodeUri(context, file.uri)
-                            if (bmp == null) {
-                                withContext(Dispatchers.Main) {
-                                    debugLog += "\n⚠️ Skipping ${file.name} - could not decode Bitmap."
-                                }
-                                return@forEach
-                            }
-                            
-                            val w = bmp.width
-                            val h = bmp.height
-                            
-                            // Match default HUD regions for CoinPoker exactly as in PokerHudService
-                            val cLeft = (w * 0.10f).toInt()
-                            val cTop = (h * 0.40f).toInt()
-                            val cRight = cLeft + (w * 0.80f).toInt()
-                            val cBottom = cTop + (h * 0.14f).toInt()
-                            
-                            val hLeft = (w * 0.35f).toInt()
-                            val hTop = (h * 0.65f).toInt()
-                            val hRight = hLeft + (w * 0.35f).toInt()
-                            val hBottom = hTop + (h * 0.14f).toInt()
-                            
-                            val cRect = android.graphics.Rect(cLeft, cTop, cRight, cBottom)
-                            val hRect = android.graphics.Rect(hLeft, hTop, hRight, hBottom)
-                            
-                            val commCropTotal = Bitmap.createBitmap(bmp, cLeft, cTop, cRight - cLeft, cBottom - cTop)
-                            val holeCropTotal = Bitmap.createBitmap(bmp, hLeft, hTop, hRight - hLeft, hBottom - hTop)
-
-                            var commName = "comm_${System.currentTimeMillis()}"
-                            var holeName = "hole_${System.currentTimeMillis()}"
-
-                            // Parse explicit cards from original filename if it exists
-                            val originalName = file.name ?: ""
-                            val expectedRegex = Regex("((?:10|[2-9TJQKA])[hdcs])", RegexOption.IGNORE_CASE)
-                            val explicitCards = expectedRegex.findAll(originalName).map { it.value.lowercase() }.toList()
-
-                            if (explicitCards.size >= 2) {
-                                // First two are usually hole, parsing the rest as comm
-                                val holeCards = explicitCards.take(2).joinToString("")
-                                val commCards = explicitCards.drop(2).joinToString("")
-                                if (holeCards.isNotEmpty()) holeName = "hole_$holeCards"
-                                if (commCards.isNotEmpty()) commName = "comm_$commCards"
-                            } else if (scanner != null) {
-                                // Optional fallback
-                                val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
-                                val holeCards = result.first.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c").lowercase()
-                                val commCards = result.second.filterNotNull().joinToString("") { it.toHtmlString().replace("<[^>]*>".toRegex(), "") }.replace("&spades;", "s").replace("&clubs;", "c").replace("<font color='red'>&hearts;</font>", "h").replace("<font color='blue'>&diams;</font>", "d").replace("♥","h").replace("♦","d").replace("♠","s").replace("♣","c").lowercase()
-                                
-                                if (holeCards.isNotEmpty()) holeName = "hole_$holeCards"
-                                if (commCards.isNotEmpty()) commName = "comm_$commCards"
-                            }
-                            
-                            val fileCommInt = java.io.File(outDirInternal, "${commName}.png")
-                            java.io.FileOutputStream(fileCommInt).use { commCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                            val fileHoleInt = java.io.File(outDirInternal, "${holeName}.png")
-                            java.io.FileOutputStream(fileHoleInt).use { holeCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
-
-                            // Save to the SAF subdirectory we created inside the user-selected folder
-                            try {
-                                publicCropDir?.createFile("image/png", "${commName}.png")?.let { docFile ->
-                                    context.contentResolver.openOutputStream(docFile.uri)?.use { out ->
-                                        commCropTotal.compress(Bitmap.CompressFormat.PNG, 100, out)
-                                    }
-                                }
-                                publicCropDir?.createFile("image/png", "${holeName}.png")?.let { docFile ->
-                                    context.contentResolver.openOutputStream(docFile.uri)?.use { out ->
-                                        holeCropTotal.compress(Bitmap.CompressFormat.PNG, 100, out)
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-
-                            // Try to save to public Downloads as legacy backup
-                            try {
-                                val fileCommPub = java.io.File(outDirPublic, "${commName}.png")
-                                java.io.FileOutputStream(fileCommPub).use { commCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                                val fileHolePub = java.io.File(outDirPublic, "${holeName}.png")
-                                java.io.FileOutputStream(fileHolePub).use { holeCropTotal.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                            } catch (e: Exception) {
-                                // Ignore legacy public storage errors
-                            }
-                            
-                            commCropTotal.recycle()
-                            holeCropTotal.recycle()
-                            bmp.recycle()
-                            
-                            withContext(Dispatchers.Main) {
-                                debugLog += "\n✅ Cropped ${file.name} -> $commName.png, $holeName.png"
-                            }
-                            crCount++
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            withContext(Dispatchers.Main) {
-                                debugLog += "\n❌ Error processing ${file.name}: ${e.message}"
-                            }
-                        }
->>>>>>> origin/main
                     }
                 }
                 
@@ -410,10 +298,6 @@ fun DebugScreen() {
                             val scanner = ScreenScanner(context, null, 0)
                             val result = scanner.processGivenBitmap(context, bmp, hRect, cRect)
                             val (detectedHole, detectedComm) = result
-<<<<<<< HEAD
-=======
-                            val scanInfo = scanner.debugLogInfo
->>>>>>> origin/main
                             
                             val allMatch: Boolean
                             val rawStrList = mutableListOf<String>()
@@ -443,10 +327,6 @@ fun DebugScreen() {
                             }
 
                             withContext(Dispatchers.Main) {
-<<<<<<< HEAD
-=======
-                                debugLog += "\n$scanInfo"
->>>>>>> origin/main
                                 if (allMatch) {
                                     debugLog += "\n ✅ PASS - Immediate Hit."
                                     passed++
@@ -569,26 +449,10 @@ fun DebugScreen() {
         
         Spacer(Modifier.height(16.dp))
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
         
         Text(
             text = debugLog, 
             style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF00FF00), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), 
-<<<<<<< HEAD
-=======
-=======
-        // Terminal Log Console
-        Text(
-            text = debugLog, 
-            style = MaterialTheme.typography.bodySmall.copy(
-                color = Color(0xFF00FF00), 
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-            ), 
->>>>>>> origin/main
->>>>>>> origin/main
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)

@@ -86,29 +86,14 @@ class ScreenScanner(
     }
 
     companion object {
-<<<<<<< HEAD
         val recognizer by lazy {
             TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-=======
-<<<<<<< HEAD
-        val recognizer by lazy {
-            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-=======
-        val recognizer: com.google.mlkit.vision.text.TextRecognizer? by lazy {
-            null
->>>>>>> origin/main
->>>>>>> origin/main
         }
     }
     
     private val scope = CoroutineScope(Dispatchers.Default + Job())
     private var scanJob: Job? = null
     
-<<<<<<< HEAD
-=======
-    var debugLogInfo = ""
-    
->>>>>>> origin/main
     var requestProfileScan = stopAfterProfileScan // if true initially, immediately run profile scan
     val isScanning = MutableStateFlow(false)
     val scanStatus = MutableStateFlow("Scanner idle.")
@@ -366,13 +351,6 @@ class ScreenScanner(
 
     // Expose processing logic for automated testing in DebugImageActivity
     suspend fun processGivenBitmap(context: Context, testBmp: Bitmap, hRect: android.graphics.Rect, cRect: android.graphics.Rect): Pair<List<Card?>, List<Card?>> = kotlinx.coroutines.coroutineScope {
-<<<<<<< HEAD
-=======
-        debugLogInfo = ""
-        debugLogInfo += "[DIAGNOSTICS] Input: ${testBmp.width}x${testBmp.height} | hRect=$hRect, cRect=$cRect\n"
-        debugLogInfo += "Templates in memory: ${TemplateManager.templates.size}\n"
-
->>>>>>> origin/main
         val ocrBitmap = testBmp.copy(Bitmap.Config.ARGB_8888, true)
         
         // Emulate the first pass with Template Manager and OCR
@@ -420,26 +398,12 @@ class ScreenScanner(
                     }
                     commCrop.recycle()
                 }
-<<<<<<< HEAD
             } catch (ignored: Exception) {}
-=======
-                debugLogInfo += "Template Matches -> Hole: ${tHole.map { it.first.toString() }}, Comm: ${tComm.map { it.first.toString() }}\n"
-            } catch (e: Exception) {
-                debugLogInfo += "Template Matching Error: ${e.message}\n"
-            }
->>>>>>> origin/main
             Pair(tHole, tComm)
         }
 
         applyCardThresholding(ocrBitmap, hRect, cRect)
-<<<<<<< HEAD
         val image = com.google.mlkit.vision.common.InputImage.fromBitmap(ocrBitmap, 0)
-=======
-<<<<<<< HEAD
-        val image = com.google.mlkit.vision.common.InputImage.fromBitmap(ocrBitmap, 0)
-=======
->>>>>>> origin/main
->>>>>>> origin/main
         
         val templateRes = templateDeferred.await()
         val templateHoleCards = templateRes.first
@@ -449,24 +413,8 @@ class ScreenScanner(
         val tempCommCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
 
         try {
-<<<<<<< HEAD
             val result = Tasks.await(recognizer.process(image), 5, java.util.concurrent.TimeUnit.SECONDS)
             result.textBlocks.forEach { block ->
-=======
-<<<<<<< HEAD
-            val result = Tasks.await(recognizer.process(image), 5, java.util.concurrent.TimeUnit.SECONDS)
-            debugLogInfo += "OCR Result text: [${result.text.replace("\n", " \" ")}]\n"
-            result.textBlocks.forEach { block ->
-=======
-            val result = if (recognizer != null) {
-                val image = com.google.mlkit.vision.common.InputImage.fromBitmap(ocrBitmap, 0)
-                Tasks.await(recognizer!!.process(image), 5, java.util.concurrent.TimeUnit.SECONDS)
-            } else null
-            
-            debugLogInfo += "OCR Result text: [${result?.text?.replace("\n", " \" ") ?: "NULL"}]\n"
-            result?.textBlocks?.forEach { block ->
->>>>>>> origin/main
->>>>>>> origin/main
                 block.lines.forEach { line ->
                     line.elements.forEach { element ->
                         val text = element.text.trim().uppercase()
@@ -491,15 +439,8 @@ class ScreenScanner(
                     }
                 }
             }
-<<<<<<< HEAD
         } catch (e: Exception) {
             e.printStackTrace()
-=======
-            debugLogInfo += "OCR Matches -> Hole: ${tempHoleCards.map { it.first.toString() }}, Comm: ${tempCommCards.map { it.first.toString() }}\n"
-        } catch (e: Exception) {
-            e.printStackTrace()
-            debugLogInfo += "OCR Exception: ${e.javaClass.simpleName} - ${e.message}\n"
->>>>>>> origin/main
         }
         
         fun clusterCards(cards: List<Pair<Card, android.graphics.Rect>>, maxCards: Int, regionRect: android.graphics.Rect): MutableList<Card?> {
@@ -552,11 +493,6 @@ class ScreenScanner(
         val rawComm = clusterCards(safeTempComm, 5, cRect)
         val rawHole = clusterCards(safeTempHole, 2, hRect)
 
-<<<<<<< HEAD
-=======
-        debugLogInfo += "Final rawHole: $rawHole | rawComm: $rawComm\n"
-
->>>>>>> origin/main
         ocrBitmap.recycle()
         Pair(rawHole, rawComm)
     }
@@ -702,10 +638,6 @@ class ScreenScanner(
                 ocrBitmap = cleanBitmap!!.copy(Bitmap.Config.ARGB_8888, true)
                 applyCardThresholding(ocrBitmap!!, activeHoleRect, activeCommRect)
                 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
                 val inputImage = InputImage.fromBitmap(ocrBitmap!!, 0)
                 val ocrRes = try {
                     Tasks.await(recognizer.process(inputImage), 5, java.util.concurrent.TimeUnit.SECONDS)
@@ -713,12 +645,6 @@ class ScreenScanner(
                     e.printStackTrace()
                     null
                 }
-<<<<<<< HEAD
-=======
-=======
-                val ocrRes: com.google.mlkit.vision.text.Text? = null
->>>>>>> origin/main
->>>>>>> origin/main
                 val templateRes = templateDeferred.await()
                 Pair(templateRes, ocrRes)
             }
