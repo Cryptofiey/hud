@@ -95,7 +95,6 @@ fun DebugScreen() {
                     outDirPublic = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "PC$pcIndex")
                 }
                 outDirPublic.mkdirs()
-
                 // Create subdirectory inside the user selected folder via SAF to guarantee write access
                 var safSubdirName = "PC$pcIndex"
                 var safSubdir = dir?.findFile(safSubdirName)

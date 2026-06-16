@@ -404,6 +404,7 @@ class ScreenScanner(
 
         applyCardThresholding(ocrBitmap, hRect, cRect)
         val image = com.google.mlkit.vision.common.InputImage.fromBitmap(ocrBitmap, 0)
+
         
         val templateRes = templateDeferred.await()
         val templateHoleCards = templateRes.first

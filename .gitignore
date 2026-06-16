@@ -22,6 +22,8 @@ debug.keystore
 /.build-outputs
 /downloaded_logs
 /logs.zip
+<<<<<<< HEAD
+=======
 /extracted*
 /poker_screenshots
 /valid_screenshots
@@ -30,3 +32,4 @@ debug.keystore
 /*.tar.gz
 /*.log
 
+>>>>>>> origin/main
