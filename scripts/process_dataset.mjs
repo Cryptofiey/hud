@@ -87,11 +87,16 @@ async function run() {
     console.log(`Scanning ${files.length} files in ${TARGET_DIR}...`);
 
     for (const file of files) {
+        if (file.startsWith('comm_') && file.includes('_hole_')) {
+            console.log(`\nSkipping already processed: ${file}`);
+            continue;
+        }
+
         const filePath = path.join(TARGET_DIR, file);
         console.log(`\nProcessing: ${file}`);
         
-        // Add delay for free tier RPM limit (approx 12 seconds to be safe)
-        await new Promise(r => setTimeout(r, 12000));
+        // Add delay for free tier RPM limit (approx 6 seconds to be safe)
+        await new Promise(r => setTimeout(r, 6000));
 
         const result = await identifyCards(filePath);
         if (!result) {
