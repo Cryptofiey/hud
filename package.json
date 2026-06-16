@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@viniciustrindade/gdownjs": "^1.0.0",
-    "jimp": "^1.6.1"
+    "jimp": "^1.6.1",
+    "zx": "^8.8.5"
   }
 }
