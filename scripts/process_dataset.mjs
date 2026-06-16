@@ -12,7 +12,7 @@ import path from 'path';
  * 4. Deletes if cards aren't clear.
  */
 
-const API_KEY = "AIzaSyCs53i6-yYHYEJ1mx06pVaNQbKl-3bIlxw";
+const API_KEY = process.env.GEMINI_API_KEY;
 const TARGET_DIR = process.argv[2];
 
 if (!API_KEY) {
@@ -25,7 +25,7 @@ if (!TARGET_DIR || !fs.existsSync(TARGET_DIR)) {
     process.exit(1);
 }
 
-const MODEL = 'gemini-2.5-flash';
+const MODEL = 'gemini-flash-latest';
 
 async function identifyCards(imagePath) {
     const imageData = fs.readFileSync(imagePath).toString('base64');
