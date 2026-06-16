@@ -25,6 +25,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import com.google.android.gms.tasks.Tasks
 import kotlinx.coroutines.tasks.await
 
 class ScreenScanner(
@@ -403,7 +404,7 @@ class ScreenScanner(
 
         applyCardThresholding(ocrBitmap, hRect, cRect)
         val image = com.google.mlkit.vision.common.InputImage.fromBitmap(ocrBitmap, 0)
-        val result = recognizer.process(image).await()
+        val result = Tasks.await(recognizer.process(image))
         
         val templateRes = templateDeferred.await()
         val templateHoleCards = templateRes.first
@@ -412,11 +413,11 @@ class ScreenScanner(
         val tempHoleCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
         val tempCommCards = mutableListOf<Pair<Card, android.graphics.Rect>>()
 
-        for (block in result.textBlocks) {
-            for (line in block.lines) {
-                for (element in line.elements) {
+        result.textBlocks.forEach { block ->
+            block.lines.forEach { line ->
+                line.elements.forEach { element ->
                     val text = element.text.trim().uppercase()
-                    if (text.length > 2 || text.isEmpty()) continue
+                    if (text.length > 2 || text.isEmpty()) return@forEach
                     
                     var cleanText = text.replace("&", "8").replace("$", "8").replace("@", "Q").replace("%", "8").replace("?", "7").replace("!", "1")
                         .replace("O", "Q").replace("0", "Q").replace("D", "Q")
@@ -424,7 +425,7 @@ class ScreenScanner(
                     var parsedRank = Rank.values().find { it.symbol.equals(rankText, ignoreCase = true) }
                     
                     if (parsedRank != null) {
-                        val rect = element.boundingBox ?: continue
+                        val rect = element.boundingBox ?: return@forEach
                         parsedRank = refineRankWithPixelCheck(ocrBitmap, rect, parsedRank)
                         if (hRect.contains(rect.centerX(), rect.centerY())) {
                             val detectedSuit = robustDetectSuit(testBmp, rect) ?: Suit.SPADES
@@ -573,7 +574,7 @@ class ScreenScanner(
             
             val currentState = PokerHudSharedState.uiState.value
 
-            val (templateResult, result) = kotlinx.coroutines.coroutineScope {
+            val templateResAndOcrRes = kotlinx.coroutines.coroutineScope {
                 val templateDeferred = async(Dispatchers.Default) {
                     val tHole = mutableListOf<Pair<Card, android.graphics.Rect>>()
                     val tComm = mutableListOf<Pair<Card, android.graphics.Rect>>()
@@ -634,12 +635,13 @@ class ScreenScanner(
                 applyCardThresholding(ocrBitmap!!, activeHoleRect, activeCommRect)
                 
                 val inputImage = InputImage.fromBitmap(ocrBitmap!!, 0)
-                val ocrTask = recognizer.process(inputImage)
-                
-                val ocrRes = ocrTask.await()
-                val tempRes = templateDeferred.await()
-                Pair(tempRes, ocrRes)
+                val ocrRes = Tasks.await(recognizer.process(inputImage))
+                val templateRes = templateDeferred.await()
+                Pair(templateRes, ocrRes)
             }
+
+            val templateResult = templateResAndOcrRes.first
+            val result = templateResAndOcrRes.second
 
             val templateHoleCards = templateResult.first
             val templateCommCards = templateResult.second
@@ -698,8 +700,8 @@ class ScreenScanner(
             }
 
             val linesList = mutableListOf<com.google.mlkit.vision.text.Text.Line>()
-            for (block in result.textBlocks) {
-                for (line in block.lines) {
+            result.textBlocks.forEach { block ->
+                block.lines.forEach { line ->
                     linesList.add(line)
                 }
             }
@@ -778,12 +780,12 @@ class ScreenScanner(
 
                     }
 
-                    for (element in line.elements) {
-                        val box = element.boundingBox ?: continue
+                        line.elements.forEach { element ->
+                        val box = element.boundingBox ?: return@forEach
                         
                         // Ignore tiny text for action/transition buttons to prevent clicking on player avatars/names
                         // 0.008f is approx 19px on 2400h screen, small enough to catch button text but avoid static noise
-                        if (box.height() < cleanBitmap!!.height * 0.008f) continue
+                        if (box.height() < cleanBitmap!!.height * 0.008f) return@forEach
                         
                         var insideHud = false
                         for (hudRect in hudRects) {
@@ -792,7 +794,7 @@ class ScreenScanner(
                                 break
                             }
                         }
-                        if (insideHud) continue
+                        if (insideHud) return@forEach
                         
                         val rawText = element.text.uppercase(java.util.Locale.US)
                         val normalized = rawText
