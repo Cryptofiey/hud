@@ -679,7 +679,7 @@ class ScreenScanner(
             val sizingButtonsMap = mutableMapOf<String, android.graphics.Rect>()
 
             // We look for action buttons in the bottom 15% of the screen (to exclude opponent status tags and speech bubbles near the hero)
-            val bottomZoneTop = cleanBitmap!!.height * 0.85
+            val bottomZoneTop = cleanBitmap!!.height * 0.82
 
             var scannedPotSize: Float? = null
             
@@ -916,90 +916,108 @@ class ScreenScanner(
                             holeElements.add(element)
                         }
                         
-                            // Action buttons logic
-                            if (box.top > bottomZoneTop) {
-                                val originalTextUpper = element.text.uppercase()
-                                val textUpper = originalTextUpper.replace(" ", "")
-                                
-                                // Prevent tiny non-button text from being recognized:
-                                if (box.width() < cleanBitmap!!.width * 0.01f) continue
-                                if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
-                                
-                                val isBright = isColorfulButton(cleanBitmap!!, box)
-                                android.util.Log.d("BotActionDetect", "Bottom element: $originalTextUpper | isBright=$isBright")
-
-                                val isAll = textUpper.contains("ALL-IN") || textUpper.contains("ALLIN") || (textUpper.contains("ALL") && !textUpper.contains("CALL")) || textUpper.contains("ОЛЛ") || textUpper.contains("ВЫСТАВИТЬ")
-                                val isSizing = textUpper.contains("MAX") || textUpper.contains("МАКС") || textUpper.contains("POT") || textUpper.contains("ПОТ") || isAll || textUpper.contains("1/2") || textUpper.contains("3/4") || textUpper == "+" || textUpper == "-"
-                                if (isSizing) {
-                                    sizingButtonsMap[originalTextUpper] = line.boundingBox ?: box
-                                }
-
-                                val isPrimary = textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || 
-                                               textUpper.contains("PАС") || textUpper.contains("CHECK") || 
-                                               textUpper.contains("CALL") || textUpper.contains("КОЛЛ") || 
-                                               textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || 
-                                               textUpper.contains("BET") || textUpper.contains("ALL-IN") || textUpper.contains("ALLIN")
-                                
-                                // Primary actions MUST be brightly colored (solid fill). 
-                                // Grey/transparent pre-action buttons will fail此 check.
-                                val qualifiesAsAction = isBright
-                                
-                                if ((textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) && !textUpper.contains("ANY")) {
-                                    if (qualifiesAsAction) {
-                                        heroActionOptions.add("Fold")
-                                        actionButtonsMap[originalTextUpper] = line.boundingBox ?: box
-                                    } else {
-                                        hasPreactions = true
-                                    }
-                                } 
-                                else if ((textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) && !textUpper.contains("FOLD") && !textUpper.contains("ФОЛД")) {
-                                    if (qualifiesAsAction) {
-                                        heroActionOptions.add("Check")
-                                        actionButtonsMap[originalTextUpper] = line.boundingBox ?: box
-                                    } else {
-                                        hasPreactions = true
-                                    }
-                                } 
-                                else if ((textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) && !textUpper.contains("ANY") && !textUpper.contains("ЛЮБ")) {
-                                    if (qualifiesAsAction) {
-                                        heroActionOptions.add("Call")
-                                        actionButtonsMap[originalTextUpper] = line.boundingBox ?: box
-                                    } else {
-                                        hasPreactions = true
-                                    }
-                                } 
-                                else if (textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || 
-                                         textUpper.contains("BET") || textUpper.contains("БЕТ") || 
-                                         textUpper.contains("CONFIRM") || textUpper.contains("ПОДТВЕРДИТЬ")) {
-                                    if (qualifiesAsAction) {
-                                        heroActionOptions.add("Raise") // Mapping Confirm to Raise internally
-                                        actionButtonsMap[originalTextUpper] = line.boundingBox ?: box
-                                    } else {
-                                        hasPreactions = true
-                                    }
-                                } 
-                                else if (textUpper.contains("ALL-IN") || textUpper.contains("ALLIN") || 
-                                         textUpper.contains("ОЛЛ-ИН") || textUpper.contains("ALL") || 
-                                         textUpper.contains("ОЛЛ") || textUpper.contains("ВЫСТАВИТЬ")) {
-                                    if (qualifiesAsAction) {
-                                        heroActionOptions.add("All-in")
-                                        actionButtonsMap[originalTextUpper] = line.boundingBox ?: box
-                                    }
-                                }
-                                else if (textUpper.contains("STRADDLE") || textUpper.contains("СТРАДДЛ")) {
-                                    if (isBright) actionButtonsMap[originalTextUpper] = box
-                                }
-                                
-                                // Add common bet sizing multipliers. These are usually grey, so we ignore color.
-                                val noSpaceText = textUpper
-                                if (noSpaceText == "1/2" || noSpaceText == "1/3" || noSpaceText == "2/3" || noSpaceText == "3/4" || 
-                                    noSpaceText == "1/2POT" || noSpaceText == "2/3POT" || noSpaceText == "3/4POT" ||
-                                    textUpper.contains("POT") || textUpper.contains("ПОТ") || textUpper.contains("MAX") || textUpper.contains("МАКС") ||
-                                    textUpper.contains("MIN") || textUpper.contains("МИН") || textUpper.matches(Regex(".*\\d+X.*")) || textUpper.contains("%") ||
-                                    noSpaceText == "+" || noSpaceText == "-") {
-                                    actionButtonsMap[originalTextUpper] = box
+                    val bottomZoneTop = cleanBitmap!!.height * 0.82
+                    val elementsInBottomZone = mutableListOf<com.google.mlkit.vision.text.Text.Element>()
+                    
+                    for (block in result?.textBlocks ?: emptyList()) {
+                        for (line in block.lines) {
+                            for (element in line.elements) {
+                                val box = element.boundingBox
+                                if (box != null && box.top > bottomZoneTop) {
+                                    elementsInBottomZone.add(element)
                                 }
                             }
+                        }
+                    }
+                    
+                    // Sort elements by Y desc to ensure lowest controls are first evaluated
+                    elementsInBottomZone.sortByDescending { it.boundingBox?.top ?: 0 }
+
+                    // We now process elementsInBottomZone separately from the main loop
+                    for (element in elementsInBottomZone) {
+                        val box = element.boundingBox ?: continue
+                        val originalTextUpper = element.text.uppercase()
+                        val textUpper = originalTextUpper.replace(" ", "")
+                        
+                        // Prevent tiny non-button text from being recognized:
+                        if (box.width() < cleanBitmap!!.width * 0.01f) continue
+                        if (box.height() < cleanBitmap!!.height * 0.005f) continue // Ignore tiny texts
+                        
+                        val isBright = isColorfulButton(cleanBitmap!!, box)
+                        android.util.Log.d("BotActionDetect", "Bottom element: $originalTextUpper | isBright=$isBright | Y=${box.top}")
+
+                        val isAll = textUpper.contains("ALL-IN") || textUpper.contains("ALLIN") || (textUpper.contains("ALL") && !textUpper.contains("CALL")) || textUpper.contains("ОЛЛ") || textUpper.contains("ВЫСТАВИТЬ")
+                        val isSizing = textUpper.contains("MAX") || textUpper.contains("МАКС") || textUpper.contains("POT") || textUpper.contains("ПОТ") || isAll || textUpper.contains("1/2") || textUpper.contains("3/4") || textUpper == "+" || textUpper == "-"
+                        if (isSizing) {
+                            sizingButtonsMap[originalTextUpper] = box
+                        }
+
+                        val isPrimary = textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || 
+                                        textUpper.contains("PАС") || textUpper.contains("CHECK") || 
+                                        textUpper.contains("CALL") || textUpper.contains("КОЛЛ") || 
+                                        textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || 
+                                        textUpper.contains("BET") || textUpper.contains("ALL-IN") || textUpper.contains("ALLIN")
+                        
+                        // Primary actions MUST be brightly colored (solid fill). 
+                        // Grey/transparent pre-action buttons will fail此 check.
+                        val qualifiesAsAction = isBright
+                        
+                        if ((textUpper.contains("FOLD") || textUpper.contains("ФОЛД") || textUpper.contains("ПАС")) && !textUpper.contains("ANY")) {
+                            if (qualifiesAsAction) {
+                                heroActionOptions.add("Fold")
+                                actionButtonsMap[originalTextUpper] = box
+                            } else {
+                                hasPreactions = true
+                            }
+                        } 
+                        else if ((textUpper.contains("CHECK") || textUpper.contains("ЧЕК")) && !textUpper.contains("FOLD") && !textUpper.contains("ФОЛД")) {
+                            if (qualifiesAsAction) {
+                                heroActionOptions.add("Check")
+                                actionButtonsMap[originalTextUpper] = box
+                            } else {
+                                hasPreactions = true
+                            }
+                        } 
+                        else if ((textUpper.contains("CALL") || textUpper.contains("КОЛЛ")) && !textUpper.contains("ANY") && !textUpper.contains("ЛЮБ")) {
+                            if (qualifiesAsAction) {
+                                heroActionOptions.add("Call")
+                                actionButtonsMap[originalTextUpper] = box
+                            } else {
+                                hasPreactions = true
+                            }
+                        } 
+                        else if (textUpper.contains("RAISE") || textUpper.contains("РЕЙЗ") || 
+                                    textUpper.contains("BET") || textUpper.contains("БЕТ") || 
+                                    textUpper.contains("CONFIRM") || textUpper.contains("ПОДТВЕРДИТЬ")) {
+                            if (qualifiesAsAction) {
+                                heroActionOptions.add("Raise") // Mapping Confirm to Raise internally
+                                actionButtonsMap[originalTextUpper] = box
+                            } else {
+                                hasPreactions = true
+                            }
+                        } 
+                        else if (textUpper.contains("ALL-IN") || textUpper.contains("ALLIN") || 
+                                    textUpper.contains("ОЛЛ-ИН") || textUpper.contains("ALL") || 
+                                    textUpper.contains("ОЛЛ") || textUpper.contains("ВЫСТАВИТЬ")) {
+                            if (qualifiesAsAction) {
+                                heroActionOptions.add("All-in")
+                                actionButtonsMap[originalTextUpper] = box
+                            }
+                        }
+                        else if (textUpper.contains("STRADDLE") || textUpper.contains("СТРАДДЛ")) {
+                            if (isBright) actionButtonsMap[originalTextUpper] = box
+                        }
+                        
+                        // Add common bet sizing multipliers. These are usually grey, so we ignore color.
+                        val noSpaceText = textUpper
+                        if (noSpaceText == "1/2" || noSpaceText == "1/3" || noSpaceText == "2/3" || noSpaceText == "3/4" || 
+                            noSpaceText == "1/2POT" || noSpaceText == "2/3POT" || noSpaceText == "3/4POT" ||
+                            textUpper.contains("POT") || textUpper.contains("ПОТ") || textUpper.contains("MAX") || textUpper.contains("МАКС") ||
+                            textUpper.contains("MIN") || textUpper.contains("МИН") || textUpper.matches(Regex(".*\\d+X.*")) || textUpper.contains("%") ||
+                            noSpaceText == "+" || noSpaceText == "-") {
+                            actionButtonsMap[originalTextUpper] = box
+                        }
+                    }
                     }
                 }
             }
