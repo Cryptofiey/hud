@@ -1,0 +1,6 @@
+task unzipScreenshots(type: Copy) {
+    def zipFile = file('old_repo/pokerbotdebugsession20260608082428.zip')
+    def outputDir = file('valid_screenshots')
+    from zipTree(zipFile)
+    into outputDir
+}
