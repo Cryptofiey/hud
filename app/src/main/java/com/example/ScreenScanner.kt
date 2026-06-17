@@ -324,25 +324,35 @@ class ScreenScanner(
             val height = bottom - top
             if (width <= 0 || height <= 0) continue
             
+            val maxCards = if (isHole) 2 else 5
+            val slots = CardSegmenter.findCardSlots(bmp, android.graphics.Rect(left, top, right, bottom), maxCards)
+            
             val pixels = IntArray(width * height)
             bmp.getPixels(pixels, 0, width, left, top, width, height)
             
             for (i in pixels.indices) {
-                val p = pixels[i]
-                val r = (p shr 16) and 0xFF
-                val g = (p shr 8) and 0xFF
-                val b = p and 0xFF
+                val y = i / width
+                val x = i % width
+                val absX = left + x
+                val absY = top + y
                 
-                // CoinPoker cards use solid colored backgrounds with WHITE text for all suits.
-                // To feed optimal images to ML Kit (which prefers dark text on light background),
-                // we convert to grayscale and invert. This preserves anti-aliasing perfectly.
-                val luminance = (0.299 * r + 0.587 * g + 0.114 * b).toInt()
-                val invertedLuma = 255 - Math.min(255, Math.max(0, luminance))
+                // Only threshold pixels that belong to the rankZone of ANY tracked slot
+                val inRankZone = slots.any { absX >= it.rankZone.left && absX <= it.rankZone.right && absY >= it.rankZone.top && absY <= it.rankZone.bottom }
                 
-                // Enhance contrast slightly by spreading the inverted luminance
-                val contrast = Math.min(255, Math.max(0, (invertedLuma - 40) * 255 / 180))
-                
-                pixels[i] = (0xFF shl 24) or (contrast shl 16) or (contrast shl 8) or contrast
+                if (inRankZone) {
+                    val p = pixels[i]
+                    val r = (p shr 16) and 0xFF
+                    val g = (p shr 8) and 0xFF
+                    val b = p and 0xFF
+                    
+                    val luminance = (0.299 * r + 0.587 * g + 0.114 * b).toInt()
+                    val invertedLuma = 255 - Math.min(255, Math.max(0, luminance))
+                    val contrast = Math.min(255, Math.max(0, (invertedLuma - 40) * 255 / 180))
+                    pixels[i] = (0xFF shl 24) or (contrast shl 16) or (contrast shl 8) or contrast
+                } else {
+                    // Blank out all other noise with pure white
+                    pixels[i] = 0xFFFFFFFF.toInt()
+                }
             }
             
             bmp.setPixels(pixels, 0, width, left, top, width, height)
@@ -1073,7 +1083,9 @@ class ScreenScanner(
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
                     val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rank)
-                    val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
+                    
+                    val suitBox = android.graphics.Rect(sliceBox.left, sliceBox.top, sliceBox.right, sliceBox.bottom + sliceBox.height())
+                    val suit = robustDetectSuit(cleanBitmap, suitBox) ?: Suit.SPADES
                     tempCommCards.add(Pair(Card(refinedRank, suit), sliceBox))
                 }
             }
@@ -1124,7 +1136,9 @@ class ScreenScanner(
                     val sliceBox = android.graphics.Rect(sliceLeft, box.top, sliceRight, box.bottom)
                     
                     val refinedRank = refineRankWithPixelCheck(ocrBitmap, sliceBox, rankRaw)
-                    val suit = robustDetectSuit(cleanBitmap, sliceBox) ?: Suit.SPADES
+                    
+                    val suitBox = android.graphics.Rect(sliceBox.left, sliceBox.top, sliceBox.right, sliceBox.bottom + sliceBox.height())
+                    val suit = robustDetectSuit(cleanBitmap, suitBox) ?: Suit.SPADES
                     tempHoleCards.add(Pair(Card(refinedRank, suit), sliceBox))
                 }
             }
