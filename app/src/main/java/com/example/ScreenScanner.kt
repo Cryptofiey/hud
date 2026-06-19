@@ -359,7 +359,7 @@ class ScreenScanner(
         }
     }
 
-    // Expose processing logic for automated testing in DebugImageActivity
+    // Expose processing logic for automated testing or debugging helper functions
     suspend fun processGivenBitmap(context: Context, testBmp: Bitmap, hRect: android.graphics.Rect, cRect: android.graphics.Rect): Pair<List<Card?>, List<Card?>> = kotlinx.coroutines.coroutineScope {
         val ocrBitmap = testBmp.copy(Bitmap.Config.ARGB_8888, true)
         

@@ -533,14 +533,6 @@ fun SettingsLayout(
                 ) {
                     val isHudOverlayRunning by PokerHudSharedState.isHudOverlayRunning.collectAsStateWithLifecycle()
                     
-                    Button(
-                        onClick = { context.startActivity(Intent(context, DebugImageActivity::class.java)) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Magenta),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("OPEN DEBUG SCREENSHOT TESTER", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-
                     SettingsToggleCard(
                         title = "HUD Overlay",
                         description = "Activate or Stop the floating HUD overlay over other apps.",

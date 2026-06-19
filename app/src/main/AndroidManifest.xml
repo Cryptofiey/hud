@@ -28,8 +28,7 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".DebugImageActivity" android:exported="false" android:theme="@style/Theme.MyApplication" />
-        
+
         <service
             android:name=".PokerHudService"
             android:enabled="true"
