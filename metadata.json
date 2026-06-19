@@ -1,0 +1,6 @@
+{
+  "name": "Poker Equity HUD",
+  "description": "A high-performance real-time Poker Equity HUD and Texas Hold'em hand simulation tool.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
