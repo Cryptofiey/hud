@@ -1839,7 +1839,6 @@ class PokerHudService : Service() {
                 WindowManager.LayoutParams.TYPE_PHONE
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
@@ -1990,7 +1989,6 @@ class PokerHudService : Service() {
                 WindowManager.LayoutParams.TYPE_PHONE
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
@@ -2019,7 +2017,7 @@ class PokerHudService : Service() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            visibility = View.GONE // Hide completely from the card scanning window area
+            visibility = View.VISIBLE
         }
 
         val spacerTitle = View(this).apply {
