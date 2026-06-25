@@ -47,14 +47,6 @@ git remote add origin "https://${GITHUB_PAT}@github.com/${REPO}.git"
 # Fetch main
 git fetch origin main 2>/dev/null
 
-<<<<<<< HEAD
-# Attempt an initial local commit so merge works
-git add -A
-git commit --allow-empty -m "Auto sync from AI Studio Build"
-git branch -M main
-
-# Merge remote changes if they exist (to not overwrite previous state without history)
-=======
 # Check if there are changes to commit
 git add -A
 if ! git diff-index --quiet HEAD -- 2>/dev/null || ! git rev-parse HEAD >/dev/null 2>&1; then
@@ -63,20 +55,15 @@ fi
 git branch -M main
 
 # Merge remote changes if they exist
->>>>>>> origin/main
 if git ls-remote --exit-code --heads origin main 2>/dev/null; then
     git merge origin/main --allow-unrelated-histories -m "Merge remote upstream" 2>/dev/null || echo "Merge encountered issues"
 fi
 
 # Add and commit any merge resolutions
 git add -A
-<<<<<<< HEAD
-git commit -m "Merge resolution from AI Studio Build" || true
-=======
 if ! git diff-index --quiet HEAD -- 2>/dev/null; then
     git commit -m "Merge resolution from AI Studio Build" || true
 fi
->>>>>>> origin/main
 
 # Force push to prevent failures if there were untracked conflicts
 git push -u origin main \

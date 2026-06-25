@@ -110,10 +110,7 @@ dependencies {
   // implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
-<<<<<<< HEAD
-=======
   implementation("androidx.documentfile:documentfile:1.0.1")
->>>>>>> origin/main
   implementation("com.google.mlkit:text-recognition:16.0.0")
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
   implementation(libs.converter.moshi)
@@ -125,6 +122,7 @@ dependencies {
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
+  implementation(libs.gson)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

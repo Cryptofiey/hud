@@ -6,11 +6,8 @@ plugins {
   alias(libs.plugins.roborazzi) apply false
   alias(libs.plugins.secrets) apply false
 }
-<<<<<<< HEAD
-=======
 
 tasks.register<Copy>("unzipScreenshots") {
     from(zipTree(file("old_repo/pokerbotdebugsession20260608082428.zip")))
     into(file("valid_screenshots"))
 }
->>>>>>> origin/main

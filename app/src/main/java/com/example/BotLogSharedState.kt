@@ -1,8 +1,6 @@
 package com.example
 
 import kotlinx.coroutines.flow.MutableStateFlow
-<<<<<<< HEAD
-=======
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -10,24 +8,17 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import android.util.Log
->>>>>>> origin/main
 
 data class LogEntry(val timestamp: Long, val tag: String, val message: String)
 
 object BotLogSharedState {
-<<<<<<< HEAD
     val isBotLogWidgetRunning = MutableStateFlow(false)
-    val isLogServerRunning = MutableStateFlow(false)
-    val widgetRect = MutableStateFlow<android.graphics.Rect?>(null)
-    
-=======
     val isLogServerRunning = MutableStateFlow(false)
     val widgetRect = MutableStateFlow<android.graphics.Rect?>(null)
     
     private val scope = CoroutineScope(Dispatchers.IO)
     private val firebaseDbUrl = BuildConfig.FIREBASE_DB_URL
 
->>>>>>> origin/main
     // Timed log history for diagnostics
     val logsHistory = java.util.Collections.synchronizedList(mutableListOf<LogEntry>())
     
@@ -44,8 +35,6 @@ object BotLogSharedState {
     
     val logL4 = MutableStateFlow("")
     val logBot = MutableStateFlow("") // L5
-<<<<<<< HEAD
-=======
 
     private fun pushToFirebase(tag: String, msg: String, timestamp: Long) {
         if (firebaseDbUrl.isEmpty() || firebaseDbUrl.contains("your-project-id")) return
@@ -76,29 +65,18 @@ object BotLogSharedState {
             }
         }
     }
->>>>>>> origin/main
     
     private fun addHistory(tag: String, msg: String) {
         val now = System.currentTimeMillis()
         logsHistory.add(LogEntry(now, tag, msg))
-<<<<<<< HEAD
-        // Cleanup logs older than 15 minutes to prevent memory leaks
-        val cutoff = now - 15 * 60 * 1000
-        try {
-            logsHistory.removeAll { it.timestamp < cutoff }
-        } catch (ignored: Exception) {}
         
-        if (logsHistory.size > 5000) {
-            try {
-                logsHistory.subList(0, logsHistory.size - 4500).clear()
-=======
         pushToFirebase(tag, msg, now)
         
-        // Keep full session logs in memory up to 500000 lines to satisfy user request for complete export
+        // Cleanup logs older than 15 minutes to prevent memory leaks OR Keep up to 500k lines
+        // We'll use the user's request for complete export but with some safety.
         if (logsHistory.size > 500000) {
             try {
                 logsHistory.subList(0, logsHistory.size - 450000).clear()
->>>>>>> origin/main
             } catch (ignored: Exception) {}
         }
     }

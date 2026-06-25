@@ -14,68 +14,22 @@ object RobotPlayer {
     // Map of Action Name (e.g. "FOLD", "CALL", "CHECK", "BET", "RAISE") to its screen Rect
     var availableActionButtons = emptyMap<String, Rect>()
     var lobbyTransitionButtons = emptyMap<String, Rect>()
-<<<<<<< HEAD
-=======
     var sizingButtonsMap = emptyMap<String, Rect>()
->>>>>>> origin/main
     var autoPlayDelayMs = 1500L
     
     // Keep track of last action to avoid spamming the same action multiple times per turn
     private var lastActedBoardCards = 0
     private var lastActedAction = ""
     private var lastActionTime = 0L
-<<<<<<< HEAD
-=======
     private var pendingActionSignature = ""
     private var pendingActionStartTime = 0L
     @Volatile private var isExecutingTurn = false
->>>>>>> origin/main
     
     init {
         // Background loop for Lobby / Table Buy-in Transition clicks
         CoroutineScope(Dispatchers.Default).launch {
             val lastClickedTimeMap = mutableMapOf<String, Long>()
             while (isActive) {
-<<<<<<< HEAD
-                delay(800) // check every 800ms
-                if (!isRobotModeEnabled.value) continue
-                if (AutoPlayerService.instance == null) continue
-                
-                // If we have active game table action buttons, we shouldn't click random lobby buttons!
-                if (availableActionButtons.isNotEmpty()) continue
-                
-                val currentLobbyButtons = lobbyTransitionButtons
-                if (currentLobbyButtons.isEmpty()) continue
-                
-                // Priority scan of transition keys
-                val priorityKeys = listOf("OK", "CONFIRM", "BUY_IN", "TAKE_SEAT", "PLAY", "JOIN", "REGISTER")
-                val now = System.currentTimeMillis()
-                val uiState = PokerHudSharedState.uiState.value
-                val hasTableElements = uiState.heroCard1 != null || uiState.heroCard2 != null || uiState.board.any { it != null } || uiState.opponents.count { it.nickname != "Unknown" && !it.nickname.startsWith("Opponent") } > 0
-                
-                for (key in priorityKeys) {
-                    val rect = currentLobbyButtons[key] ?: continue
-                    
-                    if (hasTableElements && (key == "REGISTER" || key == "PLAY" || key == "JOIN")) {
-                        continue // Prevent accidentally joining another table while already at a table
-                    }
-                    
-                    // Throttling: avoid clicking the exact same transition state faster than once per 5 seconds
-                    val lastClicked = lastClickedTimeMap[key] ?: 0L
-                    if (now - lastClicked < 5000L) {
-                        continue // wait for screen transition or server processing
-                    }
-                    
-                    Log.d("RobotPlayer", "[LOBBY] Found transition button: $key inside $rect. Executing transition click.")
-                    BotLogSharedState.appendLogBot("[BOT][L5] Transition/Lobby action: click on '$key' to navigate to game table")
-                    
-                    // Human delay before transition action
-                    delay(Random.nextLong(200, 700))
-                    executeClickOnRect(rect)
-                    
-                    lastClickedTimeMap[key] = System.currentTimeMillis()
-                    break // perform only 1 action per tick to avoid fast multi-click errors
-=======
                 try {
                     delay(800) // check every 800ms
                     if (!isRobotModeEnabled.value) continue
@@ -118,23 +72,12 @@ object RobotPlayer {
                     }
                 } catch (e: Exception) {
                     Log.e("RobotPlayer", "Error in lobby transition loop", e)
->>>>>>> origin/main
                 }
             }
         }
 
         CoroutineScope(Dispatchers.Default).launch {
             PokerHudSharedState.uiState.collectLatest { uiState ->
-<<<<<<< HEAD
-                if (!isRobotModeEnabled.value) return@collectLatest
-                if (AutoPlayerService.instance == null) {
-                    return@collectLatest
-                }
-                
-                // If there are no action buttons detected, it's not our turn
-                if (availableActionButtons.isEmpty()) {
-                    if (PokerHudSharedState.isAutoProfileScanningEnabled.value) {
-=======
                 try {
                     if (!isRobotModeEnabled.value) return@collectLatest
                     if (AutoPlayerService.instance == null) {
@@ -144,17 +87,11 @@ object RobotPlayer {
                 // If there are no action buttons detected, it's not our turn
                 if (availableActionButtons.isEmpty()) {
                     if (PokerHudSharedState.isAutoProfileScanningEnabled.value && PokerHudSharedState.appScreenContext.value == AppScreenState.COINPOKER_TABLE) {
->>>>>>> origin/main
                         handleProfileScanning(uiState)
                     }
                     return@collectLatest
                 }
 
-<<<<<<< HEAD
-                val advRec = uiState.advancedRecommendation
-                val rec = uiState.recommendation
-                val advisorText = ((advRec ?: rec)?.action ?: "").uppercase()
-=======
                 // --- CRITICAL SAFEGUARD: Never act without both hole cards recognized ---
                 if (uiState.heroCard1 == null || uiState.heroCard2 == null) {
                     Log.w("RobotPlayer", "[L5] Safeguard: Action buttons detected but hole cards are missing. Refusing to act.")
@@ -171,7 +108,6 @@ object RobotPlayer {
                 }
                 
                 val advisorText = (validRec?.action ?: "").uppercase()
->>>>>>> origin/main
                 
                 if (advisorText.isEmpty() || advisorText.contains("N/A", ignoreCase=true)) return@collectLatest
                 
@@ -199,10 +135,6 @@ object RobotPlayer {
                 val signature = "${heroStr}_${commCardsSize}_${canonicalAction}_${exactOptions}"
                 val now = System.currentTimeMillis()
                 
-<<<<<<< HEAD
-                if (lastActedAction == signature && (now - lastActionTime < 8000L)) {
-                    // Already acted for this phase recently
-=======
                 if (now - lastActionTime < 3500L) {
                     // Global cooldown after any action to let UI animations finish and ignore transient OCR distortions
                     return@collectLatest
@@ -215,7 +147,6 @@ object RobotPlayer {
                 
                 if (isExecutingTurn || pendingActionSignature == signature && (now - pendingActionStartTime < 4000L)) {
                     // We are currently waiting to execute an action, let the existing coroutine finish
->>>>>>> origin/main
                     return@collectLatest
                 }
 
@@ -223,60 +154,6 @@ object RobotPlayer {
                 // E.g., if canonicalAction is "CALL", look for "CALL" or "CHECK" in map.
                 val targetRect = findButtonRect(canonicalAction) ?: return@collectLatest
                 
-<<<<<<< HEAD
-                // Execute after humanizer delay
-                lastActedAction = signature
-                lastActedBoardCards = commCardsSize
-                lastActionTime = now
-                
-                Log.d("RobotPlayer", "Executing AI Action: $canonicalAction on rectangle $targetRect (sig: $signature)")
-                
-                CoroutineScope(Dispatchers.Default).launch {
-                    delay(calculateHumanDelay(canonicalAction))
-                    executeClickOnRect(targetRect)
-                    
-                    if (canonicalAction == "BET" || canonicalAction == "RAISE") {
-                        BotLogSharedState.appendLogBot("[BOT][L5] Waiting for bet slider/options to appear...")
-                        delay(1200) // Wait for UI transition and a new OCR scan tick
-                        
-                        // Step 2: Try to find and click the specific size if Advisor gave one
-                        var sizeRect: Rect? = null
-                        if (targetActionRaw.contains("1/2")) {
-                            sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("1/2") }?.value
-                        } else if (targetActionRaw.contains("1/3")) {
-                            sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("1/3") }?.value
-                        } else if (targetActionRaw.contains("2/3")) {
-                            sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("2/3") }?.value
-                        } else if (targetActionRaw.contains("3/4") || targetActionRaw.contains("75%")) {
-                            sizeRect = availableActionButtons.entries.firstOrNull { it.key.replace(" ", "").contains("3/4") || it.key.contains("75") }?.value
-                        } else if (targetActionRaw.contains("POT") || targetActionRaw.contains("MAX") || targetActionRaw.contains("ALL-IN")) {
-                            sizeRect = availableActionButtons.entries.firstOrNull { it.key.contains("MAX") || it.key.contains("POT") || it.key.contains("МАКС") || it.key.contains("ПОТ") }?.value
-                        }
-                        
-                        if (sizeRect != null) {
-                            BotLogSharedState.appendLogBot("[BOT][L5] Selecting bet size option")
-                            executeClickOnRect(sizeRect)
-                            delay(600) // Wait for amount to register
-                        }
-                        
-                        // Step 3: Confirm the bet
-                        val confirmRect = availableActionButtons.entries.firstOrNull { 
-                            val key = it.key.uppercase()
-                            key.contains("CONFIRM") || key.contains("ПОДТВЕРДИТЬ") || key.contains("BET") || key.contains("БЕТ") || key.contains("RAISE") || key.contains("РЕЙЗ") 
-                        }?.value ?: targetRect // fallback to same position
-                        
-                        BotLogSharedState.appendLogBot("[BOT][L5] Confirming bet")
-                        executeClickOnRect(confirmRect)
-                    } else if (canonicalAction == "ALL-IN") {
-                        BotLogSharedState.appendLogBot("[BOT][L5] Waiting for all-in confirmation...")
-                        delay(1200)
-                        val confirmRect = availableActionButtons.entries.firstOrNull { 
-                            val key = it.key.uppercase()
-                            key.contains("CONFIRM") || key.contains("ПОДТВЕРДИТЬ") || key.contains("ALL-IN") || key.contains("ОЛЛ") || key.contains("ALL") || key.contains("ВЫСТАВИТЬ")
-                        }?.value ?: targetRect
-                        executeClickOnRect(confirmRect)
-                    }
-=======
                 // Target rect acquired
                 
                 // Track pending action so we don't start multiple parallel timers for the same action
@@ -425,32 +302,21 @@ object RobotPlayer {
                 }
                 } catch (e: Exception) {
                     Log.e("RobotPlayer", "Error processing UI State in bot logic", e)
->>>>>>> origin/main
                 }
             }
         }
     }
     
-    fun start() {
+    fun startRobot() {
         // Kept for backward compatibility if called elsewhere, but no longer needed since it starts automatically in init.
         isRobotModeEnabled.value = true
     }
     
-    fun stop() {
+    fun stopRobot() {
         // Kept for backward compatibility if called elsewhere
         isRobotModeEnabled.value = false
     }
 
-<<<<<<< HEAD
-    private fun findButtonRect(canonicalAction: String): Rect? {
-        // Buttons could have names like "Check/Call" depending on how OCR sees them.
-        for ((key, rect) in availableActionButtons) {
-            val upperKey = key.uppercase()
-            
-            // Check direct matches in both English and Russian
-            val match = when (canonicalAction) {
-                "FOLD" -> upperKey.contains("FOLD") || upperKey.contains("ФОЛД")
-=======
     private fun findButtonRect(initialAction: String): Rect? {
         var canonicalAction = initialAction
         
@@ -478,30 +344,14 @@ object RobotPlayer {
             val isAll = upperKey.contains("ALL-IN") || upperKey.contains("ALLIN") || upperKey.contains("ОЛЛ-ИН") || 
                         (upperKey.contains("ALL") && !upperKey.contains("CALL")) || 
                         upperKey.contains("ОЛЛ") || upperKey.contains("ВЫСТАВИТЬ")
-
+ 
             // Primary direct matches in both English and Russian
             val match = when (canonicalAction) {
                 "FOLD" -> upperKey.contains("FOLD") || upperKey.contains("ФОЛД") || upperKey.contains("PАС") || upperKey.contains("ПАС")
->>>>>>> origin/main
                 "CHECK" -> upperKey.contains("CHECK") || upperKey.contains("ЧЕК")
                 "CALL" -> upperKey.contains("CALL") || upperKey.contains("КОЛЛ")
                 "BET", "RAISE" -> upperKey.contains("BET") || upperKey.contains("БЕТ") || 
                                   upperKey.contains("RAISE") || upperKey.contains("РЕЙЗ") || 
-<<<<<<< HEAD
-                                  upperKey.contains("CONFIRM") || upperKey.contains("ПОДТВЕРДИТЬ")
-                "ALL-IN" -> upperKey.contains("ALL-IN") || upperKey.contains("ОЛЛ-ИН") || upperKey.contains("ALL") || upperKey.contains("ОЛЛ")
-                else -> false
-            }
-            if (match) return rect
-
-            // Synonyms
-            if (canonicalAction == "FOLD" && (upperKey.contains("CHECK") || upperKey.contains("ЧЕК"))) return rect
-            if ((canonicalAction == "CALL" || canonicalAction == "CHECK") && 
-                (upperKey.contains("CALL") || upperKey.contains("CHECK") || upperKey.contains("КОЛЛ") || upperKey.contains("ЧЕК"))) return rect
-            if ((canonicalAction == "BET" || canonicalAction == "RAISE") && 
-                (upperKey.contains("BET") || upperKey.contains("RAISE") || upperKey.contains("БЕТ") || upperKey.contains("РЕЙЗ"))) return rect
-        }
-=======
                                   upperKey.contains("CONFIRM") || upperKey.contains("ПОДТВЕРДИТЬ") ||
                                   isAll
                 "ALL-IN" -> isAll || upperKey.contains("RAISE") || upperKey.contains("РЕЙЗ") || upperKey.contains("BET") || upperKey.contains("БЕТ")
@@ -557,7 +407,6 @@ object RobotPlayer {
             }
         }
         
->>>>>>> origin/main
         return null
     }
 
@@ -579,14 +428,6 @@ object RobotPlayer {
         val rawY = centerY + (gaussianGenerator.nextGaussian() * stdDevY).toFloat()
         
         // Strictly clamp within safe coordinates inside the button boundaries (minimum 4px margin)
-<<<<<<< HEAD
-        val x = rawX.coerceIn(rect.left.toFloat() + 4f, rect.right.toFloat() - 4f)
-        val y = rawY.coerceIn(rect.top.toFloat() + 4f, rect.bottom.toFloat() - 4f)
-
-        // Longer tap (120ms to 240ms) with slight randomness to pass touchslop and emulate human pressure time
-        val clickDuration = Random.nextLong(120, 240) 
-        
-=======
         val safeMinX = rect.left.toFloat() + 4f
         val safeMaxX = rect.right.toFloat() - 4f
         val safeMinY = rect.top.toFloat() + 4f
@@ -599,7 +440,6 @@ object RobotPlayer {
         val clickDuration = kotlin.random.Random.nextLong(120, 240) 
         
         BotLogSharedState.appendLogBot("[BOT][L5] DispatchClick: action x=${x.toInt()}, y=${y.toInt()}, w=${rect.width()}, h=${rect.height()}")
->>>>>>> origin/main
         autoPlayer.dispatchClick(x, y, clickDuration)
     }
 
@@ -610,29 +450,6 @@ object RobotPlayer {
         return when (action.uppercase(java.util.Locale.US)) {
             "FOLD" -> {
                 // Folds are generally fast decisions or quick reactions
-<<<<<<< HEAD
-                val variation = Random.nextLong(400, 1500)
-                maxOf(400L, base - 500L + variation)
-            }
-            "CHECK" -> {
-                // Checks can be fast or involve brief pause
-                val variation = Random.nextLong(600, 1800)
-                maxOf(500L, base - 300L + variation)
-            }
-            "CALL" -> {
-                // Calls require more assessment of pot odds and board texture
-                val variation = Random.nextLong(1000, 2800)
-                maxOf(1000L, base + variation)
-            }
-            "BET", "RAISE", "ALL-IN" -> {
-                // Big/active bets involve sizing calculation and psychological stress
-                val variation = Random.nextLong(2000, 4800)
-                maxOf(1800L, base + 800L + variation)
-            }
-            else -> {
-                val variation = Random.nextLong(800, 2000)
-                maxOf(600L, base + variation)
-=======
                 val variation = Random.nextLong(200, 800)
                 maxOf(300L, base - 800L + variation)
             }
@@ -654,7 +471,6 @@ object RobotPlayer {
             else -> {
                 val variation = Random.nextLong(400, 1200)
                 maxOf(500L, base - 500L + variation)
->>>>>>> origin/main
             }
         }
     }
@@ -718,29 +534,6 @@ object RobotPlayer {
                     // wait for scan to process
                     delay(1300)
                     
-<<<<<<< HEAD
-                    // 4. Close the profile. First try the robust global BACK action
-                    BotLogSharedState.appendLogBot("[BOT][L5] Closing profile dialog via SYSTEM BACK action")
-                    val serviceInstance = AutoPlayerService.instance
-                    val backSuccess = serviceInstance?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK) ?: false
-                    
-                    delay(600) // wait for animation
-                    
-                    // Fallback to coordinates click if back button wasn't handled or service was disconnected
-                    if (!backSuccess && serviceInstance != null) {
-                        val displayMetrics = serviceInstance.resources?.displayMetrics
-                        val screenW = displayMetrics?.widthPixels ?: 1000
-                        val screenH = displayMetrics?.heightPixels ?: 2000
-                        
-                        // Click in a peripheral safe margin outside standard modal bounds (middle-right edge)
-                        val closeX = screenW * 0.95f
-                        val closeY = screenH * 0.40f
-                        
-                        BotLogSharedState.appendLogBot("[BOT][L5] Fallback: Closing profile by clicking margin: $closeX, $closeY")
-                        serviceInstance.dispatchClick(closeX, closeY, 150)
-                    }
-                    
-=======
                     // 4. Close the profile. NEVER use SYSTEM BACK on CoinPoker as it can trigger "Leave Table" dialog!
                     BotLogSharedState.appendLogBot("[BOT][L5] Closing profile dialog via outside-click")
                     val serviceInstance = AutoPlayerService.instance
@@ -758,7 +551,6 @@ object RobotPlayer {
                         serviceInstance.dispatchClick(closeX, closeY, 150)
                     }
 
->>>>>>> origin/main
                     delay(1000) // Cooldown before next loop invocation
                 } catch (e: Exception) {
                     Log.e("RobotPlayer", "Error during profile scan", e)

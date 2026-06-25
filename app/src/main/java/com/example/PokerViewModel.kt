@@ -52,10 +52,6 @@ data class PokerUiState(
     val l2Recommendation: Recommendation? = null,
     val advancedRecommendation: Recommendation? = null,
     val l4Recommendation: Recommendation? = null,
-<<<<<<< HEAD
-    val profileBoxes: List<ScannedBox>? = null,
-    val rawScannerBoxes: List<ScannedBox>? = null
-=======
     val multiL1Recs: Map<Int, Recommendation> = emptyMap(),
     val multiL2Recs: Map<Int, Recommendation> = emptyMap(),
     val multiAdvRecs: Map<Int, Recommendation> = emptyMap(),
@@ -64,7 +60,6 @@ data class PokerUiState(
     val profileBoxes: List<ScannedBox>? = null,
     val rawScannerBoxes: List<ScannedBox>? = null,
     val isBbDisplay: Boolean = false
->>>>>>> origin/main
 ) {
     // Collect all selected cards on the table to dim them in the card picker grid
     fun getAllSelectedCards(): Set<Card> {
@@ -371,39 +366,8 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
         calculationJob = viewModelScope.launch(Dispatchers.Default) {
             val state = _uiState.value
             try {
-<<<<<<< HEAD
-                // 1. Original
-                val result = SimulationEngine.runHoldemSimulation(
-                    heroCard1 = state.heroCard1,
-                    heroCard2 = state.heroCard2,
-                    opponents = state.opponents,
-                    board = state.board,
-                    simulations = simSize
-                )
-                
-                val recommendation = AdvisorEngine.computeRecommendation(
-                    heroCard1 = state.heroCard1,
-                    heroCard2 = state.heroCard2,
-                    board = state.board,
-                    potSize = state.potSize,
-                    heroBet = state.heroBet,
-                    opponents = state.opponents,
-                    activeOpponentsCount = state.opponents.count { it.isActive },
-                    simResult = result,
-                    settings = state.settings,
-                    position = state.position,
-                    stage = state.stage,
-                    smallBlind = state.smallBlind,
-                    bigBlind = state.bigBlind,
-                    heroStack = state.heroStack
-                )
-
-                // 2. Advanced
-                val advResult = SimulationEngine.runHoldemSimulationAdvanced(
-=======
                 // Precalculate maps for 1..5 opponents in parallel
                 val multiSims = SimulationEngine.runMultiOpponentSimulation(
->>>>>>> origin/main
                     heroCard1 = state.heroCard1,
                     heroCard2 = state.heroCard2,
                     opponents = state.opponents,
@@ -411,41 +375,6 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     simulations = simSize
                 )
 
-<<<<<<< HEAD
-                val advRecommendation = AdvisorEngine.computeRecommendationAdvanced(
-                    heroCard1 = state.heroCard1,
-                    heroCard2 = state.heroCard2,
-                    board = state.board,
-                    potSize = state.potSize,
-                    heroBet = state.heroBet,
-                    opponents = state.opponents,
-                    activeOpponentsCount = state.opponents.count { it.isActive },
-                    simResult = advResult,
-                    settings = state.settings,
-                    position = state.position,
-                    stage = state.stage,
-                    smallBlind = state.smallBlind,
-                    bigBlind = state.bigBlind,
-                    heroStack = state.heroStack
-                )
-
-                val l2Recommendation = AdvisorEngine.computeRecommendationL2(
-                    heroCard1 = state.heroCard1,
-                    heroCard2 = state.heroCard2,
-                    board = state.board,
-                    potSize = state.potSize,
-                    heroBet = state.heroBet,
-                    opponents = state.opponents,
-                    activeOpponentsCount = state.opponents.count { it.isActive },
-                    simResult = advResult,
-                    settings = state.settings,
-                    position = state.position,
-                    stage = state.stage,
-                    smallBlind = state.smallBlind,
-                    bigBlind = state.bigBlind,
-                    heroStack = state.heroStack
-                )
-=======
                 val multiAdvSims = SimulationEngine.runMultiOpponentSimulationAdvanced(
                     heroCard1 = state.heroCard1,
                     heroCard2 = state.heroCard2,
@@ -542,7 +471,6 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                 val recommendation = multiL1[decisionOpponentCount]
                 val l2Recommendation = multiL2[decisionOpponentCount]
                 val advRecommendation = multiAdv[decisionOpponentCount]
->>>>>>> origin/main
 
                 val l4Recommendation = AdvisorEngine.computeRecommendationL4(
                     heroCard1 = state.heroCard1,
@@ -551,23 +479,13 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                     potSize = state.potSize,
                     heroBet = state.heroBet,
                     opponents = state.opponents,
-<<<<<<< HEAD
-                    activeOpponentsCount = state.opponents.count { it.isActive },
-=======
                     activeOpponentsCount = decisionOpponentCount,
->>>>>>> origin/main
                     simResult = advResult,
                     settings = state.settings,
                     position = state.position,
                     stage = state.stage,
                     smallBlind = state.smallBlind,
                     bigBlind = state.bigBlind,
-<<<<<<< HEAD
-                    heroStack = state.heroStack
-                )
-
-                withContext(Dispatchers.Main) {
-=======
                     heroStack = state.heroStack,
                     isBbDisplay = state.isBbDisplay
                 )
@@ -594,7 +512,6 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                         l4Recommendation
                     )
 
->>>>>>> origin/main
                     _uiState.update {
                         it.copy(
                             isCalculating = false,
@@ -603,16 +520,12 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
                             advancedSimulationResult = advResult,
                             l2Recommendation = l2Recommendation,
                             advancedRecommendation = advRecommendation,
-<<<<<<< HEAD
-                            l4Recommendation = l4Recommendation
-=======
                             l4Recommendation = l4Recommendation,
                             multiL1Recs = multiL1,
                             multiL2Recs = multiL2,
                             multiAdvRecs = multiAdv,
                             multiSimResults = multiSims,
                             multiAdvSimResults = multiAdvSims
->>>>>>> origin/main
                         )
                     }
                 }
@@ -654,8 +567,6 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
 
         return null // No free slots
     }
-<<<<<<< HEAD
-=======
 
     fun importHandHistory(inputStream: java.io.InputStream): Int {
         val count = HandHistoryParser.parseHandHistory(inputStream, prefsManager)
@@ -673,5 +584,4 @@ class PokerViewModel(application: Application) : AndroidViewModel(application) {
         }
         return count
     }
->>>>>>> origin/main
 }

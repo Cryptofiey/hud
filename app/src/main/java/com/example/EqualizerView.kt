@@ -57,35 +57,7 @@ class EqualizerView(context: Context) : View(context) {
 
         if (!isVertical) {
             val gap = w * 0.02f
-<<<<<<< HEAD
-            val blockWidth = (w - gap * 3) / 4f
-
-            // Draw L1 (Math)
-            drawBlock(canvas, 0f, blockWidth, h, state.l1Fill, state.l1Color, "L1")
-
-            // Draw L2 (Table Data)
-            drawBlock(canvas, blockWidth + gap, blockWidth, h, state.l2Fill, state.l2Color, "L2")
-
-            // Draw L3 (Profiles - custom segments)
-            val l3Left = (blockWidth + gap) * 2
-            drawL3Block(canvas, l3Left, blockWidth, h, state.l3Segments)
-
-            // Draw L4 (Robot)
-            val l4Left = (blockWidth + gap) * 3
-            drawBlock(canvas, l4Left, blockWidth, h, state.l4Fill, state.l4Color, "L4")
-        } else {
-            val gap = h * 0.02f
-            val blockHeight = (h - gap * 3) / 4f
-
-            drawBlockVertical(canvas, 0f, w, blockHeight, state.l1Fill, state.l1Color, "L1")
-            drawBlockVertical(canvas, blockHeight + gap, w, blockHeight, state.l2Fill, state.l2Color, "L2")
-            val l3Top = (blockHeight + gap) * 2
-            drawL3BlockVertical(canvas, l3Top, w, blockHeight, state.l3Segments)
-            val l4Top = (blockHeight + gap) * 3
-            drawBlockVertical(canvas, l4Top, w, blockHeight, state.l4Fill, state.l4Color, "L4")
-=======
-            val totalBlockW = w - gap * 3
-            val unitW = totalBlockW / 6f
+            val unitW = (w - gap * 3) / 6f
 
             // Draw L1 (Math)
             val l1W = unitW
@@ -124,7 +96,6 @@ class EqualizerView(context: Context) : View(context) {
             val l4Top = l3Top + l3H + gap
             val l4H = unitH
             drawBlockVertical(canvas, l4Top, w, l4H, state.l4Fill, state.l4Color, "L4")
->>>>>>> origin/main
         }
     }
 

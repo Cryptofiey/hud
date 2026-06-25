@@ -59,11 +59,8 @@ import java.util.Locale
 import android.media.projection.MediaProjectionManager
 import androidx.activity.result.contract.ActivityResultContracts
 import android.app.Activity.RESULT_OK
-<<<<<<< HEAD
-=======
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.app.Application
->>>>>>> origin/main
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -72,10 +69,7 @@ object ScannerConfig {
     var pendingProjectionResultCode: Int = 0
     val isProjectionGranted = MutableStateFlow(false)
     var activeProjection: android.media.projection.MediaProjection? = null
-<<<<<<< HEAD
-=======
     var ocrThreshold: Int = 195 // Default value, will be overwritten by load
->>>>>>> origin/main
 }
 
 fun Context.findActivity(): Activity? {
@@ -129,11 +123,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-<<<<<<< HEAD
-=======
         ScannerConfig.ocrThreshold = PreferencesManager(this).loadOcrThreshold()
         
->>>>>>> origin/main
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             android.util.Log.e("AndroidRuntime", "FATAL UNCAUGHT EXCEPTION in thread ${thread.name}", throwable)
@@ -425,6 +416,12 @@ fun SettingsLayout(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val showScannerBoxes by PokerHudSharedState.showScannerBoxes.collectAsStateWithLifecycle()
+    val scannerOffsetX by PokerHudSharedState.scannerOffsetX.collectAsStateWithLifecycle()
+    val scannerOffsetY by PokerHudSharedState.scannerOffsetY.collectAsStateWithLifecycle()
+    val useVpipPfrFilter by PokerHudSharedState.useVpipPfrFilter.collectAsStateWithLifecycle()
+    val useWsdWtsdFilter by PokerHudSharedState.useWsdWtsdFilter.collectAsStateWithLifecycle()
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -516,11 +513,7 @@ fun SettingsLayout(
                 onClick = { onTabChecked(1) },
                 text = {
                     Text(
-<<<<<<< HEAD
-                        text = "Visualization of calculations",
-=======
                         text = "Opponents & Hand DB",
->>>>>>> origin/main
                         fontWeight = if (tabIndex == 1) FontWeight.Bold else FontWeight.Normal,
                         fontSize = 9.sp,
                         color = if (tabIndex == 1) Color.White else Color(0x99FFFFFF)
@@ -545,10 +538,7 @@ fun SettingsLayout(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     val isHudOverlayRunning by PokerHudSharedState.isHudOverlayRunning.collectAsStateWithLifecycle()
-<<<<<<< HEAD
                     val isBotLogWidgetRunning by BotLogSharedState.isBotLogWidgetRunning.collectAsStateWithLifecycle()
-=======
->>>>>>> origin/main
                     
                     SettingsToggleCard(
                         title = "HUD Overlay",
@@ -585,7 +575,6 @@ fun SettingsLayout(
                         onMoreInfo = { onMoreInfoClicked("HUD Overlay controls and permissions") }
                     )
 
-<<<<<<< HEAD
                     SettingsToggleCard(
                         title = "🤖 Bot Log Widget",
                         description = "Activate or Stop the floating log tracker for bot L/M levels.",
@@ -667,9 +656,6 @@ fun SettingsLayout(
                         },
                         onMoreInfo = { onMoreInfoClicked("Start this to view the bot's L1-L5 logs on your PC. Phone and PC must be on the same Wi-Fi. This avoids overlaying the log widget on your poker table and solves all blocking issues!") }
                     )
-=======
-                    // Bot Logs have been moved to server.
->>>>>>> origin/main
 
                     // Option Card 1: Winning Probabilities
                     val winProbMaxHands by PokerHudSharedState.winProbMaxHands.collectAsStateWithLifecycle()
@@ -815,6 +801,9 @@ fun SettingsLayout(
                         onMoreInfo = { onMoreInfoClicked("Автоматическое сканирование экрана") }
                     )
 
+                    NvidiaNimConfigCard(onMoreInfoClicked)
+
+
                     // Option Card 6: Accessibility Service for Termux Autoclicker Control
                     Box(
                         modifier = Modifier
@@ -857,7 +846,7 @@ fun SettingsLayout(
                                         checked = isRobotModeEnabled,
                                         onCheckedChange = { 
                                             RobotPlayer.isRobotModeEnabled.value = it
-                                            if (it) RobotPlayer.start() else RobotPlayer.stop()
+                                            if (it) RobotPlayer.startRobot() else RobotPlayer.stopRobot()
                                         },
                                         colors = SwitchDefaults.colors(
                                             checkedThumbColor = Color(0xFF4CAF50),
@@ -916,7 +905,6 @@ fun SettingsLayout(
                         }
                     }
 
-<<<<<<< HEAD
                     Spacer(modifier = Modifier.height(10.dp))
 
                     // Option Card: Accessibility Service for Instant Debug Capturing
@@ -991,9 +979,6 @@ fun SettingsLayout(
                             }
                         }
                     }
-
-=======
->>>>>>> origin/main
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             } else {
@@ -1073,14 +1058,8 @@ fun SettingsLayout(
                         }
                     }
 
-<<<<<<< HEAD
                     // Sklansky Group distribution preview of current cards
                     // Scanner Fine-Tuning Box
-                    val showScannerBoxes by PokerHudSharedState.showScannerBoxes.collectAsStateWithLifecycle()
-                    val scannerOffsetX by PokerHudSharedState.scannerOffsetX.collectAsStateWithLifecycle()
-                    val scannerOffsetY by PokerHudSharedState.scannerOffsetY.collectAsStateWithLifecycle()
-=======
-                    // Removed Scanner Fine-Tuning Box and Layout Calibration Overlays as per user request
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             }
@@ -1115,14 +1094,12 @@ fun SettingsLayout(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Explanatory card
->>>>>>> origin/main
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFF0F0F0F))
                             .border(BorderStroke(1.dp, Color(0xFF1E88E5)), RoundedCornerShape(8.dp))
-<<<<<<< HEAD
                             .padding(8.dp)
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1170,8 +1147,6 @@ fun SettingsLayout(
                     }
 
                     // Advisor Filters configurations
-                    val useVpipPfrFilter by PokerHudSharedState.useVpipPfrFilter.collectAsStateWithLifecycle()
-                    val useWsdWtsdFilter by PokerHudSharedState.useWsdWtsdFilter.collectAsStateWithLifecycle()
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1286,51 +1261,6 @@ fun SettingsLayout(
                         }
                     }
 
-=======
-                            .padding(12.dp)
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = "🗄️ База данных рук и оппонентов",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
-                            )
-                            Text(
-                                text = "CoinPoker сохраняет историю раздач в текстовые файлы. Запросите архив рук на почту в клиенте CoinPoker или найдите файлы на устройстве, а затем импортируйте их здесь. Бот автоматически рассчитает VPIP, PFR, AF и Шоудаун по тысячам сыгранных рук для всех ваших оппонентов, избавляя вас от необходимости калибровать каждого в ручном режиме!",
-                                color = Color.LightGray,
-                                fontSize = 9.sp,
-                                lineHeight = 13.sp
-                            )
-                            
-                            Spacer(modifier = Modifier.height(4.dp))
-                            
-                            Button(
-                                onClick = {
-                                    filePickerLauncher.launch("text/plain")
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
-                                shape = RoundedCornerShape(6.dp),
-                                modifier = Modifier.fillMaxWidth().height(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "Hand History Import icon",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "ИМПОРТИРОВАТЬ ИСТОРИЮ РУК (TXT)",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
-
-                    // Opponents DB Section
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1490,7 +1420,6 @@ fun SettingsLayout(
                         }
                     }
                     
->>>>>>> origin/main
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             }
@@ -2324,9 +2253,6 @@ fun CardPickerDialog(
         }
     )
 }
-<<<<<<< HEAD
-=======
-
 @Composable
 private fun DetailStatRow(label: String, value: String) {
     Row(
@@ -2338,4 +2264,210 @@ private fun DetailStatRow(label: String, value: String) {
         Text(text = value, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
     }
 }
->>>>>>> origin/main
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NvidiaNimConfigCard(onMoreInfo: (String) -> Unit) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    
+    var selectedModel by remember { mutableStateOf(NvidiaNimService.getSelectedModel(context)) }
+    var customApiKey by remember { mutableStateOf(NvidiaNimService.getCustomApiKey(context)) }
+    var modelDropdownExpanded by remember { mutableStateOf(false) }
+    
+    var testRunning by remember { mutableStateOf(false) }
+    var testResultText by remember { mutableStateOf<String?>(null) }
+    var testLatency by remember { mutableStateOf<Long?>(null) }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF0F0F0F))
+            .border(BorderStroke(1.2.dp, Color(0xFF1E88E5)), RoundedCornerShape(10.dp))
+            .padding(14.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🟢 NVIDIA NIM AI Vision Engine",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "Nvidia NIM info",
+                    tint = Color(0xFF1E88E5),
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clickable { onMoreInfo("NVIDIA NIM AI Vision integration replaces local ML Kit OCR with cutting-edge visual LLMs for superior accuracy in card detection and screen profiling.") }
+                )
+            }
+            
+            Text(
+                text = "Replaces local ML Kit OCR module with high-performance NVIDIA visual inference models for game screen structuring.",
+                color = Color.LightGray,
+                fontSize = 9.sp,
+                lineHeight = 11.sp
+            )
+
+            HorizontalDivider(color = Color(0x1AFFFFFF), thickness = 1.dp)
+
+            // API Key Input
+            Text(text = "NVIDIA NIM API Key:", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = customApiKey,
+                onValueChange = {
+                    customApiKey = it
+                    NvidiaNimService.setCustomApiKey(context, it)
+                },
+                placeholder = { Text("Enter NVIDIA NIM API Key (or loaded from .env)", color = Color.Gray, fontSize = 9.sp) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedContainerColor = Color(0xFF161616),
+                    unfocusedContainerColor = Color(0xFF161616),
+                    focusedBorderColor = Color(0xFF1E88E5),
+                    unfocusedBorderColor = Color(0x33FFFFFF)
+                ),
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(6.dp),
+                singleLine = true
+            )
+
+            // Model Dropdown
+            Text(text = "Select Vision Model:", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = selectedModel,
+                    onValueChange = {},
+                    readOnly = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color(0xFF161616),
+                        unfocusedContainerColor = Color(0xFF161616),
+                        focusedBorderColor = Color(0xFF1E88E5),
+                        unfocusedBorderColor = Color(0x33FFFFFF)
+                    ),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .clickable { modelDropdownExpanded = true },
+                    shape = RoundedCornerShape(6.dp),
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Dropdown icon",
+                            tint = Color.Gray,
+                            modifier = Modifier.clickable { modelDropdownExpanded = true }
+                        )
+                    }
+                )
+                DropdownMenu(
+                    expanded = modelDropdownExpanded,
+                    onDismissRequest = { modelDropdownExpanded = false },
+                    modifier = Modifier.background(Color(0xFF2E2E2E))
+                ) {
+                    NvidiaNimService.AVAILABLE_MODELS.forEach { model ->
+                        DropdownMenuItem(
+                            text = { Text(model, color = Color.White, fontSize = 10.sp) },
+                            onClick = {
+                                selectedModel = model
+                                NvidiaNimService.setSelectedModel(context, model)
+                                modelDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Speed Test Button
+            Button(
+                onClick = {
+                    testRunning = true
+                    testResultText = "Running speed test..."
+                    coroutineScope.launch {
+                        val res = NvidiaNimService.testModelSpeed(context, selectedModel)
+                        testRunning = false
+                        if (res.success) {
+                            testLatency = res.latencyMs
+                            testResultText = "Success! Latency: ${res.latencyMs}ms\nResponse: ${res.response}"
+                        } else {
+                            testLatency = null
+                            testResultText = "Failed: ${res.error}"
+                        }
+                    }
+                },
+                enabled = !testRunning,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(32.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text(
+                    text = if (testRunning) "TESTING..." else "CHECK SCAN SPEED",
+                    fontSize = 9.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // Test Results Display
+            testResultText?.let { resultText ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF161616))
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        text = resultText,
+                        color = if (testLatency != null) Color(0xFF4CAF50) else Color(0xFFE57373),
+                        fontSize = 8.sp,
+                        lineHeight = 11.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // MANDATORY SECURITY WARNING
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0x1AFF5722))
+                    .border(BorderStroke(1.dp, Color(0xFFFF5722)), RoundedCornerShape(6.dp))
+                    .padding(8.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "⚠️ SECURITY WARNING:",
+                        color = Color(0xFFFF5722),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 8.sp
+                    )
+                    Text(
+                        text = "I have included your API keys in the generated APK file for this prototype. Please be aware that Android APKs can be easily decompiled, and these keys can be extracted by anyone who has access to the file. Do not share this APK file publicly or with unauthorized individuals to prevent potential misuse.",
+                        color = Color(0xFFFFAB91),
+                        fontSize = 7.5.sp,
+                        lineHeight = 10.sp
+                    )
+                }
+            }
+        }
+    }
+}
+

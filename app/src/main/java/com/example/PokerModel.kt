@@ -5,14 +5,11 @@ import java.util.Locale
 import kotlin.random.Random as KotlinRandom
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
-<<<<<<< HEAD
-=======
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
->>>>>>> origin/main
 
 enum class Rank(val value: Int, val symbol: String) {
     TWO(2, "2"), THREE(3, "3"), FOUR(4, "4"), FIVE(5, "5"),
@@ -80,11 +77,8 @@ data class OpponentState(
     val nickname: String = "Player $id",
     val betSize: Float = 0f,
     val stackSize: Float = 1000f,
-<<<<<<< HEAD
-=======
     val sessionVpip: Float? = null,
     val sessionVpipBox: android.graphics.Rect? = null,
->>>>>>> origin/main
     val stats: PlayerStats? = null,
     val currentAction: String = "NONE",
     val isDealer: Boolean = false,
@@ -92,6 +86,91 @@ data class OpponentState(
     @Transient
     val boundingBox: android.graphics.Rect? = null
 )
+
+// 1. Settings Preferences Data Structure
+data class AdvisorSettings(
+    val usePip: Boolean = true,
+    val useAdvancedStats: Boolean = true,
+    val showRecommendation: Boolean = true,
+    val fontScale: Float = 1.0f,
+    val windowWidthPct: Int = 100,
+    val windowHeightPct: Int = 100
+)
+
+data class PlayerStats(
+    val nickname: String,
+    val handsPlayed: Int = 0,
+    val vpipCount: Int = 0,
+    val pfrCount: Int = 0,
+    val foldTo3betCount: Int = 0,
+    val showdownTotal: Int = 0,
+    val showdownWins: Int = 0,
+    val aggressionCount: Int = 0,
+    val aggressionCalls: Int = 0,
+    val lastUpdated: Long = 0,
+    // Historical stats (loaded from profiles)
+    val histVpip: Float? = null,
+    val histPfr: Float? = null,
+    val hist3Bet: Float? = null,
+    val histFoldTo3Bet: Float? = null,
+    val histCBet: Float? = null,
+    val histFoldToCBet: Float? = null,
+    val histSteal: Float? = null,
+    val histCheckRaise: Float? = null,
+    val histWtsd: Float? = null,
+    val histWsd: Float? = null,
+    @Transient
+    val profileBoundingBoxes: List<ScannedBox> = emptyList()
+) {
+    val vpip: Float get() = if (handsPlayed > 0) (vpipCount.toFloat() / handsPlayed) * 100f else 0f
+    val pfr: Float get() = if (handsPlayed > 0) (pfrCount.toFloat() / handsPlayed) * 100f else 0f
+    val aggressionFactor: Float get() = if (aggressionCalls > 0) aggressionCount.toFloat() / aggressionCalls else aggressionCount.toFloat()
+    val showdownWinPct: Float get() = if (showdownTotal > 0) (showdownWins.toFloat() / showdownTotal) * 100f else 0f
+    val foldTo3bet: Float get() = if (pfrCount > 0) (foldTo3betCount.toFloat() / pfrCount) * 100f else 0f
+    
+    val vpipPfrGap: Float get() = (histVpip ?: vpip) - (histPfr ?: pfr)
+    
+    val honestyIndex: Float get() {
+        val wtsd = histWtsd ?: 30f
+        val wsd = histWsd ?: 50f
+        return wsd - wtsd
+    }
+
+    val preflopBluffingTendency: Float get() {
+        val currPfr = histPfr ?: pfr
+        val fold3 = histFoldTo3Bet ?: 45f
+        return currPfr * (fold3 / 100f)
+    }
+
+    val postflopDangerIndex: Float get() {
+        val cbet = histCBet ?: 55f
+        val cr = histCheckRaise ?: 10f
+        return (cbet * 0.7f) + (cr * 3f)
+    }
+}
+
+// 3. Recommendation Response Object
+data class Recommendation(
+    val action: String, // CHECK, FOLD, CALL, RAISE, ALL-IN
+    val confidence: Float, // 0 - 100
+    val explanation: String,
+    val originalScore: Float = 0f
+)
+
+enum class TablePosition(val displayName: String) {
+    UTG("UTG (Early)"),
+    MP("MP (Middle)"),
+    CO("CO (Cutoff)"),
+    BTN("BTN (Button)"),
+    SB("SB (Small Blind)"),
+    BB("BB (Big Blind)")
+}
+
+enum class TournamentStage(val displayName: String) {
+    EARLY("Early (Deep Stack)"),
+    MIDDLE("Middle Stage"),
+    LATE("Late (Short Stack)")
+}
 
 data class SimulationResult(
     val heroWinPct: Float,
@@ -243,8 +322,6 @@ object SimulationEngine {
         }.map { Pair(it.first, it.second) }
     }
 
-<<<<<<< HEAD
-=======
     fun getOpponentSubsetForN(allOpponents: List<OpponentState>, n: Int): List<OpponentState> {
         val activeOpps = allOpponents.filter { it.isActive }
         val result = mutableListOf<OpponentState>()
@@ -299,8 +376,6 @@ object SimulationEngine {
         }
         return results
     }
-
->>>>>>> origin/main
     suspend fun runHoldemSimulation(
         heroCard1: Card?,
         heroCard2: Card?,
