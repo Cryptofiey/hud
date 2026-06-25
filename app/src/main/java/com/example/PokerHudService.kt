@@ -55,17 +55,84 @@ sealed class ExternalAction {
         val tablePosition: TablePosition? = null,
         val smallBlind: Float? = null,
         val bigBlind: Float? = null,
+<<<<<<< HEAD
         val tournamentStage: TournamentStage? = null
+=======
+        val tournamentStage: TournamentStage? = null,
+        val isBbDisplay: Boolean = false
+>>>>>>> origin/main
     ) : ExternalAction()
     data class ControlHud(val command: String) : ExternalAction()
 }
 
 enum class AppScreenState {
     APP_UNKNOWN,
+<<<<<<< HEAD
     COINPOKER_KNOWN,
     COINPOKER_UNKNOWN
 }
 
+=======
+    COINPOKER_TABLE,
+    COINPOKER_LOBBY,
+    COINPOKER_PROFILE,
+    COINPOKER_KNOWN, // Kept for backwards compatibility if needed
+    COINPOKER_UNKNOWN
+}
+
+object ValueStabilizer {
+    private val counts = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val candidates = java.util.concurrent.ConcurrentHashMap<String, Float>()
+    private val confirmedValues = java.util.concurrent.ConcurrentHashMap<String, Float>()
+    
+    fun clear() {
+        counts.clear()
+        candidates.clear()
+        confirmedValues.clear()
+    }
+    
+    fun stabilize(key: String, newVal: Float?, currentVal: Float, forceUpdate: Boolean = false): Float {
+        if (newVal == null) return currentVal
+        if (forceUpdate) {
+            confirmedValues[key] = newVal
+            counts[key] = 0
+            return newVal
+        }
+        
+        val confirmed = confirmedValues[key] ?: currentVal
+        
+        val diff = kotlin.math.abs(newVal - confirmed)
+        val isSame = diff < 0.1f || (confirmed > 0f && (diff / confirmed) < 0.015f)
+        
+        if (isSame) {
+            counts[key] = 0
+            confirmedValues[key] = confirmed
+            return confirmed
+        }
+        
+        val pendingCandidate = candidates[key] ?: 0f
+        val candidateDiff = kotlin.math.abs(newVal - pendingCandidate)
+        val matchesCandidate = candidateDiff < 0.1f || (pendingCandidate > 0f && (candidateDiff / pendingCandidate) < 0.015f)
+        
+        if (matchesCandidate) {
+            val c = (counts[key] ?: 0) + 1
+            counts[key] = c
+            if (c >= 2) {
+                confirmedValues[key] = newVal
+                counts[key] = 0
+                return newVal
+            } else {
+                return confirmed
+            }
+        } else {
+            candidates[key] = newVal
+            counts[key] = 1
+            return confirmed
+        }
+    }
+}
+
+>>>>>>> origin/main
 object PokerHudSharedState {
     val isHudOverlayRunning = MutableStateFlow(false)
     val appScreenContext = MutableStateFlow(AppScreenState.APP_UNKNOWN)
@@ -191,6 +258,10 @@ class PokerHudService : Service() {
     // Automated VPIP/PFR hand tracking state definitions
     private var lastHandKey: String? = null
     private val countedHandPlayers = mutableSetOf<String>()
+<<<<<<< HEAD
+=======
+    private val foldedPlayersThisHand = mutableSetOf<String>()
+>>>>>>> origin/main
     private val countedVpipPlayers = mutableSetOf<String>()
     private val countedPfrPlayers = mutableSetOf<String>()
     private val countedShowdownPlayers = mutableSetOf<String>()
@@ -471,8 +542,16 @@ class PokerHudService : Service() {
 
     private fun showFloatingOverlay() {
         if (isOverlayShowing) return
+<<<<<<< HEAD
 
         val params = WindowManager.LayoutParams(
+=======
+        isOverlayShowing = true
+        floatingOverlayView = null
+        
+        // 5. OBSERVE LIVE RECALCULATED STATE COUPLING FROM MAIN APP VIEWMODEL
+        /*
+>>>>>>> origin/main
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -588,6 +667,7 @@ class PokerHudService : Service() {
             }
         }
 
+<<<<<<< HEAD
         val readProfileBtn = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "ПРОФИЛЬ"
             textSize = 6f
@@ -649,6 +729,10 @@ class PokerHudService : Service() {
 
         val btnMinimize = Button(this, null, 0, android.R.style.Widget_Button).apply {
             text = "СКРЫТЬ"
+=======
+        val btnMinimize = Button(this, null, 0, android.R.style.Widget_Button).apply {
+            text = "HIDE"
+>>>>>>> origin/main
             textSize = 6f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF37474F"), 4f)
@@ -662,7 +746,11 @@ class PokerHudService : Service() {
         }
 
         val btnExit = Button(this, null, 0, android.R.style.Widget_Button).apply {
+<<<<<<< HEAD
             text = "ВЫХОД"
+=======
+            text = "EXIT"
+>>>>>>> origin/main
             textSize = 6f
             setTextColor(AndroidColor.WHITE)
             background = createBackgroundDrawable(AndroidColor.parseColor("#FF1E88E5"), 4f)
@@ -678,8 +766,11 @@ class PokerHudService : Service() {
 
         headerRow.addView(txtTitle)
         headerRow.addView(btnSwitchToVert)
+<<<<<<< HEAD
         headerRow.addView(readProfileBtn)
         headerRow.addView(btnFrames)
+=======
+>>>>>>> origin/main
         headerRow.addView(btnMinimize)
         headerRow.addView(btnExit)
         expanded.addView(headerRow)
@@ -705,7 +796,11 @@ class PokerHudService : Service() {
         scannerStatusBox = scannerBoxLocal
 
         val scannerTxt = TextView(this).apply {
+<<<<<<< HEAD
             text = "🔍 🔴 Стадия/Борд: Ждем..."
+=======
+            text = "🔍 🔴 Stage/Board: Wait..."
+>>>>>>> origin/main
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
             textSize = 9f
             typeface = Typeface.DEFAULT_BOLD
@@ -750,12 +845,21 @@ class PokerHudService : Service() {
             return tv
         }
 
+<<<<<<< HEAD
         val commCheckBox = createToggleButton("Борд", PokerHudSharedState.showCommBox)
         val holeCheckBox = createToggleButton("Карты", PokerHudSharedState.showHoleBox)
         val probsCheckBox = createToggleButton("Статы", PokerHudSharedState.showProbsBox)
         
         val debugSnapBtn = TextView(this).apply {
             text = "📷 ДЕБАГ"
+=======
+        val commCheckBox = createToggleButton("Board", PokerHudSharedState.showCommBox)
+        val holeCheckBox = createToggleButton("Cards", PokerHudSharedState.showHoleBox)
+        val probsCheckBox = createToggleButton("Stats", PokerHudSharedState.showProbsBox)
+        
+        val debugSnapBtn = TextView(this).apply {
+            text = "📷 DEBUG"
+>>>>>>> origin/main
             textSize = 6.5f
             gravity = Gravity.CENTER
             setTextColor(AndroidColor.WHITE)
@@ -850,14 +954,23 @@ class PokerHudService : Service() {
             return btn
         }
 
+<<<<<<< HEAD
         val btnProfile = TextView(this).apply {
             text = "👤"
+=======
+        val btnScan = TextView(this).apply {
+            text = "🔍"
+>>>>>>> origin/main
             textSize = 11f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(dpToPx(26f), dpToPx(26f)).apply {
                 setMargins(0, dpToPx(3f), 0, dpToPx(3f))
             }
+<<<<<<< HEAD
             background = createDynamicGlow(true, "#FFD500F9")
+=======
+            background = createDynamicGlow(true, "#FF9B59B6")
+>>>>>>> origin/main
             setOnClickListener {
                 if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
                     val originalVisibility = floatingOverlayView?.visibility ?: View.VISIBLE
@@ -891,6 +1004,7 @@ class PokerHudService : Service() {
         val btnBoard = createControllerEmojiButton("📋", PokerHudSharedState.showCommBox, "#FF2ECC71")
         val btnCards = createControllerEmojiButton("🎴", PokerHudSharedState.showHoleBox, "#FFF39C12")
         val btnProbs = createControllerEmojiButton("📊", PokerHudSharedState.showProbsBox, "#FF3498DB")
+<<<<<<< HEAD
         val btnScan = createControllerEmojiButton("🔍", PokerHudSharedState.showScannerBoxes, "#FF9B59B6")
 
         emojiContainer.addView(btnProfile)
@@ -898,6 +1012,15 @@ class PokerHudService : Service() {
         emojiContainer.addView(btnCards)
         emojiContainer.addView(btnProbs)
         emojiContainer.addView(btnScan)
+=======
+        val btnRobot = createControllerEmojiButton("🤖", RobotPlayer.isRobotModeEnabled, "#FF00E676")
+
+        emojiContainer.addView(btnScan)
+        emojiContainer.addView(btnBoard)
+        emojiContainer.addView(btnCards)
+        emojiContainer.addView(btnProbs)
+        emojiContainer.addView(btnRobot)
+>>>>>>> origin/main
         
         expanded.addView(emojiContainer)
 
@@ -953,7 +1076,11 @@ class PokerHudService : Service() {
                 miniHandleView.visibility = View.GONE
             } else if (isVertical) {
                 params.width = dpToPx(55f)
+<<<<<<< HEAD
                 params.height = dpToPx(240f) // Tall vertical shape
+=======
+                params.height = WindowManager.LayoutParams.WRAP_CONTENT
+>>>>>>> origin/main
                 if (params.x < 0) {
                     params.x = dpToPx(10f)
                 }
@@ -961,7 +1088,11 @@ class PokerHudService : Service() {
                 // Match expanded layout dimensions to vertical parent size
                 expanded.layoutParams = (expanded.layoutParams as FrameLayout.LayoutParams).apply {
                     width = dpToPx(55f)
+<<<<<<< HEAD
                     height = dpToPx(240f)
+=======
+                    height = FrameLayout.LayoutParams.WRAP_CONTENT
+>>>>>>> origin/main
                 }
                 
                 parentFrame.background = createBackgroundDrawable(AndroidColor.parseColor("#E6111C24"), 8f, dpToPx(1.5f), AndroidColor.parseColor("#FFD500F9"))
@@ -1036,6 +1167,10 @@ class PokerHudService : Service() {
             Log.e("PokerHudService", "Failed to add floating overlay view: ${e.message}", e)
             stopSelf()
         }
+<<<<<<< HEAD
+=======
+        */
+>>>>>>> origin/main
 
         // 5. OBSERVE LIVE RECALCULATED STATE COUPLING FROM MAIN APP VIEWMODEL
         serviceScope.launch {
@@ -1122,6 +1257,7 @@ class PokerHudService : Service() {
             }
         }
 
+<<<<<<< HEAD
         serviceScope.launch {
             PokerHudSharedState.hudScale.collect { scale ->
                 expanded.pivotX = 0f
@@ -1142,6 +1278,9 @@ class PokerHudService : Service() {
                 mini.alpha = opacity
             }
         }
+=======
+        // Removed hudScale and hudOpacity listeners for deleted controller UI
+>>>>>>> origin/main
 
         serviceScope.launch {
             PokerHudSharedState.isGameMode.collect { gameMode ->
@@ -1202,6 +1341,10 @@ class PokerHudService : Service() {
                         currentState.heroCard2 == action.hero2 && 
                         currentState.board == newBoard &&
                         !action.updateProfileBoxes &&
+<<<<<<< HEAD
+=======
+                        currentState.heroActionOptions == action.heroActionOptions &&
+>>>>>>> origin/main
                         (action.potSize == null || action.potSize == currentState.potSize)) {
                         return@collect
                     }
@@ -1212,6 +1355,10 @@ class PokerHudService : Service() {
                     if (heroCardsString != "Empty_Empty" && heroCardsString != lastHandKey) {
                         lastHandKey = heroCardsString
                         countedHandPlayers.clear()
+<<<<<<< HEAD
+=======
+                        foldedPlayersThisHand.clear()
+>>>>>>> origin/main
                         countedVpipPlayers.clear()
                         countedPfrPlayers.clear()
                         countedShowdownPlayers.clear()
@@ -1221,6 +1368,14 @@ class PokerHudService : Service() {
                         for (opponent in action.opponents) {
                             val name = opponent.nickname
                             if (name.isNotEmpty() && name != "Unknown") {
+<<<<<<< HEAD
+=======
+                                // Track folds globally for this hand
+                                if (!opponent.isActive && (opponent.currentAction == "FOLD" || opponent.currentAction == "SIT_OUT")) {
+                                    foldedPlayersThisHand.add(name)
+                                }
+                                
+>>>>>>> origin/main
                                 if (!countedHandPlayers.contains(name)) {
                                     countedHandPlayers.add(name)
                                     val stats = prefs.loadPlayerStats(name)
@@ -1278,6 +1433,14 @@ class PokerHudService : Service() {
                         }
                     }
 
+<<<<<<< HEAD
+=======
+                    val forceReset = (action.hero1 != currentState.heroCard1 || action.hero2 != currentState.heroCard2) && action.hero1 != null
+                    if (forceReset) {
+                        ValueStabilizer.clear()
+                    }
+
+>>>>>>> origin/main
                     // Dynamically map opponents with real-time up-to-date stats
                     val finalOpponentsList = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         val sourceList = if (action.opponents.isNotEmpty()) action.opponents else currentState.opponents
@@ -1286,10 +1449,34 @@ class PokerHudService : Service() {
                             // Actually loadPlayerStats uses SharedPreferences which is mostly cached in memory by Android anyway,
                             // but we still want to avoid unnecessary copies.
                             val dbStats = prefs.loadPlayerStats(opp.nickname)
+<<<<<<< HEAD
                             if (opp.stats == dbStats) opp else opp.copy(stats = dbStats)
                         }
                     }
 
+=======
+                            val isStillFolded = foldedPlayersThisHand.contains(opp.nickname)
+                            val updatedOpp = if (isStillFolded) opp.copy(isActive = false, currentAction = "FOLD") else opp
+                            
+                            val prevOpp = currentState.opponents.firstOrNull { it.nickname == opp.nickname }
+                            val prevStack = prevOpp?.stackSize ?: opp.stackSize
+                            val prevBet = prevOpp?.betSize ?: opp.betSize
+                            
+                            val stabStack = ValueStabilizer.stabilize("opp_stack_${opp.nickname}", opp.stackSize, prevStack, forceReset)
+                            val stabBet = ValueStabilizer.stabilize("opp_bet_${opp.nickname}", opp.betSize, prevBet, forceReset)
+                            
+                            val finalOpp = updatedOpp.copy(stackSize = stabStack, betSize = stabBet)
+                            if (finalOpp.stats == dbStats) finalOpp else finalOpp.copy(stats = dbStats)
+                        }
+                    }
+
+                    val stabilizedPot = ValueStabilizer.stabilize("pot_size", action.potSize, currentState.potSize, forceReset)
+                    val stabilizedHeroStack = ValueStabilizer.stabilize("hero_stack", action.heroStack, currentState.heroStack, forceReset)
+                    val stabilizedHeroBet = ValueStabilizer.stabilize("hero_bet", action.heroBet, currentState.heroBet, forceReset)
+                    val stabilizedSB = ValueStabilizer.stabilize("small_blind", action.smallBlind, currentState.smallBlind, forceReset)
+                    val stabilizedBB = ValueStabilizer.stabilize("big_blind", action.bigBlind, currentState.bigBlind, forceReset)
+
+>>>>>>> origin/main
                     val updatedState = currentState.copy(
                         heroCard1 = action.hero1,
                         heroCard2 = action.hero2,
@@ -1297,6 +1484,7 @@ class PokerHudService : Service() {
                         opponents = finalOpponentsList,
                         profileBoxes = if (action.updateProfileBoxes) action.profileBoxes else currentState.profileBoxes,
                         rawScannerBoxes = action.rawScannerBoxes,
+<<<<<<< HEAD
                         potSize = action.potSize ?: currentState.potSize,
                         heroActionOptions = action.heroActionOptions,
                         heroTurn = action.heroTurn,
@@ -1306,12 +1494,28 @@ class PokerHudService : Service() {
                         smallBlind = action.smallBlind ?: currentState.smallBlind,
                         bigBlind = action.bigBlind ?: currentState.bigBlind,
                         stage = action.tournamentStage ?: currentState.stage
+=======
+                        potSize = stabilizedPot,
+                        heroActionOptions = action.heroActionOptions,
+                        heroTurn = action.heroTurn,
+                        heroStack = stabilizedHeroStack,
+                        heroBet = stabilizedHeroBet,
+                        position = action.tablePosition ?: currentState.position,
+                        smallBlind = stabilizedSB,
+                        bigBlind = stabilizedBB,
+                        stage = action.tournamentStage ?: currentState.stage,
+                        isBbDisplay = action.isBbDisplay
+>>>>>>> origin/main
                     )
                     PokerHudSharedState.uiState.update { updatedState }
                     
                     if (action.updateProfileBoxes && action.profileBoxes != null) {
                         serviceScope.launch {
+<<<<<<< HEAD
                             kotlinx.coroutines.delay(5000)
+=======
+                            kotlinx.coroutines.delay(15000)
+>>>>>>> origin/main
                             PokerHudSharedState.uiState.update { 
                                 if (it.profileBoxes == action.profileBoxes) it.copy(profileBoxes = null) else it
                             }
@@ -1336,14 +1540,20 @@ class PokerHudService : Service() {
                             // Reduced sim size for persistent HUD for battery/thermal/memory safety
                             val simSize = 1200 
                             
+<<<<<<< HEAD
                             // 1. Original Branch
                             val result = com.example.SimulationEngine.runHoldemSimulation(
+=======
+                            // Precalculate maps for 1..5 opponents in parallel
+                            val multiSims = com.example.SimulationEngine.runMultiOpponentSimulation(
+>>>>>>> origin/main
                                 heroCard1 = updatedState.heroCard1,
                                 heroCard2 = updatedState.heroCard2,
                                 opponents = updatedState.opponents,
                                 board = updatedState.board,
                                 simulations = simSize
                             )
+<<<<<<< HEAD
                             val recommendation = com.example.AdvisorEngine.computeRecommendation(
                                 heroCard1 = updatedState.heroCard1,
                                 heroCard2 = updatedState.heroCard2,
@@ -1363,12 +1573,17 @@ class PokerHudService : Service() {
 
                             // 2. Advanced Branch
                             val advResult = com.example.SimulationEngine.runHoldemSimulationAdvanced(
+=======
+
+                            val multiAdvSims = com.example.SimulationEngine.runMultiOpponentSimulationAdvanced(
+>>>>>>> origin/main
                                 heroCard1 = updatedState.heroCard1,
                                 heroCard2 = updatedState.heroCard2,
                                 opponents = updatedState.opponents,
                                 board = updatedState.board,
                                 simulations = simSize
                             )
+<<<<<<< HEAD
                             val advRecommendation = com.example.AdvisorEngine.computeRecommendationAdvanced(
                                 heroCard1 = updatedState.heroCard1,
                                 heroCard2 = updatedState.heroCard2,
@@ -1402,6 +1617,97 @@ class PokerHudService : Service() {
                                 bigBlind = updatedState.bigBlind,
                                 heroStack = updatedState.heroStack
                             )
+=======
+
+                            val multiL1 = mutableMapOf<Int, com.example.Recommendation>()
+                            val multiL2 = mutableMapOf<Int, com.example.Recommendation>()
+                            val multiAdv = mutableMapOf<Int, com.example.Recommendation>()
+
+                            for (n in 1..5) {
+                                val subset = com.example.SimulationEngine.getOpponentSubsetForN(updatedState.opponents, n)
+                                
+                                val recL1 = com.example.AdvisorEngine.computeRecommendation(
+                                    heroCard1 = updatedState.heroCard1,
+                                    heroCard2 = updatedState.heroCard2,
+                                    board = updatedState.board,
+                                    potSize = updatedState.potSize,
+                                    heroBet = updatedState.heroBet,
+                                    opponents = subset,
+                                    activeOpponentsCount = n,
+                                    simResult = multiSims[n],
+                                    settings = updatedState.settings,
+                                    position = updatedState.position,
+                                    stage = updatedState.stage,
+                                    smallBlind = updatedState.smallBlind,
+                                    bigBlind = updatedState.bigBlind,
+                                    heroStack = updatedState.heroStack,
+                                    heroActionOptions = updatedState.heroActionOptions
+                                )
+                                multiL1[n] = recL1
+
+                                val recL2 = com.example.AdvisorEngine.computeRecommendationL2(
+                                    heroCard1 = updatedState.heroCard1,
+                                    heroCard2 = updatedState.heroCard2,
+                                    board = updatedState.board,
+                                    potSize = updatedState.potSize,
+                                    heroBet = updatedState.heroBet,
+                                    opponents = subset,
+                                    activeOpponentsCount = n,
+                                    simResult = multiSims[n],
+                                    settings = updatedState.settings,
+                                    position = updatedState.position,
+                                    stage = updatedState.stage,
+                                    smallBlind = updatedState.smallBlind,
+                                    bigBlind = updatedState.bigBlind,
+                                    heroStack = updatedState.heroStack,
+                                    heroActionOptions = updatedState.heroActionOptions
+                                )
+                                multiL2[n] = recL2
+
+                                val recAdv = com.example.AdvisorEngine.computeRecommendationAdvanced(
+                                    heroCard1 = updatedState.heroCard1,
+                                    heroCard2 = updatedState.heroCard2,
+                                    board = updatedState.board,
+                                    potSize = updatedState.potSize,
+                                    heroBet = updatedState.heroBet,
+                                    opponents = subset,
+                                    activeOpponentsCount = n,
+                                    simResult = multiAdvSims[n],
+                                    settings = updatedState.settings,
+                                    position = updatedState.position,
+                                    stage = updatedState.stage,
+                                    smallBlind = updatedState.smallBlind,
+                                    bigBlind = updatedState.bigBlind,
+                                    heroStack = updatedState.heroStack,
+                                    heroActionOptions = updatedState.heroActionOptions
+                                )
+                                multiAdv[n] = recAdv
+                            }
+
+                            // Pick the target branch corresponding to the actual active count + potential pending behind us
+                            val actualActiveCount = updatedState.opponents.count { it.isActive }
+                            val isPreflop = updatedState.board.filterNotNull().isEmpty()
+                            val pendingBehind = if (isPreflop) {
+                                when (updatedState.position) {
+                                    com.example.TablePosition.UTG -> 5
+                                    com.example.TablePosition.MP -> 4
+                                    com.example.TablePosition.CO -> 3
+                                    com.example.TablePosition.BTN -> 2
+                                    com.example.TablePosition.SB -> 1
+                                    com.example.TablePosition.BB -> 0
+                                }
+                            } else {
+                                0
+                            }
+                            // Effective opponent count is the actual active players plus those who can still act after us
+                            val decisionOpponentCount = maxOf(actualActiveCount, pendingBehind).coerceIn(1, 5)
+
+                            val result = multiSims[decisionOpponentCount]
+                            val advResult = multiAdvSims[decisionOpponentCount]
+                            val recommendation = multiL1[decisionOpponentCount]
+                            val l2Recommendation = multiL2[decisionOpponentCount]
+                            val advRecommendation = multiAdv[decisionOpponentCount]
+>>>>>>> origin/main
 
                             val l4Recommendation = com.example.AdvisorEngine.computeRecommendationL4(
                                 heroCard1 = updatedState.heroCard1,
@@ -1410,14 +1716,23 @@ class PokerHudService : Service() {
                                 potSize = updatedState.potSize,
                                 heroBet = updatedState.heroBet,
                                 opponents = updatedState.opponents,
+<<<<<<< HEAD
                                 activeOpponentsCount = updatedState.opponents.count { it.isActive },
+=======
+                                activeOpponentsCount = decisionOpponentCount,
+>>>>>>> origin/main
                                 simResult = advResult,
                                 settings = updatedState.settings,
                                 position = updatedState.position,
                                 stage = updatedState.stage,
                                 smallBlind = updatedState.smallBlind,
                                 bigBlind = updatedState.bigBlind,
+<<<<<<< HEAD
                                 heroStack = updatedState.heroStack
+=======
+                                heroStack = updatedState.heroStack,
+                                heroActionOptions = updatedState.heroActionOptions
+>>>>>>> origin/main
                             )
 
                             PokerHudSharedState.uiState.update { 
@@ -1427,7 +1742,16 @@ class PokerHudService : Service() {
                                     advancedSimulationResult = advResult,
                                     l2Recommendation = l2Recommendation,
                                     advancedRecommendation = advRecommendation,
+<<<<<<< HEAD
                                     l4Recommendation = l4Recommendation
+=======
+                                    l4Recommendation = l4Recommendation,
+                                    multiL1Recs = multiL1,
+                                    multiL2Recs = multiL2,
+                                    multiAdvRecs = multiAdv,
+                                    multiSimResults = multiSims,
+                                    multiAdvSimResults = multiAdvSims
+>>>>>>> origin/main
                                 )
                             }
                         } catch (e: Exception) {
@@ -1770,9 +2094,18 @@ class PokerHudService : Service() {
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
 
+<<<<<<< HEAD
         val params = WindowManager.LayoutParams(
             dpToPx(280f),
             dpToPx(115f),
+=======
+        val wPx = (screenWidth * 0.80f).toInt()
+        val hPx = (screenHeight * 0.14f).toInt()
+
+        val params = WindowManager.LayoutParams(
+            wPx,
+            hPx,
+>>>>>>> origin/main
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -1780,12 +2113,22 @@ class PokerHudService : Service() {
                 WindowManager.LayoutParams.TYPE_PHONE
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+<<<<<<< HEAD
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
             x = (screenWidth - dpToPx(280f)) / 2
             y = (screenHeight * 0.42f).toInt()
+=======
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.LEFT
+            x = (screenWidth * 0.10f).toInt()
+            y = (screenHeight * 0.38f).toInt()
+>>>>>>> origin/main
         }
 
         val frame = FrameLayout(this).apply {
@@ -1916,9 +2259,18 @@ class PokerHudService : Service() {
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
 
+<<<<<<< HEAD
         val params = WindowManager.LayoutParams(
             dpToPx(85f),
             dpToPx(85f),
+=======
+        val wPx = (screenWidth * 0.35f).toInt()
+        val hPx = (screenHeight * 0.14f).toInt()
+
+        val params = WindowManager.LayoutParams(
+            wPx,
+            hPx,
+>>>>>>> origin/main
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -1926,12 +2278,22 @@ class PokerHudService : Service() {
                 WindowManager.LayoutParams.TYPE_PHONE
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+<<<<<<< HEAD
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
             x = (screenWidth - dpToPx(85f)) / 2
             y = (screenHeight * 0.75f).toInt()
+=======
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.LEFT
+            x = (screenWidth * 0.35f).toInt()
+            y = (screenHeight * 0.65f).toInt()
+>>>>>>> origin/main
         }
 
         val frame = FrameLayout(this).apply {
@@ -1953,7 +2315,11 @@ class PokerHudService : Service() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+<<<<<<< HEAD
             visibility = View.GONE // Hide completely from the card scanning window area
+=======
+            visibility = View.VISIBLE
+>>>>>>> origin/main
         }
 
         val spacerTitle = View(this).apply {
@@ -2060,7 +2426,11 @@ class PokerHudService : Service() {
         if (floatingProbsOverlay != null) return
         val params = WindowManager.LayoutParams(
             dpToPx(160f),
+<<<<<<< HEAD
             dpToPx(210f),
+=======
+            WindowManager.LayoutParams.WRAP_CONTENT,
+>>>>>>> origin/main
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -2082,12 +2452,17 @@ class PokerHudService : Service() {
                 dpToPx(1.5f), 
                 AndroidColor.parseColor("#FF4CAF50")
             )
+<<<<<<< HEAD
             setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
+=======
+            setPadding(dpToPx(1f), dpToPx(1f), dpToPx(1f), dpToPx(1f))
+>>>>>>> origin/main
         }
         val content = FrameLayout(this)
         
         val mainVert = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+<<<<<<< HEAD
             clipChildren = false
             clipToPadding = false
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
@@ -2115,12 +2490,76 @@ class PokerHudService : Service() {
                 } else {
                     PokerHudSharedState.isProbsHudVertical.value = false
                     PokerHudSharedState.isProbsHudMinimized.value = false
+=======
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+            setPadding(dpToPx(3f), dpToPx(3f), dpToPx(3f), dpToPx(3f))
+        }
+
+        var onResizeCallback: ((Boolean) -> Unit)? = null
+        
+        val toggleBtnHorizontal = TextView(this).apply {
+            text = "↕️"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(AndroidColor.parseColor("#888888"))
+            layoutParams = FrameLayout.LayoutParams(dpToPx(24f), dpToPx(24f)).apply {
+                gravity = Gravity.BOTTOM or Gravity.END
+                bottomMargin = dpToPx(1f)
+                rightMargin = dpToPx(1f)
+            }
+            
+            var initialWidth = 0
+            var initialHeight = 0
+            var initialTouchX = 0f
+            var initialTouchY = 0f
+            var clickStartTime = 0L
+
+            setOnTouchListener { _, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        initialWidth = params.width
+                        initialHeight = params.height
+                        initialTouchX = event.rawX
+                        initialTouchY = event.rawY
+                        clickStartTime = System.currentTimeMillis()
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val deltaX = (event.rawX - initialTouchX).toInt()
+                        val deltaY = (event.rawY - initialTouchY).toInt()
+                        val isVert = PokerHudSharedState.isProbsHudVertical.value
+                        val minWidth = if (isVert) dpToPx(55f) else dpToPx(160f)
+                        val minHeight = if (isVert) dpToPx(100f) else dpToPx(100f)
+                        
+                        params.width = Math.max(minWidth, initialWidth + deltaX)
+                        params.height = Math.max(minHeight, initialHeight + deltaY)
+                        try {
+                            windowManager?.updateViewLayout(frame, params)
+                        } catch (ignored: Exception) {}
+                        
+                        val isWideNow = !isVert && (params.width > dpToPx(220f))
+                        onResizeCallback?.invoke(isWideNow)
+                        true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val duration = System.currentTimeMillis() - clickStartTime
+                        val distanceX = Math.abs(event.rawX - initialTouchX)
+                        val distanceY = Math.abs(event.rawY - initialTouchY)
+                        if (duration < 250 && distanceX < 12 && distanceY < 12) {
+                            val isVert = PokerHudSharedState.isProbsHudVertical.value
+                            PokerHudSharedState.isProbsHudVertical.value = !isVert
+                        }
+                        true
+                    }
+                    else -> false
+>>>>>>> origin/main
                 }
             }
         }
         
         val infoRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+<<<<<<< HEAD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 leftMargin = 0
                 rightMargin = dpToPx(4f)
@@ -2134,12 +2573,25 @@ class PokerHudService : Service() {
             typeface = Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 rightMargin = dpToPx(38f) // Keep clear of the 3 buttons at the top right!
+=======
+            background = createBackgroundDrawable(AndroidColor.TRANSPARENT, dpToPx(6f).toFloat(), dpToPx(1f), AndroidColor.parseColor("#44FFFFFF"))
+            setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                leftMargin = -dpToPx(2f)
+                rightMargin = -dpToPx(2f)
+                topMargin = -dpToPx(2f)
+                bottomMargin = dpToPx(4f)
+>>>>>>> origin/main
             }
         }
         
         // Info Slot Content
         val txtCardsBoard = TextView(this).apply {
+<<<<<<< HEAD
             text = "Карты: -- | Борд: --"
+=======
+            text = "🎴 -- | 📋 --"
+>>>>>>> origin/main
             setTextColor(AndroidColor.parseColor("#FFD54F"))
             textSize = 8f
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -2148,7 +2600,11 @@ class PokerHudService : Service() {
         }
 
         val txtHandRankStrength = TextView(this).apply {
+<<<<<<< HEAD
             text = "Комбо: -- | Сила: --"
+=======
+            text = "🎯 -- | 💪 --"
+>>>>>>> origin/main
             setTextColor(AndroidColor.parseColor("#90CAF9"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -2158,7 +2614,11 @@ class PokerHudService : Service() {
         }
         
         val txtSklan = TextView(this).apply {
+<<<<<<< HEAD
             text = "Группа: [Нет карт]"
+=======
+            text = "👥 [No Cards]"
+>>>>>>> origin/main
             setTextColor(AndroidColor.parseColor("#FFFF7043"))
             textSize = 8f
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -2166,6 +2626,7 @@ class PokerHudService : Service() {
             }
         }
 
+<<<<<<< HEAD
         val txtSynthetic = TextView(this).apply {
             text = "L2: ΔSD: -- | КоэфPF: -- | БлефPF: --"
             setTextColor(AndroidColor.parseColor("#FFCC80"))
@@ -2182,6 +2643,11 @@ class PokerHudService : Service() {
         infoRow.addView(txtSynthetic)
         
         mainVert.addView(infoRow)
+=======
+        infoRow.addView(txtCardsBoard)
+        infoRow.addView(txtHandRankStrength)
+        infoRow.addView(txtSklan)
+>>>>>>> origin/main
         
         // Equalizer View Integration
         val equalizer = EqualizerView(this).apply {
@@ -2192,9 +2658,14 @@ class PokerHudService : Service() {
                 rightMargin = dpToPx(4f)
             }
         }
+<<<<<<< HEAD
         mainVert.addView(equalizer)
         
         // Divider before Advisor Slot
+=======
+        
+        // Divider before Advisor Slot (acts as Horizontal or Vertical divider dynamically)
+>>>>>>> origin/main
         val advDivider = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1f)).apply {
                 topMargin = dpToPx(2f)
@@ -2204,11 +2675,18 @@ class PokerHudService : Service() {
             }
             setBackgroundColor(AndroidColor.parseColor("#22FFFFFF"))
         }
+<<<<<<< HEAD
         mainVert.addView(advDivider)
         
         // Advisor Slot
         val txtL1Advisor = TextView(this).apply {
             text = "🧮 L1: ЖДЕМ..."
+=======
+        
+        // Advisor Slot
+        val txtL1Advisor = TextView(this).apply {
+            text = "🧮 L1: WAIT..."
+>>>>>>> origin/main
             setTextColor(AndroidColor.parseColor("#FF90CAF9"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -2220,7 +2698,11 @@ class PokerHudService : Service() {
         }
         
         val txtL2Advisor = TextView(this).apply {
+<<<<<<< HEAD
             text = "🖩 L2: ЖДЕМ..."
+=======
+            text = "🖩 L2: WAIT..."
+>>>>>>> origin/main
             setTextColor(AndroidColor.parseColor("#FFCC80"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -2232,7 +2714,11 @@ class PokerHudService : Service() {
         }
         
         val txtL3Advisor = TextView(this).apply {
+<<<<<<< HEAD
             text = "🦾 L3: ЖДЕМ..."
+=======
+            text = "🦾 L3: WAIT..."
+>>>>>>> origin/main
             setTextColor(AndroidColor.parseColor("#FF80DEEA"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -2244,7 +2730,11 @@ class PokerHudService : Service() {
         }
 
         val txtL4Advisor = TextView(this).apply {
+<<<<<<< HEAD
             text = "🖐️ L4: ЖДЕМ..."
+=======
+            text = "🖐️ L4: WAIT..."
+>>>>>>> origin/main
             setTextColor(AndroidColor.parseColor("#FF00FFCC"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -2256,7 +2746,11 @@ class PokerHudService : Service() {
         }
 
         val txtL5Advisor = TextView(this).apply {
+<<<<<<< HEAD
             text = "🤖 L5: Робот Off"
+=======
+            text = "🤖 L5: Robot OFF"
+>>>>>>> origin/main
             setTextColor(AndroidColor.parseColor("#FFA7FFEB"))
             textSize = 8f
             typeface = Typeface.DEFAULT_BOLD
@@ -2279,11 +2773,163 @@ class PokerHudService : Service() {
         advVert.addView(txtL5Advisor)
         
         val scrollAdvisor = android.widget.ScrollView(this).apply {
+<<<<<<< HEAD
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
         }
         scrollAdvisor.addView(advVert)
         
         mainVert.addView(scrollAdvisor)
+=======
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        scrollAdvisor.addView(advVert)
+
+        // CREATE NEW ADAPTIVE TWO-COLUMN FLOW WRAPPER
+        val leftGroup = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        val rightGroup = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        val flowContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+
+        leftGroup.addView(infoRow)
+        leftGroup.addView(equalizer)
+
+        rightGroup.addView(scrollAdvisor)
+
+        flowContainer.addView(leftGroup)
+        flowContainer.addView(advDivider)
+        flowContainer.addView(rightGroup)
+
+        mainVert.addView(flowContainer)
+
+        var actionAdvisorScaleLocal = 1.0f
+
+        fun updateFlowLayout(isWide: Boolean) {
+            val isAdvVisible = PokerHudSharedState.showActionAdvisor.value
+            
+            if (isWide) {
+                flowContainer.orientation = LinearLayout.HORIZONTAL
+                leftGroup.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f)
+                rightGroup.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.1f)
+                
+                advDivider.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
+                advDivider.layoutParams = LinearLayout.LayoutParams(dpToPx(1f), LinearLayout.LayoutParams.MATCH_PARENT).apply {
+                    leftMargin = dpToPx(4f)
+                    rightMargin = dpToPx(4f)
+                    topMargin = dpToPx(2f)
+                    bottomMargin = dpToPx(2f)
+                }
+                
+                rightGroup.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
+                
+                // Fine-tune paddings / margins for compact wide fit
+                infoRow.setPadding(dpToPx(4f), dpToPx(1f), dpToPx(4f), dpToPx(1f))
+                (infoRow.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    bottomMargin = dpToPx(2f)
+                    infoRow.layoutParams = this
+                }
+                
+                equalizer.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(18f)).apply {
+                    topMargin = dpToPx(2f)
+                    bottomMargin = 0
+                    leftMargin = 0
+                    rightMargin = dpToPx(2f)
+                }
+                
+                // Adjust text sizes / margins slightly snugger for the side-by-side view
+                (txtCardsBoard.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(0.5f)
+                    txtCardsBoard.layoutParams = this
+                }
+                (txtHandRankStrength.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(0.5f)
+                    txtHandRankStrength.layoutParams = this
+                }
+                (txtSklan.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(0.5f)
+                    txtSklan.layoutParams = this
+                }
+                
+                for (tv in listOf(txtL1Advisor, txtL2Advisor, txtL3Advisor, txtL4Advisor, txtL5Advisor)) {
+                    (tv.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                        bottomMargin = dpToPx(0.5f)
+                        tv.layoutParams = this
+                    }
+                }
+                val compactSize = 7.2f * actionAdvisorScaleLocal
+                txtL1Advisor.textSize = compactSize
+                txtL2Advisor.textSize = compactSize
+                txtL3Advisor.textSize = compactSize
+                txtL4Advisor.textSize = compactSize
+                txtL5Advisor.textSize = compactSize
+                
+            } else {
+                flowContainer.orientation = LinearLayout.VERTICAL
+                leftGroup.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                rightGroup.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                rightGroup.visibility = View.VISIBLE
+                
+                advDivider.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
+                advDivider.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1.0f)).apply {
+                    topMargin = dpToPx(3f)
+                    bottomMargin = dpToPx(3f)
+                    leftMargin = 0
+                    rightMargin = dpToPx(4f)
+                }
+                
+                // Standard default snug padding
+                infoRow.setPadding(dpToPx(4f), dpToPx(2f), dpToPx(4f), dpToPx(2f))
+                (infoRow.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    bottomMargin = dpToPx(4f)
+                    infoRow.layoutParams = this
+                }
+                
+                equalizer.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(24f)).apply {
+                    topMargin = dpToPx(2f)
+                    bottomMargin = dpToPx(2f)
+                    leftMargin = 0
+                    rightMargin = dpToPx(4f)
+                }
+                
+                (txtCardsBoard.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(1.5f)
+                    txtCardsBoard.layoutParams = this
+                }
+                (txtHandRankStrength.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(1.5f)
+                    txtHandRankStrength.layoutParams = this
+                }
+                (txtSklan.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                    topMargin = dpToPx(1.5f)
+                    txtSklan.layoutParams = this
+                }
+                
+                for (tv in listOf(txtL1Advisor, txtL2Advisor, txtL3Advisor, txtL4Advisor, txtL5Advisor)) {
+                    (tv.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                        bottomMargin = dpToPx(1.5f)
+                        tv.layoutParams = this
+                    }
+                }
+                val standardSize = 8.0f * actionAdvisorScaleLocal
+                txtL1Advisor.textSize = standardSize
+                txtL2Advisor.textSize = standardSize
+                txtL3Advisor.textSize = standardSize
+                txtL4Advisor.textSize = standardSize
+                txtL5Advisor.textSize = standardSize
+            }
+        }
+
+        onResizeCallback = { isWide ->
+            updateFlowLayout(isWide)
+        }
+>>>>>>> origin/main
 
         // Vertical specific layouts
         val vertToolbar = LinearLayout(this).apply {
@@ -2368,7 +3014,49 @@ class PokerHudService : Service() {
         val btnBoard = createEmojiButton("📋", PokerHudSharedState.showCommBox, "#FF2ECC71")
         val btnCards = createEmojiButton("🎴", PokerHudSharedState.showHoleBox, "#FFF39C12")
         val btnAdv = createEmojiButton("📊", PokerHudSharedState.showActionAdvisor, "#FF3498DB")
+<<<<<<< HEAD
         val btnScan = createEmojiButton("🔍", PokerHudSharedState.showScannerBoxes, "#FF9B59B6")
+=======
+        val btnScan = TextView(this).apply {
+            text = "🔍"
+            textSize = 11f
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(dpToPx(26f), dpToPx(26f)).apply {
+                setMargins(0, dpToPx(3f), 0, dpToPx(3f))
+            }
+            background = createDynamicGlow(true, "#FF9B59B6")
+            setOnClickListener {
+                if (ScannerConfig.isProjectionGranted.value && ScannerConfig.pendingProjectionData != null) {
+                    val originalVisibility = floatingOverlayView?.visibility ?: View.VISIBLE
+                    floatingOverlayView?.visibility = View.INVISIBLE
+                    floatingCommOverlay?.visibility = View.INVISIBLE
+                    floatingHoleOverlay?.visibility = View.INVISIBLE
+                    floatingProbsOverlay?.visibility = View.INVISIBLE
+                    floatingScannerOverlay?.visibility = View.INVISIBLE
+                    
+                    serviceScope.launch {
+                        kotlinx.coroutines.delay(2000)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            floatingOverlayView?.visibility = originalVisibility
+                            floatingCommOverlay?.visibility = if (PokerHudSharedState.showCommBox.value) View.VISIBLE else View.GONE
+                            floatingHoleOverlay?.visibility = if (PokerHudSharedState.showHoleBox.value) View.VISIBLE else View.GONE
+                            floatingProbsOverlay?.visibility = if (PokerHudSharedState.showProbsBox.value) View.VISIBLE else View.GONE
+                            floatingScannerOverlay?.visibility = if (PokerHudSharedState.showScannerBoxes.value) View.VISIBLE else View.GONE
+                        }
+                    }
+
+                    if (screenScanner != null) {
+                        screenScanner?.requestProfileScan = true
+                    } else {
+                        val tempScanner = ScreenScanner(this@PokerHudService, ScannerConfig.pendingProjectionData!!, ScannerConfig.pendingProjectionResultCode, stopAfterProfileScan = true)
+                        tempScanner.start()
+                    }
+                } else {
+                    android.widget.Toast.makeText(this@PokerHudService, "Enable Screen Projection first", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+>>>>>>> origin/main
         val btnRobot = createEmojiButton("🤖", RobotPlayer.isRobotModeEnabled, "#FF00E676")
 
         emojiContainer.addView(btnBoard)
@@ -2426,7 +3114,11 @@ class PokerHudService : Service() {
                 
                 content.visibility = View.VISIBLE
                 mainVert.visibility = View.VISIBLE
+<<<<<<< HEAD
                 toggleBtnHorizontal.visibility = View.GONE
+=======
+                toggleBtnHorizontal.visibility = View.VISIBLE
+>>>>>>> origin/main
                 miniHandleView.visibility = View.GONE
                 
                 infoRow.visibility = View.GONE
@@ -2445,8 +3137,20 @@ class PokerHudService : Service() {
                 }
             } else {
                 val isAdvVisible = PokerHudSharedState.showActionAdvisor.value
+<<<<<<< HEAD
                 params.width = dpToPx(160f)
                 params.height = if (isAdvVisible) dpToPx(210f) else dpToPx(110f)
+=======
+                val isWide = params.width > dpToPx(220f)
+                
+                if (!isWide) {
+                    params.width = dpToPx(160f)
+                    params.height = if (isAdvVisible) dpToPx(210f) else dpToPx(110f)
+                }
+                
+                updateFlowLayout(isWide)
+                
+>>>>>>> origin/main
                 if (params.x < 0) {
                     params.x = dpToPx(100f)
                 }
@@ -2469,6 +3173,7 @@ class PokerHudService : Service() {
                 emojiContainer.visibility = View.GONE
                 
                 infoRow.visibility = View.VISIBLE
+<<<<<<< HEAD
                 
                 advDivider.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
                 scrollAdvisor.visibility = if (isAdvVisible) View.VISIBLE else View.GONE
@@ -2480,6 +3185,9 @@ class PokerHudService : Service() {
                     leftMargin = 0
                     rightMargin = dpToPx(4f)
                 }
+=======
+                equalizer.isVertical = false
+>>>>>>> origin/main
             }
             
             try {
@@ -2571,14 +3279,22 @@ class PokerHudService : Service() {
                                 val combinedWin = res.heroWinPct + res.heroTiePct
                                 currentWin = String.format(Locale.US, "%.1f%%", combinedWin)
                             } else {
+<<<<<<< HEAD
                                 currentWin = "Ждем..."
+=======
+                                currentWin = "Wait..."
+>>>>>>> origin/main
                             }
 
                             if (advRes != null) {
                                 val combinedWin = advRes.heroWinPct + advRes.heroTiePct
                                 currentAdvWin = String.format(Locale.US, "%.1f%%", combinedWin)
                             } else {
+<<<<<<< HEAD
                                 currentAdvWin = "Ждем..."
+=======
+                                currentAdvWin = "Wait..."
+>>>>>>> origin/main
                             }
                             
                             currentCardsStr = "${state.heroCard1.toHtmlString()} ${state.heroCard2.toHtmlString()}"
@@ -2592,6 +3308,7 @@ class PokerHudService : Service() {
 
                         if (state.heroCard1 != null && state.heroCard2 != null) {
                             val groupNum = AdvisorEngine.getSklanskyGroup(state.heroCard1, state.heroCard2)
+<<<<<<< HEAD
                             txtSklan.text = "Группа: $groupNum | Диапазон: 1-$sRange"
                             
                             val strengthDesc = when (groupNum) {
@@ -2634,12 +3351,30 @@ class PokerHudService : Service() {
                         } else {
                             txtSynthetic.text = "L2: ΔSD: -- | КоэфPF: -- | БлефPF: --"
                         }
+=======
+                            txtSklan.text = "👥 $groupNum | 📊 1-$sRange"
+                            
+                            val strengthDesc = when (groupNum) {
+                                1, 2 -> "Top (1/20)"
+                                3, 4 -> "High (4/20)"
+                                5, 6 -> "Med (8/20)"
+                                else -> "Weak (14/20)"
+                            }
+                            
+                            val relativePos = if (groupNum <= sRange) "Ahead of Range" else "Behind Range"
+                            currentStrength = "$strengthDesc ($relativePos)"
+                        } else {
+                            txtSklan.text = "👥 [No Cards]"
+                            currentStrength = "--"
+                        }
+>>>>>>> origin/main
                     }
 
                     if (heroCardsChanged || boardChanged || simResultChanged || opponentsChanged || recommendationChanged) {
                         val l3Val = if (state.heroCard1 != null && state.heroCard2 != null && advRec != null) {
                             String.format(Locale.US, "%.0f%%", advRec.confidence)
                         } else if (state.heroCard1 != null && state.heroCard2 != null) {
+<<<<<<< HEAD
                             "Ждем..."
                         } else {
                             "0.0%"
@@ -2647,6 +3382,14 @@ class PokerHudService : Service() {
                         title.text = "LHD | L1: $currentWin | L2: $currentAdvWin | L3: $l3Val"
                         txtCardsBoard.text = android.text.Html.fromHtml("<b>Карты:</b> $currentCardsStr | <b>Борд:</b> $currentBoardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
                         txtHandRankStrength.text = "Комбо: $currentHandRank | Сила: $currentStrength"
+=======
+                            "Wait..."
+                        } else {
+                            "0.0%"
+                        }
+                        txtCardsBoard.text = android.text.Html.fromHtml("🎴 $currentCardsStr | 📋 $currentBoardStr", android.text.Html.FROM_HTML_MODE_LEGACY)
+                        txtHandRankStrength.text = "🎯 $currentHandRank | 💪 $currentStrength"
+>>>>>>> origin/main
                     }
                     
                     if (recommendationChanged) {
@@ -2657,7 +3400,11 @@ class PokerHudService : Service() {
                             txtL1Advisor.text = "🧮 L1: $actName (${String.format(Locale.US, "%.0f%%", rec.confidence)})$exp"
                             setRecommendationColor(txtL1Advisor, rec.action)
                         } else {
+<<<<<<< HEAD
                             txtL1Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🧮 L1: Ждем..." else "🧮 L1: Ждем карты"
+=======
+                            txtL1Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🧮 L1: Wait..." else "🧮 L1: Wait cards"
+>>>>>>> origin/main
                             txtL1Advisor.setTextColor(AndroidColor.parseColor("#FFFFD54F"))
                         }
 
@@ -2668,7 +3415,11 @@ class PokerHudService : Service() {
                             txtL2Advisor.text = "🖩 L2: $actName (${String.format(Locale.US, "%.0f%%", l2Rec.confidence)})$exp"
                             setRecommendationColor(txtL2Advisor, l2Rec.action)
                         } else {
+<<<<<<< HEAD
                             txtL2Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🖩 L2: Ждем..." else ""
+=======
+                            txtL2Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🖩 L2: Wait..." else ""
+>>>>>>> origin/main
                             txtL2Advisor.setTextColor(AndroidColor.parseColor("#FFCC80"))
                         }
 
@@ -2679,18 +3430,36 @@ class PokerHudService : Service() {
                             txtL3Advisor.text = "🦾 L3: $actName (${String.format(Locale.US, "%.0f%%", advRec.confidence)})$exp"
                             setRecommendationColor(txtL3Advisor, advRec.action)
                         } else {
+<<<<<<< HEAD
                             txtL3Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🦾 L3: Ждем..." else ""
+=======
+                            txtL3Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🦾 L3: Wait..." else ""
+>>>>>>> origin/main
                             txtL3Advisor.setTextColor(AndroidColor.parseColor("#FF80DEEA"))
                         }
 
                         // 4. Update L4 recommendation
                         if (l4Rec != null) {
+<<<<<<< HEAD
                             val actName = translateAction(l4Rec.action)
                             val exp = if (l4Rec.explanation.isNotEmpty()) " | ${l4Rec.explanation}" else ""
                             txtL4Advisor.text = "🖐️ L4: $actName (${String.format(Locale.US, "%.0f%%", l4Rec.confidence)})$exp"
                             setRecommendationColor(txtL4Advisor, l4Rec.action)
                         } else {
                             txtL4Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🖐️ L4: Ждем..." else ""
+=======
+                            if (l4Rec.explanation.contains("Disabled", ignoreCase = true)) {
+                                txtL4Advisor.text = "🖐️ L4: Отключен пользователем"
+                                txtL4Advisor.setTextColor(AndroidColor.parseColor("#FF90A4AE"))
+                            } else {
+                                val actName = translateAction(l4Rec.action)
+                                val exp = if (l4Rec.explanation.isNotEmpty()) " | ${l4Rec.explanation}" else ""
+                                txtL4Advisor.text = "🖐️ L4: $actName (${String.format(Locale.US, "%.0f%%", l4Rec.confidence)})$exp"
+                                setRecommendationColor(txtL4Advisor, l4Rec.action)
+                            }
+                        } else {
+                            txtL4Advisor.text = if (state.heroCard1 != null && state.heroCard2 != null) "🖐️ L4: Wait..." else ""
+>>>>>>> origin/main
                             txtL4Advisor.setTextColor(AndroidColor.parseColor("#FF00FFCC"))
                         }
                     }
@@ -2699,6 +3468,7 @@ class PokerHudService : Service() {
                     if (isRobotActive) {
                         val buttons = RobotPlayer.availableActionButtons
                         if (buttons.isEmpty()) {
+<<<<<<< HEAD
                             txtL5Advisor.text = "🤖 L5: Робот АКТИВЕН (Ожидание)"
                         } else {
                             val detectedActions = buttons.keys.joinToString(", ")
@@ -2707,12 +3477,27 @@ class PokerHudService : Service() {
                         txtL5Advisor.setTextColor(AndroidColor.parseColor("#FF00E676"))
                     } else {
                         txtL5Advisor.text = "🤖 L5: Робот ВЫКЛЮЧЕН"
+=======
+                            txtL5Advisor.text = "🤖 L5: Robot (Wait)"
+                        } else {
+                            val detectedActions = buttons.keys.joinToString(", ")
+                            txtL5Advisor.text = "🤖 L5: Robot ON: $detectedActions"
+                        }
+                        txtL5Advisor.setTextColor(AndroidColor.parseColor("#FF00E676"))
+                    } else {
+                        txtL5Advisor.text = "🤖 L5: Robot OFF"
+>>>>>>> origin/main
                         txtL5Advisor.setTextColor(AndroidColor.parseColor("#FF90A4AE"))
                     }
 
                     // Unconditional reactive Equalizer block updating
+<<<<<<< HEAD
                     val l1FillValue = if (state.heroCard1 != null && state.heroCard2 != null && res != null) {
                         (res.heroWinPct + res.heroTiePct) / 100f
+=======
+                    val l1FillValue = if (rec != null && state.heroCard1 != null && state.heroCard2 != null) {
+                        rec.originalScore
+>>>>>>> origin/main
                     } else if (state.heroCard1 != null && state.heroCard2 != null) {
                         0.35f
                     } else {
@@ -2725,8 +3510,13 @@ class PokerHudService : Service() {
                         else -> AndroidColor.GRAY
                     }
                     
+<<<<<<< HEAD
                     val l2FillValue = if (state.heroCard1 != null && state.heroCard2 != null && advRes != null) {
                         (advRes.heroWinPct + advRes.heroTiePct) / 100f
+=======
+                    val l2FillValue = if (l2Rec != null && state.heroCard1 != null && state.heroCard2 != null) {
+                        l2Rec.originalScore
+>>>>>>> origin/main
                     } else if (state.heroCard1 != null && state.heroCard2 != null) {
                         0.35f
                     } else {
@@ -2823,11 +3613,22 @@ class PokerHudService : Service() {
         }
         serviceScope.launch(probsJob!!) {
             PokerHudSharedState.actionAdvisorScale.collect { scale -> 
+<<<<<<< HEAD
                 txtL1Advisor.textSize = 8f * scale
                 txtL2Advisor.textSize = 8f * scale
                 txtL3Advisor.textSize = 8f * scale
                 txtL4Advisor.textSize = 8f * scale
                 txtL5Advisor.textSize = 8f * scale
+=======
+                actionAdvisorScaleLocal = scale
+                val isWide = params.width > dpToPx(220f)
+                val baseSize = if (isWide) 7.2f else 8.0f
+                txtL1Advisor.textSize = baseSize * scale
+                txtL2Advisor.textSize = baseSize * scale
+                txtL3Advisor.textSize = baseSize * scale
+                txtL4Advisor.textSize = baseSize * scale
+                txtL5Advisor.textSize = baseSize * scale
+>>>>>>> origin/main
             }
         }
         // serviceScope.launch(probsJob!!) {
@@ -2836,6 +3637,7 @@ class PokerHudService : Service() {
     }
 
     private fun translateAction(action: String): String {
+<<<<<<< HEAD
         return when (action.uppercase(Locale.US)) {
             "FOLD" -> "ФОЛД"
             "CHECK" -> "ЧЕК"
@@ -2845,6 +3647,9 @@ class PokerHudService : Service() {
             "BET" -> "БЕТ"
             else -> action
         }
+=======
+        return action.uppercase(Locale.US)
+>>>>>>> origin/main
     }
 
     private fun setRecommendationColor(textView: TextView, action: String) {
@@ -2889,8 +3694,12 @@ class PokerHudService : Service() {
         }
         floatingScannerOverlay = null
         try {
+<<<<<<< HEAD
             stopService(Intent(this, BotLogWidgetService::class.java))
             BotLogSharedState.isBotLogWidgetRunning.value = false
+=======
+            // Log services removed.
+>>>>>>> origin/main
         } catch (e: Exception) {}
         ScannerConfig.activeProjection?.stop()
         ScannerConfig.activeProjection = null

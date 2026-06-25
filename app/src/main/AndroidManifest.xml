@@ -28,6 +28,10 @@
             </intent-filter>
         </activity>
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/main
         <service
             android:name=".PokerHudService"
             android:enabled="true"
@@ -39,6 +43,7 @@
                 android:value="Overlay tool for displaying statistical computations and logs on request" />
         </service>
 
+<<<<<<< HEAD
         <service
             android:name=".BotLogWidgetService"
             android:enabled="true"
@@ -50,6 +55,8 @@
                 android:value="Overlay tool for displaying statistical computations and bot logs" />
         </service>
 
+=======
+>>>>>>> origin/main
         <receiver
             android:name=".PokerHudReceiver"
             android:enabled="true"
@@ -76,6 +83,7 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+<<<<<<< HEAD
         <service
             android:name=".DebugCaptureService"
             android:enabled="true"
@@ -89,6 +97,9 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/debug_capture_service_config" />
         </service>
+=======
+
+>>>>>>> origin/main
 
     </application>
 

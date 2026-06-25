@@ -47,7 +47,11 @@ data class PlayerStats(
 
     // --- SYNTHETIC METRICS (Синтетические метрики) ---
 
+<<<<<<< HEAD
     // 1. Пассивный коридор (Calling Station Index)
+=======
+    // 1. Passiveный коридор (Calling Station Index)
+>>>>>>> origin/main
     // Разрыв между VPIP и PFR. Если разрыв >15%, значит оппонент много коллирует префлоп, играя пассивно.
     val vpipPfrGap: Float get() {
         val currVpip = histVpip ?: vpip
@@ -55,6 +59,7 @@ data class PlayerStats(
         return currVpip - currPfr
     }
 
+<<<<<<< HEAD
     // 2. Индекс честности на шоудауне (Postflop Honesty Index)
     // Разница между выигрышами (WSD) и доходами до вскрытия (WTSD).
     // Высокий WTSD (>30%) и низкий WSD (<48%) (Индекс < 15-18) = Телефон/Автоответчик (коллирует с мусором).
@@ -74,6 +79,10 @@ data class PlayerStats(
         val fold3 = histFoldTo3Bet ?: 45f
         return currPfr * (fold3 / 100f)
     }
+=======
+    // 2. Индекс честности на шоудауне (Postflop Honesty Index) — Удален как неиспользуемый
+    // 3. Частота префлоп-блефа / Опенрайза с мусором (Preflop Bluffing Tendency) - Удален как неиспользуемый
+>>>>>>> origin/main
 
     // 4. Агрессия на нескольких улицах (Multi-Street Danger Index)
     // Индекс опасности действий оппонента после флопа. Конт-бет (базовая агрессия) + 3x Check-Raise (экстремальная агрессия).
@@ -89,7 +98,12 @@ data class PlayerStats(
 data class Recommendation(
     val action: String, // CHECK, FOLD, CALL, RAISE, ALL-IN
     val confidence: Float, // 0 - 100
+<<<<<<< HEAD
     val explanation: String
+=======
+    val explanation: String,
+    val originalScore: Float = 0f
+>>>>>>> origin/main
 )
 
 enum class TablePosition(val displayName: String) {
@@ -122,6 +136,70 @@ object AdvisorEngine {
     }
 
     // Helper: Determine Sklansky & Malmuth Hand Group for two cards
+<<<<<<< HEAD
+=======
+    private fun getPositionalHazard(position: TablePosition, isPreflop: Boolean): Float {
+        return when(position) {
+            TablePosition.UTG -> if (isPreflop) 0.05f else 0.02f
+            TablePosition.MP -> if (isPreflop) 0.03f else 0.01f
+            TablePosition.CO -> if (isPreflop) 0.01f else 0.0f
+            TablePosition.BTN -> 0.0f
+            TablePosition.SB -> if (isPreflop) 0.02f else 0.04f
+            TablePosition.BB -> if (isPreflop) 0.0f else 0.02f
+        }
+    }
+
+    private fun getTargetPotOdds(basePotOdds: Float, betToCall: Float, heroStack: Float, activeOpponentsCount: Int, position: TablePosition, isPreflop: Boolean, stage: TournamentStage, sklanskyGroup: Int, bigBlind: Float = 0f): Float {
+        val mRatio = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20f
+        
+        val stackRisk = if (heroStack > 0) (betToCall / heroStack).coerceIn(0f, 1f) else 0f
+        val shortStackFactor = (mRatio / 20f).coerceIn(0.1f, 1.0f)
+        val stackRiskMargin = stackRisk * 0.08f * shortStackFactor
+        
+        // Penalize for multiple active opponents (squeeze hazard & multiway dilution)
+        val multiwayHazard = if (activeOpponentsCount > 1) {
+            (activeOpponentsCount - 1) * 0.005f
+        } else 0f
+
+        val positionalHazard = getPositionalHazard(position, isPreflop) * 0.4f
+        
+        // Stage & Bubble Hazard (Tighter ranges as game progresses, but less so if we are short stacked)
+        var stageHazard = if (isPreflop) {
+            when (stage) {
+                TournamentStage.EARLY -> 0.0f 
+                TournamentStage.MIDDLE -> {
+                    if (sklanskyGroup >= 6) 0.02f
+                    else if (sklanskyGroup >= 5) 0.01f
+                    else 0.0f
+                }
+                TournamentStage.LATE -> {
+                    when {
+                        sklanskyGroup >= 7 -> 0.05f
+                        sklanskyGroup >= 4 -> 0.03f
+                        else -> 0.01f 
+                    }
+                }
+            }
+        } else {
+            when (stage) {
+                TournamentStage.EARLY -> 0.0f
+                TournamentStage.MIDDLE -> 0.01f
+                TournamentStage.LATE -> 0.03f 
+            }
+        }
+        
+        stageHazard *= shortStackFactor
+
+        // --- CHEAP FLOP FIX ---
+        if (isPreflop && betToCall > 0f && bigBlind > 0f && betToCall <= bigBlind * 2.5f) {
+            stageHazard = 0.0f 
+            stageHazard -= 0.02f 
+        }
+
+        return basePotOdds + stackRiskMargin + multiwayHazard + positionalHazard + stageHazard
+    }
+
+>>>>>>> origin/main
     fun getSklanskyGroup(card1: Card, card2: Card): Int {
         val r1 = maxOf(card1.rank.value, card2.rank.value)
         val r2 = minOf(card1.rank.value, card2.rank.value)
@@ -237,14 +315,26 @@ object AdvisorEngine {
         smallBlind: Float,
         bigBlind: Float,
         heroStack: Float,
+<<<<<<< HEAD
         lastActions: String = ""
+=======
+        lastActions: String = "",
+        heroActionOptions: List<String> = emptyList(),
+        isBbDisplay: Boolean = false
+>>>>>>> origin/main
     ): Recommendation {
         // Zero cards check
         if (heroCard1 == null || heroCard2 == null) {
             return Recommendation(
+<<<<<<< HEAD
                 action = "FOLD",
                 confidence = 100f,
                 explanation = "Enter Hero hole cards to trigger active advice solver."
+=======
+                action = "WAIT",
+                confidence = 100f,
+                explanation = "Wait cards."
+>>>>>>> origin/main
             )
         }
 
@@ -275,6 +365,7 @@ object AdvisorEngine {
                 maxOpponentBet = pBet
             }
         }
+<<<<<<< HEAD
         val betToCall = maxOf(0f, maxOpponentBet - heroBet)
         val activePot = potSize + betToCall
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
@@ -282,12 +373,37 @@ object AdvisorEngine {
         // 4. Source 4: Pot Odds & Margin Factor (EV_OddsGap)
         val s4 = if (betToCall > 0f) {
             val gap = s1 - potOdds
+=======
+        var betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        
+        // --- OCR FIX FOR MISSED BETS ---
+        if (betToCall == 0f && heroActionOptions.isNotEmpty()) {
+            val hasCheck = heroActionOptions.any { it.equals("Check", true) }
+            val hasCall = heroActionOptions.any { it.equals("Call", true) }
+            val hasAllIn = heroActionOptions.any { it.equals("All-in", true) }
+            
+            if (!hasCheck && (hasCall || hasAllIn)) {
+                if (hasAllIn && !hasCall) betToCall = heroStack
+                else betToCall = bigBlind.coerceAtLeast(1f) // Assumed minimal bet
+            }
+        }
+        val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
+        val activePot = if (potSize + totalOpponentBets + heroBet < betToCall && betToCall > 0) betToCall + (bigBlind * 1.5f) else potSize + totalOpponentBets + heroBet
+        val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
+        val isPreflop = board.filterNotNull().isEmpty()
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup, bigBlind)
+
+        // 4. Source 4: Pot Odds & Margin Factor (EV_OddsGap)
+        val s4 = if (betToCall > 0f) {
+            val gap = s1 - targetPotOdds
+>>>>>>> origin/main
             ((gap + 1f) / 2f).coerceIn(0f, 1f)
         } else {
             (s1 * 1.15f).coerceIn(0f, 1f)
         }
 
         // Pure GTO Math Core - clean of any psychological or position heuristics
+<<<<<<< HEAD
         val l1Score = (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
 
         // Perfect GTO Tighter Standards for Multi-Way fields to avoid equity dilution
@@ -298,17 +414,47 @@ object AdvisorEngine {
         val action: String
         val explanation: String
         val profitableCall = s1 > potOdds
+=======
+        val l1Score = if (isPreflop) {
+            (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
+        } else {
+            (s1 * 0.80f) + (s4 * 0.20f)
+        }
+
+        val isMultiway = activeOpponentsCount >= 2
+        val fairShare = if (activeOpponentsCount > 0) 1.0f / (activeOpponentsCount + 1.0f) else 0.5f
+        val betThreshold = if (isPreflop) {
+            if (isMultiway) 0.50f else 0.45f
+        } else {
+            fairShare + if (isMultiway) 0.10f else 0.05f
+        }
+        val raiseThreshold = if (isPreflop) {
+            if (isMultiway) 0.65f else 0.60f
+        } else {
+            fairShare + if (isMultiway) 0.25f else 0.15f
+        }
+
+        val action: String
+        val explanation: String
+        val profitableCall = s1 > targetPotOdds
+>>>>>>> origin/main
 
         fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
         fun fmt(f: Float): String = String.format(Locale.US, "%.1f", f)
 
+<<<<<<< HEAD
         val mRatio = if (heroStack > 0 && bigBlind > 0) (heroStack.toFloat() / bigBlind) else 20.0f
+=======
+        val mRatioRaw = if (heroStack > 0 && bigBlind > 0) (heroStack.toFloat() / bigBlind) else 20.0f
+        val mRatio = if (heroStack > 0 && isBbDisplay) heroStack else mRatioRaw
+>>>>>>> origin/main
 
         if (betToCall > 0) {
             if (profitableCall) {
                 if (s1 > 0.65f && l1Score > raiseThreshold) {
                     if (mRatio < 12.0f) {
                         action = "ALL-IN"
+<<<<<<< HEAD
                         explanation = "ОЛЛ-ИН: превосходное EV ${pct(s1)}% [M=${fmt(mRatio)}]"
                     } else {
                         action = "RAISE"
@@ -331,6 +477,30 @@ object AdvisorEngine {
                 } else {
                     action = "FOLD"
                     explanation = "Фолд: математически невыгодно, эквити ${pct(s1)}% < шансы ${pct(potOdds)}%"
+=======
+                        explanation = "ALL-IN: excellent EV ${pct(s1)}% [M=${fmt(mRatio)}]"
+                    } else {
+                        action = "RAISE"
+                        explanation = "Raise: strong value equity ${pct(s1)}%"
+                    }
+                } else {
+                    action = "CALL"
+                    explanation = "Call: equity ${pct(s1)}% > odds ${pct(targetPotOdds)}% (with margin)"
+                }
+            } else {
+                // Unprofitable call based on raw win percentage. Check if playability score offers GTO defense
+                if (l1Score > 0.48f && s1 > (0.9f / (activeOpponentsCount + 1.0f))) {
+                    if (s1 > 0.45f && l1Score > raiseThreshold) {
+                        action = "RAISE"
+                        explanation = "Raise (semi-bluff): equity ${pct(s1)}%"
+                    } else {
+                        action = "CALL"
+                        explanation = "Call (defense): equity ${pct(s1)}%"
+                    }
+                } else {
+                    action = "FOLD"
+                    explanation = "Fold: weak equity ${pct(s1)}% < odds ${pct(potOdds)}%"
+>>>>>>> origin/main
                 }
             }
         } else {
@@ -338,6 +508,7 @@ object AdvisorEngine {
             if (s1 > 0.60f && l1Score > raiseThreshold) {
                 if (mRatio < 12.0f && (s1 > 0.80f || sklanskyGroup <= 2)) {
                     action = "ALL-IN"
+<<<<<<< HEAD
                     explanation = "ОЛЛ-ИН: математический превосходный пуш, эквити ${pct(s1)}%"
                 } else {
                     action = "RAISE"
@@ -352,10 +523,27 @@ object AdvisorEngine {
             } else {
                 action = "CHECK"
                 explanation = "Чек: ведение банка по шансам, эквити ${pct(s1)}%"
+=======
+                    explanation = "ALL-IN: excellent push, equity ${pct(s1)}%"
+                } else {
+                    action = "RAISE"
+                    explanation = "Raise: value aggression, equity ${pct(s1)}%"
+                }
+            } else if (s1 > 0.45f && l1Score > betThreshold) {
+                action = "BET"
+                explanation = "Bet: math advantage, equity ${pct(s1)}%"
+            } else if (l1Score > 0.50f) {
+                action = "BET"
+                explanation = "Bet (bluff): equity ${pct(s1)}%"
+            } else {
+                action = "CHECK"
+                explanation = "Check: pot control, equity ${pct(s1)}%"
+>>>>>>> origin/main
             }
         }
 
         // Formulate highly detailed explanation with mathematical weights tracking
+<<<<<<< HEAD
         val detailExplanation = "GTO L1: EV[Sim=${pct(s1)}%|Skl=${pct(s2)}%|Chen=${pct(s3)}%|Mrg=${pct(s4)}%] (СрВыч=${pct(l1Score)}%) | $explanation"
 
         val confidence = when(action) {
@@ -367,6 +555,29 @@ object AdvisorEngine {
         }
 
         return Recommendation(action, confidence, detailExplanation)
+=======
+        val breakdown = "Simulations (Branch 1): Base=${pct(s1)}%\n" +
+                        "Sklansky (Branch 2): Grp=$sklanskyGroup, Wgt=${pct(s2)}%\n" +
+                        "Chen Score (Branch 3): Wgt=${pct(s3)}%\n" +
+                        "Pot Odds/Margin (Branch 4): Targets=${pct(targetPotOdds)}%, Adj=${pct(s4)}%\n" +
+                        "Net Output: EV Average=${pct(l1Score)}%"
+                        
+        val detailExplanation = "⚙️ L1 MATH VETKI:\n$breakdown\n🎯 ACTION: $explanation"
+
+        val confidence = when(action) {
+            "RAISE", "ALL-IN", "BET" -> (((l1Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
+            "FOLD" -> {
+                val msg = "🚨 DECISION-LOG [FOLD L1]: EV = ${pct(l1Score)}%, Target PotOdds/Threshold = ${pct(targetPotOdds)}%. (s1=${pct(s1)}%). Reason: L1 threshold missed."
+                BotLogSharedState.appendLogBot(msg)
+                (((0.5f - l1Score) / 0.5f) * 100f).coerceIn(10f, 98f)
+            }
+            "CALL" -> ((1.0f - kotlin.math.abs(l1Score - 0.45f) / 0.55f) * 100f).coerceIn(10f, 98f)
+            "CHECK" -> ((1.0f - kotlin.math.abs(l1Score - 0.35f) / 0.65f) * 100f).coerceIn(10f, 98f)
+            else -> 50f
+        }
+
+        return Recommendation(action, confidence, detailExplanation, l1Score)
+>>>>>>> origin/main
     }
 
     fun computeRecommendationL2(
@@ -383,10 +594,19 @@ object AdvisorEngine {
         stage: TournamentStage,
         smallBlind: Float,
         bigBlind: Float,
+<<<<<<< HEAD
         heroStack: Float
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
             return Recommendation("FOLD", 100f, "Enter cards.")
+=======
+        heroStack: Float,
+        heroActionOptions: List<String> = emptyList(),
+        isBbDisplay: Boolean = false
+    ): Recommendation {
+        if (heroCard1 == null || heroCard2 == null) {
+            return Recommendation("WAIT", 100f, "Wait cards.")
+>>>>>>> origin/main
         }
 
         // 1. Core Source 1: Monte Carlo Simulation win pct (and check fallback to L1 elements)
@@ -416,6 +636,7 @@ object AdvisorEngine {
                 maxOpponentBet = pBet
             }
         }
+<<<<<<< HEAD
         val betToCall = maxOf(0f, maxOpponentBet - heroBet)
         val activePot = potSize + betToCall
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
@@ -423,13 +644,46 @@ object AdvisorEngine {
         // Core Source 4: Margin / Potential Odds Gap
         val s4 = if (betToCall > 0f) {
             val gap = s1 - potOdds
+=======
+        var betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        
+        // --- OCR FIX FOR MISSED BETS ---
+        if (betToCall == 0f && heroActionOptions.isNotEmpty()) {
+            val hasCheck = heroActionOptions.any { it.equals("Check", true) }
+            val hasCall = heroActionOptions.any { it.equals("Call", true) }
+            val hasAllIn = heroActionOptions.any { it.equals("All-in", true) }
+            
+            if (!hasCheck && (hasCall || hasAllIn)) {
+                if (hasAllIn && !hasCall) betToCall = heroStack
+                else betToCall = bigBlind.coerceAtLeast(1f) // Assumed minimal bet
+            }
+        }
+        val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
+        val activePot = if (potSize + totalOpponentBets + heroBet < betToCall && betToCall > 0) betToCall + (bigBlind * 1.5f) else potSize + totalOpponentBets + heroBet
+        val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
+        
+        val isPreflop = board.filterNotNull().isEmpty()
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup, bigBlind)
+
+        // Core Source 4: Margin / Potential Odds Gap
+        val s4 = if (betToCall > 0f) {
+            val gap = s1 - targetPotOdds
+>>>>>>> origin/main
             ((gap + 1f) / 2f).coerceIn(0f, 1f)
         } else {
             (s1 * 1.15f).coerceIn(0f, 1f)
         }
 
         // Clean L1 GTO base score (the foundation we build on top of)
+<<<<<<< HEAD
         val baseL1Score = (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
+=======
+        val baseL1Score = if (isPreflop) {
+            (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
+        } else {
+            (s1 * 0.80f) + (s4 * 0.20f)
+        }
+>>>>>>> origin/main
 
         // 2. Average table stats for fallback strategy
         val opponentsWithStats = opponents.filter { it.stats != null }
@@ -463,12 +717,36 @@ object AdvisorEngine {
 
         for (opp in activeOpponents) {
             val stats = opp.stats
+<<<<<<< HEAD
             val hasProfile = stats?.histVpip != null
             val hasSession = stats != null && stats.handsPlayed > 2
 
             // Fallback strategy: try Profile (hist), then try duplicates (session), then blend population and table average
             val vpip = stats?.histVpip ?: stats?.vpip ?: (25f * 0.4f + avgTableVpip * 0.6f)
             val pfr = stats?.histPfr ?: stats?.pfr ?: (15f * 0.4f + avgTablePfr * 0.6f)
+=======
+            
+            val hasProfile = stats?.histVpip != null
+            val hasSession = stats != null && stats.handsPlayed > 2
+
+            // Prioritize sessionVpip scanned from screen. Soften with histVpip if available.
+            val screenVpip = opp.sessionVpip
+            val profileVpip = stats?.histVpip
+            val sessionVpipDb = if (hasSession) stats.vpip else null
+
+            val vpip = if (screenVpip != null) {
+                if (profileVpip != null) {
+                    // Soften: 70% screen, 30% historical
+                    (screenVpip * 0.7f) + (profileVpip * 0.3f)
+                } else {
+                    screenVpip
+                }
+            } else {
+                profileVpip ?: sessionVpipDb ?: (25f * 0.4f + avgTableVpip * 0.6f)
+            }
+
+            val pfr = stats?.histPfr ?: sessionVpipDb?.let { stats?.pfr } ?: (15f * 0.4f + avgTablePfr * 0.6f)
+>>>>>>> origin/main
             val wtsd = stats?.histWtsd ?: (30f * 0.4f + avgTableWtsd * 0.6f)
             val wsd = stats?.histWsd ?: (50f * 0.4f + avgTableWsd * 0.6f)
 
@@ -500,8 +778,13 @@ object AdvisorEngine {
                 oppVpipAdj = 0.05f  // Loose fish -> exploit with wider value
             }
 
+<<<<<<< HEAD
             // Alternative Mechanism: completely disable personal data adjustments if they have no profile or session data
             if (!hasProfile && !hasSession) {
+=======
+            // Alternative Mechanism: completely disable personal data adjustments if they have no profile, session, or screen data
+            if (!hasProfile && !hasSession && screenVpip == null) {
+>>>>>>> origin/main
                 oppDeltaAdj = 0f
                 oppFocusAdj = 0f
                 oppVpipAdj = 0f
@@ -525,6 +808,7 @@ object AdvisorEngine {
         }
 
         // 5. Second-order environmental overlays: Tournament Stage / ICM (Bubble Proximity)
+<<<<<<< HEAD
         val stageAdj = when (stage) {
             TournamentStage.EARLY -> 0.0f  // Deep stack comfort
             TournamentStage.MIDDLE -> -0.01f
@@ -536,6 +820,39 @@ object AdvisorEngine {
         val stackAdjustment = if (mRatio < 10.0f) {
             // Under short-stack pressure, reduce speculative play and tilt decisions to push/fold
             if (sklanskyGroup <= 3) 0.05f else -0.05f
+=======
+        val stageAdj = if (isPreflop) {
+            when (stage) {
+                TournamentStage.EARLY -> 0.01f  // Deep stack comfort, slight boost for speculative plays
+                TournamentStage.MIDDLE -> if (sklanskyGroup >= 5) -0.04f else -0.01f
+                TournamentStage.LATE -> {
+                    // Bubble / survival: severely penalize weak hands, reward premium
+                    when {
+                        sklanskyGroup >= 6 -> -0.12f
+                        sklanskyGroup >= 4 -> -0.06f
+                        sklanskyGroup <= 2 -> 0.02f // Premium hands get a tiny boost for stealing
+                        else -> -0.03f
+                    }
+                }
+            }
+        } else {
+            when (stage) {
+                TournamentStage.EARLY -> 0.0f
+                TournamentStage.MIDDLE -> -0.01f
+                TournamentStage.LATE -> -0.04f  // Bubble / survival adjustment (play tighter in uncertain calls)
+            }
+        }
+
+        // 6. Stack levels (Table stack limits / M-Ratio)
+        val mRatioRaw = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
+        val mRatio = if (heroStack > 0 && isBbDisplay) heroStack else mRatioRaw
+        val stackAdjustment = if (mRatio < 10.0f) {
+            // Under short-stack pressure, reduce speculative play and tilt decisions to push/fold
+            if (sklanskyGroup <= 3) 0.06f else -0.06f
+        } else if (mRatio > 40.0f && stage == TournamentStage.LATE) {
+            // Big stack bully on the bubble
+            0.03f 
+>>>>>>> origin/main
         } else {
             0.0f
         }
@@ -559,13 +876,24 @@ object AdvisorEngine {
             if (avgTableVpip > 0) avgTablePfr / avgTableVpip else 0.5f
         }
 
+<<<<<<< HEAD
         val isPreflop = board.filterNotNull().isEmpty()
         val profitableCall = l2Score > potOdds
+=======
+        // The total overlays generated by L2 modifiers (environmental and opponent profiling)
+        val l2Overlays = netOpponentAdjustment + positionalAdj + stageAdj + stackAdjustment
+        
+        // Apply overlays to the pure Monte Carlo win rate to get a calibrated true equity estimate
+        val adjustedS1 = (s1 + l2Overlays).coerceIn(0.0f, 1.0f)
+
+        val profitableCall = adjustedS1 > targetPotOdds
+>>>>>>> origin/main
 
         val action: String
         val explanation: String
         fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
 
+<<<<<<< HEAD
         if (betToCall > 0) {
             if (profitableCall) {
                 // Positively expected call (L2 score > pot odds)
@@ -589,10 +917,51 @@ object AdvisorEngine {
                 } else {
                     action = "FOLD"
                     explanation = "L2 Фолд: математически невыгодно, сила ${pct(l2Score)}% < шансы ${pct(potOdds)}%"
+=======
+        val activeOpponentsCount = opponents.count { it.isActive }
+        val isMultiway = activeOpponentsCount >= 2
+        val fairShare = if (activeOpponentsCount > 0) 1.0f / (activeOpponentsCount + 1.0f) else 0.5f
+
+        val betThreshold = if (isPreflop) {
+            if (isMultiway) 0.45f else 0.40f
+        } else {
+            fairShare + if (isMultiway) 0.10f else 0.05f
+        }
+        val raiseThreshold = if (isPreflop) {
+            if (isMultiway) 0.60f else 0.55f
+        } else {
+            fairShare + if (isMultiway) 0.25f else 0.15f
+        }
+
+        if (betToCall > 0) {
+            if (profitableCall) {
+                // Positively expected call (L2 score > pot odds)
+                if (l2Score > raiseThreshold || (isPreflop && sklanskyGroup <= 2 && l2Score > 0.45f)) {
+                    if (mRatio < 12.0f) {
+                        action = "ALL-IN"
+                        explanation = "L2 ALL-IN: short stack def [M=${String.format(Locale.US, "%.1f", mRatio)}]"
+                    } else {
+                        action = "RAISE"
+                        explanation = "L2 Raise (value): exploit field, power ${pct(l2Score)}%"
+                    }
+                } else {
+                    action = "CALL"
+                    explanation = "L2 Call: power ${pct(l2Score)}% > odds ${pct(targetPotOdds)}% (with margin)"
+                }
+            } else {
+                // Negative expected call (L2 score <= pot odds)
+                if (l2Score > targetPotOdds - 0.05f && (isPreflop && sklanskyGroup <= 4)) {
+                    action = "CALL"
+                    explanation = "L2 Call (defense): strong pos draw"
+                } else {
+                    action = "FOLD"
+                    explanation = "L2 Fold: weak power ${pct(l2Score)}% < odds ${pct(targetPotOdds)}%"
+>>>>>>> origin/main
                 }
             }
         } else {
             // No bet to call -> Check / Bet / Raise solver
+<<<<<<< HEAD
             if (l2Score > 0.60f) {
                 if (mRatio < 12.0f && (l2Score > 0.70f || sklanskyGroup <= 2)) {
                     action = "ALL-IN"
@@ -610,10 +979,25 @@ object AdvisorEngine {
             } else {
                 action = "CHECK"
                 explanation = "L2 Чек: пас линии, сила ${pct(l2Score)}%"
+=======
+            if (l2Score > raiseThreshold) {
+                action = "RAISE"
+                explanation = "L2 Raise (attack): initiative, power ${pct(l2Score)}%, ΔSD ${avgDeltaSD.toInt()}%"
+            } else if (l2Score > betThreshold || (isPreflop && sklanskyGroup <= 3)) {
+                action = "BET"
+                explanation = "L2 Bet: value line, power ${pct(l2Score)}%, Focus ${String.format(Locale.US, "%.2f", avgFocus)}"
+            } else if (l2Score > fairShare - 0.05f) {
+                action = "CHECK"
+                explanation = "L2 Check: pot control, power ${pct(l2Score)}%"
+            } else {
+                action = "CHECK"
+                explanation = "L2 Check: passive line, power ${pct(l2Score)}%"
+>>>>>>> origin/main
             }
         }
 
         // Compose high-fidelity overlay explanation reflecting GTO calibrated metrics
+<<<<<<< HEAD
         val detailedL2Explanation = "L2: EV[L1=${pct(baseL1Score)}%|Opp=${String.format(Locale.US, "%+.1f", netOpponentAdjustment*100)}%|Env=${String.format(Locale.US, "%+.1f", (positionalAdj+stageAdj+stackAdjustment)*100)}%] (Калиб=${pct(l2Score)}%) | $explanation"
 
         val confidenceValue = when(action) {
@@ -625,6 +1009,31 @@ object AdvisorEngine {
         }
 
         return Recommendation(action, confidenceValue, detailedL2Explanation)
+=======
+        val l2Vetki = "L1 MATH BASE (Branch 1-4): Average=${pct(baseL1Score)}%\n" +
+                      "L2 OVERLAYS:\n" +
+                      "- VPIP/Stats Adj (Branch 5): ${if (netOpponentAdjustment >= 0) "+" else ""}${pct(netOpponentAdjustment)}%\n" +
+                      "- Positional Adj (Branch 6): ${position.name} -> ${if (positionalAdj >= 0) "+" else ""}${pct(positionalAdj)}%\n" +
+                      "- Stage/ICM Adj (Branch 7): ${stage.name} -> ${if (stageAdj >= 0) "+" else ""}${pct(stageAdj)}%\n" +
+                      "- Stack Limits (Branch 8): M-Ratio<10 -> ${if (stackAdjustment >= 0) "+" else ""}${pct(stackAdjustment)}%\n" +
+                      "Net Output: L2 Calibrated EV=${pct(l2Score)}%"
+
+        val detailedL2Explanation = "⚙️ L2 PERSONAL STATS VETKI:\n$l2Vetki\n🎯 ACTION: $explanation"
+
+        val confidenceValue = when(action) {
+            "RAISE", "ALL-IN", "BET" -> (((l2Score - 0.4f) / 0.6f) * 100f).coerceIn(10f, 95f)
+            "FOLD" -> {
+                val msg = "🚨 DECISION-LOG [FOLD L2]: EV = ${pct(l2Score)}%, Target PotOdds/Threshold = ${pct(targetPotOdds)}%. (s1=${pct(s1)}%, baseL1=${pct(baseL1Score)}%). Reason: L2 threshold missed."
+                BotLogSharedState.appendLogBot(msg)
+                (((0.5f - l2Score) / 0.5f) * 100f).coerceIn(10f, 95f)
+            }
+            "CALL" -> ((1.0f - kotlin.math.abs(l2Score - 0.45f) / 0.55f) * 100f).coerceIn(10f, 95f)
+            "CHECK" -> ((1.0f - kotlin.math.abs(l2Score - 0.35f) / 0.65f) * 100f).coerceIn(10f, 95f)
+            else -> 50f
+        }
+
+        return Recommendation(action, confidenceValue, detailedL2Explanation, l2Score)
+>>>>>>> origin/main
     }
 
     fun computeRecommendationAdvanced(
@@ -642,10 +1051,19 @@ object AdvisorEngine {
         smallBlind: Float,
         bigBlind: Float,
         heroStack: Float,
+<<<<<<< HEAD
         lastActions: String = ""
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
             return Recommendation("FOLD", 100f, "Enter cards.")
+=======
+        lastActions: String = "",
+        heroActionOptions: List<String> = emptyList(),
+        isBbDisplay: Boolean = false
+    ): Recommendation {
+        if (heroCard1 == null || heroCard2 == null) {
+            return Recommendation("WAIT", 100f, "Wait cards.")
+>>>>>>> origin/main
         }
 
         // 1. Core Source 1: Monte Carlo Simulation win pct
@@ -675,6 +1093,7 @@ object AdvisorEngine {
                 maxOpponentBet = pBet
             }
         }
+<<<<<<< HEAD
         val betToCall = maxOf(0f, maxOpponentBet - heroBet)
         val activePot = potSize + betToCall
         val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
@@ -682,16 +1101,54 @@ object AdvisorEngine {
         // Core Source 4: Margin / Potential Odds Gap
         val s4 = if (betToCall > 0f) {
             val gap = s1 - potOdds
+=======
+        var betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        
+        // --- OCR FIX FOR MISSED BETS ---
+        if (betToCall == 0f && heroActionOptions.isNotEmpty()) {
+            val hasCheck = heroActionOptions.any { it.equals("Check", true) }
+            val hasCall = heroActionOptions.any { it.equals("Call", true) }
+            val hasAllIn = heroActionOptions.any { it.equals("All-in", true) }
+            
+            if (!hasCheck && (hasCall || hasAllIn)) {
+                if (hasAllIn && !hasCall) betToCall = heroStack
+                else betToCall = bigBlind.coerceAtLeast(1f) // Assumed minimal bet
+            }
+        }
+        val totalOpponentBets = opponents.filter { it.isActive }.sumOf { (if (settings.usePip) it.betSize else 0f).toDouble() }.toFloat()
+        val activePot = if (potSize + totalOpponentBets + heroBet < betToCall && betToCall > 0) betToCall + (bigBlind * 1.5f) else potSize + totalOpponentBets + heroBet
+        val potOdds = if (betToCall > 0) betToCall / (activePot + betToCall) else 0.0f
+        
+        val isPreflop = board.filterNotNull().isEmpty()
+        val isPostflop = !isPreflop
+        val activeOpponentsCount = opponents.count { it.isActive }
+        val targetPotOdds = getTargetPotOdds(potOdds, betToCall, heroStack, activeOpponentsCount, position, isPreflop, stage, sklanskyGroup, bigBlind)
+
+        // Core Source 4: Margin / Potential Odds Gap
+        val s4 = if (betToCall > 0f) {
+            val gap = s1 - targetPotOdds
+>>>>>>> origin/main
             ((gap + 1f) / 2f).coerceIn(0f, 1f)
         } else {
             (s1 * 1.15f).coerceIn(0f, 1f)
         }
 
+<<<<<<< HEAD
         val baseL1Score = (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
 
         val isPreflop = board.filterNotNull().isEmpty()
         val isPostflop = !isPreflop
         val mRatio = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
+=======
+        val baseL1Score = if (isPreflop) {
+            (s1 * 0.35f) + (s2 * 0.25f) + (s3 * 0.20f) + (s4 * 0.20f)
+        } else {
+            (s1 * 0.80f) + (s4 * 0.20f)
+        }
+
+        val mRatioRaw = if (heroStack > 0 && bigBlind > 0) heroStack / bigBlind else 20.0f
+        val mRatio = if (heroStack > 0 && isBbDisplay) heroStack else mRatioRaw
+>>>>>>> origin/main
 
         // 2. Identify active opponents, build robust fallback profiles for first zone if none exists
         val activeOpponents = opponents.filter { it.isActive }
@@ -702,7 +1159,11 @@ object AdvisorEngine {
         var totalEvL3_0 = 0f
         var totalEvL3_5 = 0f
         
+<<<<<<< HEAD
         var tableArchetype = "Неизвестный Пул"
+=======
+        var tableArchetype = "Unknown Pool"
+>>>>>>> origin/main
         var maxExploitReason = ""
 
         if (activeOpponents.isEmpty()) {
@@ -742,17 +1203,26 @@ object AdvisorEngine {
                 val wsdVal = profileStats.histWsd ?: 50f
 
                 val archetype = when {
+<<<<<<< HEAD
                     vpipVal > 40f && pfrVal < 12f -> "Гиппопотам"
                     vpipVal > 35f && pfrVal > 25f && postflopDanger > 40f -> "Гепард"
                     vpipVal < 16f && pfrVal < 12f && showdownResilience < 0.12f -> "Хамелеон"
                     wtsdVal > 35f && wsdVal < 45f -> "Обезьяна"
                     else -> "Акула"
+=======
+                    vpipVal > 40f && pfrVal < 12f -> "Whale🐋"
+                    vpipVal > 35f && pfrVal > 25f && postflopDanger > 40f -> "Maniac🐆"
+                    vpipVal < 16f && pfrVal < 12f && showdownResilience < 0.12f -> "Nit🦎"
+                    wtsdVal > 35f && wsdVal < 45f -> "Station🐒"
+                    else -> "Reg🦈"
+>>>>>>> origin/main
                 }
                 
                 tableArchetype = archetype
 
                 // 5. Pathway Adjustment for THIS specific opponent
                 var oppEvL2_5 = baseL1Score
+<<<<<<< HEAD
                 if (archetype == "Гепард") oppEvL2_5 += 0.14f
                 else if (archetype == "Гиппопотам" || archetype == "Обезьяна") oppEvL2_5 -= 0.10f
 
@@ -763,6 +1233,18 @@ object AdvisorEngine {
                 var oppEvL3_5 = baseL1Score - 0.05f
                 if (foldVulnerability > 0.22f || archetype == "Хамелеон") oppEvL3_5 += 0.18f
                 else if (archetype == "Гиппопотам" || archetype == "Обезьяна") oppEvL3_5 -= 0.18f
+=======
+                if (archetype == "Maniac🐆") oppEvL2_5 += 0.14f
+                else if (archetype == "Whale🐋" || archetype == "Station🐒") oppEvL2_5 -= 0.10f
+
+                var oppEvL3_0 = baseL1Score + 0.02f
+                if (archetype == "Whale🐋" || archetype == "Station🐒") oppEvL3_0 += 0.15f
+                else if (archetype == "Nit🦎") oppEvL3_0 -= 0.06f
+
+                var oppEvL3_5 = baseL1Score - 0.05f
+                if (foldVulnerability > 0.22f || archetype == "Nit🦎") oppEvL3_5 += 0.18f
+                else if (archetype == "Whale🐋" || archetype == "Station🐒") oppEvL3_5 -= 0.18f
+>>>>>>> origin/main
 
                 totalEvL2_5 += oppEvL2_5
                 totalEvL3_0 += oppEvL3_0
@@ -776,6 +1258,7 @@ object AdvisorEngine {
                 val cbet = profileStats.histCBet ?: 55f
 
                 if (isPreflop && (position == TablePosition.SB || position == TablePosition.BB) && steal > 40f) {
+<<<<<<< HEAD
                     maxExploitReason = "Steal >40% авто-защита блайндов"
                 } else if (isPreflop && fold3 > 60f) {
                     maxExploitReason = "Оверфолд на 3-Bet (>60%)"
@@ -789,6 +1272,21 @@ object AdvisorEngine {
                     maxExploitReason = "Флоат против шир. CB"
                 } else if (isPostflop && cr > 15f && betToCall > 0) {
                     maxExploitReason = "Агрессивный Чек-Рейз!"
+=======
+                    maxExploitReason = "Steal >40% auto blind def"
+                } else if (isPreflop && fold3 > 60f) {
+                    maxExploitReason = "Overfold to 3-Bet (>60%)"
+                } else if (isPostflop && betToCall == 0f && foldCbet > 55f) {
+                    maxExploitReason = "Auto-bluff (Fold to CB >55%)"
+                } else if (wtsdVal > 32f || (gap > 20f && vpipVal > 35f)) {
+                    maxExploitReason = "Opp is station (respect)"
+                } else if (wtsdVal < 25f && wsdVal > 55f && betToCall > bigBlind) {
+                    maxExploitReason = "Respect rock agro!"
+                } else if (isPostflop && betToCall > 0 && cbet > 70f) {
+                    maxExploitReason = "Float vs wide. CB"
+                } else if (isPostflop && cr > 15f && betToCall > 0) {
+                    maxExploitReason = "Agro Check-Raise!"
+>>>>>>> origin/main
                 }
             }
         }
@@ -799,8 +1297,13 @@ object AdvisorEngine {
         var evL3_5 = totalEvL3_5 / divider
 
         // Global environmental bounds
+<<<<<<< HEAD
         if (mRatio < 12f) {
             evL2_5 -= 0.12f // Короткий стек не имеет пространства для пассивного разыгрывания
+=======
+        if (mRatio < 8f) {
+            evL2_5 -= 0.05f // Короткий стек не имеет пространства для пассивного разыгрывания
+>>>>>>> origin/main
         }
         if (position == TablePosition.UTG || position == TablePosition.MP) {
             evL3_5 -= 0.05f // Без позиции блефы менее прибыльны
@@ -812,6 +1315,7 @@ object AdvisorEngine {
         val action: String
         val branchSummary: String
 
+<<<<<<< HEAD
         if (evL3_5 > evL3_0 && evL3_5 > evL2_5) {
             bestBranch = "L3.5 (Блеф)"
             l3Score = evL3_5
@@ -831,6 +1335,59 @@ object AdvisorEngine {
             l3Score = evL2_5
             action = if (betToCall > 0) "CALL" else "CHECK"
             branchSummary = "Имитация слабости / Сбор блефов прокаткой"
+=======
+        val isMultiway = activeOpponentsCount >= 2
+        val fairShare = if (activeOpponentsCount > 0) 1.0f / (activeOpponentsCount + 1.0f) else 0.5f
+
+        val betThreshold = if (isPreflop) {
+            if (isMultiway) 0.45f else 0.40f
+        } else {
+            fairShare + if (isMultiway) 0.10f else 0.05f
+        }
+        val raiseThreshold = if (isPreflop) {
+            if (isMultiway) 0.60f else 0.55f
+        } else {
+            fairShare + if (isMultiway) 0.25f else 0.15f
+        }
+
+        // Determine branch and adjust pure equity (s1) with heuristic overlays
+        if (evL3_5 > evL3_0 && evL3_5 > evL2_5) {
+            bestBranch = "L3.5 (Bluff)"
+            l3Score = evL3_5
+            val adjustedS1 = (s1 + (l3Score - baseL1Score)).coerceIn(0f, 1f)
+            action = if (betToCall > 0) {
+                if (l3Score > raiseThreshold) "RAISE" else if (adjustedS1 > targetPotOdds || (isPreflop && sklanskyGroup <= 4)) "CALL" else "FOLD"
+            } else "BET"
+            branchSummary = "Max fold equity bluffing"
+        } else if (evL3_0 > evL2_5) {
+            bestBranch = "L3.0 (Value)"
+            l3Score = evL3_0
+            val adjustedS1 = (s1 + (l3Score - baseL1Score)).coerceIn(0f, 1f)
+            if (betToCall > 0) {
+                if (adjustedS1 > targetPotOdds) {
+                    action = if (l3Score > raiseThreshold || (isPreflop && sklanskyGroup <= 2)) "RAISE" else "CALL"
+                } else {
+                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > targetPotOdds - 0.05f) "CALL" else "FOLD"
+                }
+            } else {
+                action = if (l3Score > betThreshold) "BET" else "CHECK"
+            }
+            branchSummary = if (action == "CHECK") "Pot control (check strong range)" else "Value extract"
+        } else {
+            bestBranch = "L2.5 (Passive)"
+            l3Score = evL2_5
+            val adjustedS1 = (s1 + (l3Score - baseL1Score)).coerceIn(0f, 1f)
+            if (betToCall > 0) {
+                if (adjustedS1 > targetPotOdds) {
+                    action = "CALL"
+                } else {
+                    action = if (isPreflop && sklanskyGroup <= 4 && l3Score > targetPotOdds - 0.05f) "CALL" else "FOLD"
+                }
+            } else {
+                action = "CHECK"
+            }
+            branchSummary = if (action == "CHECK") "Fake weak / Bal. check" else "Catch bluffs"
+>>>>>>> origin/main
         }
 
         // Ограничиваем score в пределах [0, 1]
@@ -841,6 +1398,7 @@ object AdvisorEngine {
         var explanation = branchSummary
 
         // Специфический пуш-фолд эксплойт на коротких стеках
+<<<<<<< HEAD
         if (mRatio < 12f && isPreflop) {
             if (sklanskyGroup <= 3 || finalScore > 0.58f) {
                 finalAction = "ALL-IN"
@@ -875,6 +1433,56 @@ object AdvisorEngine {
         }
 
         return Recommendation(finalAction, confidence, fullExpl)
+=======
+        if (mRatio < 8f && isPreflop) {
+            if (sklanskyGroup <= 4 || (finalScore > 0.60f && sklanskyGroup <= 5)) {
+                finalAction = "ALL-IN"
+                explanation = "ALL-IN short stack preflop [M=${String.format(Locale.US, "%.1f", mRatio)}]"
+            } else if (finalAction == "CALL" && betToCall > (bigBlind * 2.5f).coerceAtLeast(0f)) {
+                finalAction = "FOLD"
+                explanation = "Fold short stack preflop"
+                BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD]: Short stack preflop error (M=${mRatio})")
+            }
+        }
+        
+        // Push very high equity on late streets to extract maximum value or end hand
+        if (isPostflop && finalScore >= 0.85f && board.filterNotNull().size >= 4) {
+             finalAction = "ALL-IN"
+             explanation = "Max EV pressure. ALL-IN strong combo!"
+        } else if (isPostflop && finalScore >= 0.75f && board.filterNotNull().size >= 4 && (finalAction == "BET" || finalAction == "RAISE")) {
+             finalAction = "BET MAX"
+             explanation = "Strong value! Max bet."
+        }
+        
+        // Remove exploit reason if action contradicts it
+        if (maxExploitReason == "Overfold to 3-Bet (>60%)" && finalAction != "RAISE" && finalAction != "ALL-IN") maxExploitReason = ""
+        if (maxExploitReason == "Auto-bluff (Fold to CB >55%)" && finalAction != "BET" && finalAction != "ALL-IN" && finalAction != "RAISE") maxExploitReason = ""
+        if (maxExploitReason == "Float vs wide. CB" && finalAction != "CALL" && finalAction != "RAISE") maxExploitReason = ""
+
+        fun pct(f: Float): String = String.format(Locale.US, "%.0f", f * 100)
+        
+        val archetypeLabel = if (countedOpponents > 1) "Mix [$tableArchetype+]" else "[$tableArchetype]"
+        
+        val fullExpl: String = if (maxExploitReason.isNotEmpty()) {
+            "L3 $bestBranch: Check=${pct(evL2_5)}%|Act=${pct(evL3_0)}%|Agr=${pct(evL3_5)}% $archetypeLabel -> $maxExploitReason | $explanation"
+        } else {
+            "L3 $bestBranch: Check=${pct(evL2_5)}%|Act=${pct(evL3_0)}%|Agr=${pct(evL3_5)}% $archetypeLabel -> $explanation"
+        }
+
+        val confidence = when(finalAction) {
+            "RAISE", "ALL-IN", "BET", "BET MAX" -> (((finalScore - 0.4f) / 0.6f) * 100f).coerceIn(10f, 98f)
+                        "FOLD" -> {
+                            val msg = "🚨 DECISION-LOG [FOLD L3]: EV = ${pct(finalScore)}%, Target PotOdds/Threshold = ${pct(targetPotOdds)}%. (s1=${pct(s1)}%, baseL1=${pct(baseL1Score)}%). Reason: L3score ${pct(l3Score)}% <= Target."
+                            BotLogSharedState.appendLogBot(msg)
+                            (((0.5f - finalScore) / 0.5f) * 100f).coerceIn(10f, 98f)
+                        }
+            "CALL" -> ((1.0f - kotlin.math.abs(finalScore - 0.45f) / 0.55f) * 100f).coerceIn(10f, 98f)
+            "CHECK" -> ((1.0f - kotlin.math.abs(finalScore - 0.35f) / 0.65f) * 100f).coerceIn(10f, 98f)
+            else -> 50f
+        }
+
+        return Recommendation(finalAction, confidence, fullExpl, finalScore)
+>>>>>>> origin/main
     }
 
     fun computeRecommendationL4(
@@ -892,6 +1500,7 @@ object AdvisorEngine {
         smallBlind: Float,
         bigBlind: Float,
         heroStack: Float,
+<<<<<<< HEAD
         lastActions: String = ""
     ): Recommendation {
         if (heroCard1 == null || heroCard2 == null) {
@@ -902,6 +1511,23 @@ object AdvisorEngine {
         val baseL3 = computeRecommendationAdvanced(
             heroCard1, heroCard2, board, potSize, heroBet,
             opponents, activeOpponentsCount, simResult, settings, position, stage, smallBlind, bigBlind, heroStack, lastActions
+=======
+        lastActions: String = "",
+        heroActionOptions: List<String> = emptyList(),
+        isBbDisplay: Boolean = false
+    ): Recommendation {
+        if (heroCard1 == null || heroCard2 == null) {
+            return Recommendation("WAIT", 100f, "Wait cards.")
+        }
+
+        // L4 is disabled by USER request (Level 4 behavior-adaptive logic bypassed)
+        return Recommendation("", 0f, "Disabled by USER")
+    }
+        /*
+        val baseL3 = computeRecommendationAdvanced(
+            heroCard1, heroCard2, board, potSize, heroBet,
+            opponents, activeOpponentsCount, simResult, settings, position, stage, smallBlind, bigBlind, heroStack, lastActions, heroActionOptions, isBbDisplay
+>>>>>>> origin/main
         )
 
         // Find the main active opponent
@@ -910,7 +1536,11 @@ object AdvisorEngine {
 
         var action = baseL3.action
         var confidence = baseL3.confidence
+<<<<<<< HEAD
         var customExplanation = "DNA: Адаптивное решение"
+=======
+        var customExplanation = "DNA: Adaptive decision"
+>>>>>>> origin/main
 
         if (stats != null) {
             val vpip = stats.histVpip ?: stats.vpip
@@ -920,6 +1550,7 @@ object AdvisorEngine {
 
             // Define "Creature's DNA" profile subtypes of active opponent:
             val dnaProfile = when {
+<<<<<<< HEAD
                 vpip > 50f && pfr < 10f -> "Гиппопотам" // Super loose-passive whale
                 vpip > 35f && pfr > 25f -> "Гепард" // Aggressive maniac
                 vpip < 16f && pfr < 12f -> "Хамелеон" // Passive Nit
@@ -942,10 +1573,38 @@ object AdvisorEngine {
                     customExplanation = "DNA ($dnaProfile): Сброс маргинала при <15бб"
                 } else {
                     customExplanation = "DNA ($dnaProfile): Сброс рук"
+=======
+                vpip > 50f && pfr < 10f -> "Whale🐋" // Super loose-passive whale
+                vpip > 35f && pfr > 25f -> "Maniac🐆" // Aggressive maniac
+                vpip < 16f && pfr < 12f -> "Nit🦎" // Passive Nit
+                wtsd > 35f && wsd < 45f -> "Station🐒" // Showdown-station
+                else -> "Reg🦈" // Decent regular
+            }
+
+            // High pressure or short stack DNA response
+            val bigBlinds = if (heroStack > 0 && isBbDisplay) heroStack else heroStack / (bigBlind.coerceAtLeast(1f))
+            if (bigBlinds < 8f && board.filterNotNull().isEmpty()) {
+                // Short stack preflop Push/Fold DNA adjustment
+                val sklansky = getSklanskyGroup(heroCard1, heroCard2)
+                if (sklansky <= 4) {
+                    action = "ALL-IN" 
+                    confidence = 90f
+                    customExplanation = "DNA($dnaProfile): Push/Fold <8bb"
+                } else if (action == "CALL") {
+                    if (sklansky >= 6) {
+                        action = "FOLD"
+                        confidence = 85f
+                        customExplanation = "DNA($dnaProfile): Fold <8bb"
+                        BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
+                    }
+                } else if (action == "FOLD") {
+                    customExplanation = "DNA($dnaProfile): Fold <8bb"
+>>>>>>> origin/main
                 }
             } else {
                 // Preflop / Postflop adaptive meta game behavior matching DNA profiles:
                 when (dnaProfile) {
+<<<<<<< HEAD
                     "Гиппопотам" -> {
                         // Against passive whale, NEVER bluff, only thin value raise/bet
                         if (action == "RAISE" || action == "BET") {
@@ -958,10 +1617,26 @@ object AdvisorEngine {
                         }
                     }
                     "Гепард" -> {
+=======
+                    "Whale🐋" -> {
+                        // Against passive whale, NEVER bluff, only thin value raise/bet
+                        if (action == "RAISE" || action == "BET") {
+                            confidence = (confidence + 15f).coerceAtMost(98f)
+                            customExplanation = "DNA: Value Push > 🐋"
+                        } else if (action == "CALL" && baseL3.confidence < 40f) {
+                            action = "FOLD"
+                            confidence = 75f
+                            customExplanation = "DNA: Fold marginal > 🐋"
+                            BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
+                        }
+                    }
+                    "Maniac🐆" -> {
+>>>>>>> origin/main
                         // cheetah is super aggressive. Let's trap / check-call or let him bluff
                         if (action == "BET" && board.filterNotNull().isNotEmpty()) {
                             action = "CHECK"
                             confidence = 80f
+<<<<<<< HEAD
                             customExplanation = "DNA: Ловушка (чекаем вперед Гепарда)"
                         } else if (action == "CALL") {
                             confidence = (confidence + 10f).coerceAtMost(95f)
@@ -981,10 +1656,35 @@ object AdvisorEngine {
                         }
                     }
                     "Обезьяна" -> {
+=======
+                            customExplanation = "DNA: Trap (check > 🐆)"
+                        } else if (action == "CALL") {
+                            confidence = (confidence + 10f).coerceAtMost(95f)
+                            customExplanation = "DNA: Call 🐆 bet"
+                        } else if (action == "FOLD") {
+                            BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: 🐆")
+                        }
+                    }
+                    "Nit🦎" -> {
+                        // Chameleon is tight-passive. Overfold to his bets, steal his blinds.
+                        if (action == "CALL" && baseL3.confidence < 55f) {
+                            action = "FOLD"
+                            confidence = 90f
+                            customExplanation = "DNA: Fold > 🦎"
+                            BotLogSharedState.appendLogBot("🚨 DECISION-LOG [FOLD L4]: $customExplanation")
+                        } else if (action == "CHECK" && position == TablePosition.BTN) {
+                            action = "BET"
+                            confidence = 70f
+                            customExplanation = "DNA: Steal 🦎 pot"
+                        }
+                    }
+                    "Station🐒" -> {
+>>>>>>> origin/main
                         // Showdown station, loves calling. Don't pull big multi-street bluffs.
                         if (action == "BET" && baseL3.confidence < 60f) {
                             action = "CHECK"
                             confidence = 85f
+<<<<<<< HEAD
                             customExplanation = "DNA: Обезьяну не напугать, чек"
                         } else {
                             customExplanation = "DNA: Чистый велью-пуш в Обезьяну"
@@ -992,15 +1692,58 @@ object AdvisorEngine {
                     }
                     else -> {
                         customExplanation = "DNA (Акула): Адаптивный сбалансированный эксплойт"
+=======
+                            customExplanation = "DNA: Check (No bluff > 🐒)"
+                        } else {
+                            customExplanation = "DNA: Value Push > 🐒"
+                        }
+                    }
+                    else -> {
+                        customExplanation = "DNA(🦈): Balanced exploit"
+>>>>>>> origin/main
                     }
                 }
             }
         } else {
+<<<<<<< HEAD
             customExplanation = "DNA: Ожидание профиля (Баланс)"
         }
 
         return Recommendation(action, confidence, customExplanation)
     }
+=======
+            customExplanation = "DNA: Wait prof"
+        }
+
+        // Global safeguard: never fold if checking is free/possible
+        var maxOpponentBet = 0f
+        opponents.filter { it.isActive }.forEach { opp ->
+            val pBet = if (settings.usePip) opp.betSize else 0f
+            if (pBet > maxOpponentBet) maxOpponentBet = pBet
+        }
+        var betToCall = maxOf(0f, maxOpponentBet - heroBet)
+        
+        // --- OCR FIX FOR MISSED BETS ---
+        if (betToCall == 0f && heroActionOptions.isNotEmpty()) {
+            val hasCheck = heroActionOptions.any { it.equals("Check", true) }
+            val hasCall = heroActionOptions.any { it.equals("Call", true) }
+            val hasAllIn = heroActionOptions.any { it.equals("All-in", true) }
+            
+            if (!hasCheck && (hasCall || hasAllIn)) {
+                if (hasAllIn && !hasCall) betToCall = heroStack
+                else betToCall = bigBlind.coerceAtLeast(1f) // Assumed minimal bet
+            }
+        }
+        
+        if (betToCall <= 0f && action == "FOLD") {
+            action = "CHECK"
+            customExplanation = "Check (Free)"
+            confidence = 100f
+        }
+
+        return Recommendation(action, confidence, customExplanation, baseL3.originalScore)
+        */
+>>>>>>> origin/main
 }
 
 // 5. High-performance clean player stats and preferences database helper (SharedPreferences)
@@ -1019,6 +1762,17 @@ class PreferencesManager(context: Context) {
             apply()
         }
     }
+<<<<<<< HEAD
+=======
+    
+    fun saveOcrThreshold(threshold: Int) {
+        prefs.edit().putInt("scanner_ocr_threshold", threshold).apply()
+    }
+    
+    fun loadOcrThreshold(): Int {
+        return prefs.getInt("scanner_ocr_threshold", 195)
+    }
+>>>>>>> origin/main
 
     // Loads general simulation & advisor configurations
     fun loadAdvisorSettings(): AdvisorSettings {

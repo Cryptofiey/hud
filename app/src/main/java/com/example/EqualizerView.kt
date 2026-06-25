@@ -57,6 +57,7 @@ class EqualizerView(context: Context) : View(context) {
 
         if (!isVertical) {
             val gap = w * 0.02f
+<<<<<<< HEAD
             val blockWidth = (w - gap * 3) / 4f
 
             // Draw L1 (Math)
@@ -82,6 +83,48 @@ class EqualizerView(context: Context) : View(context) {
             drawL3BlockVertical(canvas, l3Top, w, blockHeight, state.l3Segments)
             val l4Top = (blockHeight + gap) * 3
             drawBlockVertical(canvas, l4Top, w, blockHeight, state.l4Fill, state.l4Color, "L4")
+=======
+            val totalBlockW = w - gap * 3
+            val unitW = totalBlockW / 6f
+
+            // Draw L1 (Math)
+            val l1W = unitW
+            drawBlock(canvas, 0f, l1W, h, state.l1Fill, state.l1Color, "L1")
+
+            // Draw L2 (Table Data)
+            val l2Left = l1W + gap
+            val l2W = unitW * 2f
+            drawBlock(canvas, l2Left, l2W, h, state.l2Fill, state.l2Color, "L2")
+
+            // Draw L3 (Profiles - custom segments)
+            val l3Left = l2Left + l2W + gap
+            val l3W = unitW * 2f
+            drawL3Block(canvas, l3Left, l3W, h, state.l3Segments)
+
+            // Draw L4 (Robot)
+            val l4Left = l3Left + l3W + gap
+            val l4W = unitW
+            drawBlock(canvas, l4Left, l4W, h, state.l4Fill, state.l4Color, "L4")
+        } else {
+            val gap = h * 0.02f
+            val totalBlockH = h - gap * 3
+            val unitH = totalBlockH / 6f
+
+            val l1H = unitH
+            drawBlockVertical(canvas, 0f, w, l1H, state.l1Fill, state.l1Color, "L1")
+            
+            val l2Top = l1H + gap
+            val l2H = unitH * 2f
+            drawBlockVertical(canvas, l2Top, w, l2H, state.l2Fill, state.l2Color, "L2")
+            
+            val l3Top = l2Top + l2H + gap
+            val l3H = unitH * 2f
+            drawL3BlockVertical(canvas, l3Top, w, l3H, state.l3Segments)
+            
+            val l4Top = l3Top + l3H + gap
+            val l4H = unitH
+            drawBlockVertical(canvas, l4Top, w, l4H, state.l4Fill, state.l4Color, "L4")
+>>>>>>> origin/main
         }
     }
 

@@ -15,11 +15,71 @@ object OpponentScanner {
         var boundingBox: Rect,
         var nickname: String,
         var consecutiveMisses: Int = 0,
+<<<<<<< HEAD
         var consecutiveHits: Int = 1
+=======
+        var consecutiveHits: Int = 1,
+        var isMature: Boolean = false,
+        var pendingNickname: String = "",
+        var pendingNicknameCount: Int = 0,
+        var lastKnownStackSize: Float = 100f,
+        var lastKnownBetSize: Float = 0f,
+        var lastKnownActive: Boolean = true,
+        var lastKnownVpip: Float? = null
+>>>>>>> origin/main
     )
 
     private val trackedAnchors = mutableListOf<TrackedAnchor>()
 
+<<<<<<< HEAD
+=======
+    fun mergeRightsideDigits(box: Rect, baseText: String, lines: List<Text.Line>): String {
+        var text = baseText
+        val h = box.height()
+        if (h <= 0) return text
+        var searchRight = box.right
+        
+        // Find any line to the right of 'box' that is vertically aligned
+        while (true) {
+            val nextLine = lines.firstOrNull { l ->
+                val b = l.boundingBox ?: return@firstOrNull false
+                if (l.text.trim() == baseText.trim()) return@firstOrNull false
+                val isToRight = b.left >= searchRight - (h * 0.2f) && b.left <= searchRight + (h * 4.0f)
+                val isVertAligned = Math.abs(b.centerY() - box.centerY()) < (h * 0.7f)
+                isToRight && isVertAligned
+            }
+            
+            if (nextLine != null) {
+                val nextText = nextLine.text.trim()
+                val cleanNext = nextText.replace(Regex("[^0-9.,KMBkmb]"), "")
+                if (cleanNext.isNotEmpty()) {
+                    text += " " + nextText
+                    searchRight = nextLine.boundingBox!!.right
+                } else {
+                    break
+                }
+            } else {
+                break
+            }
+        }
+        return text
+    }
+
+    private fun isSeatEmptyMarkerPresent(anchorBox: Rect, linesList: List<Text.Line>, width: Int): Boolean {
+        for (line in linesList) {
+            val lineBox = line.boundingBox ?: continue
+            val dist = Math.hypot((lineBox.centerX() - anchorBox.centerX()).toDouble(), (lineBox.centerY() - anchorBox.centerY()).toDouble())
+            if (dist < width * 0.16) {
+                val text = line.text.trim().uppercase()
+                if (text == "+" || text.contains("JOIN") || text.contains("TAKE SEAT") || text.contains("SIT DOWN") || text.contains("SITOUT") || text.contains("SIT OUT")) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+>>>>>>> origin/main
     private fun isValidPlayerName(name: String): Boolean {
         val upper = name.trim().uppercase()
         if (upper.isEmpty()) return false
@@ -27,8 +87,13 @@ object OpponentScanner {
         if (upper.length < 2 || upper.length > 20) return false
         if (name.trim().split(Regex("\\s+")).size > 2) return false // Names usually are 1-2 words max
         
+<<<<<<< HEAD
         // Ensure it doesn't have too many weird symbols
         val validCharCount = name.count { it.isLetterOrDigit() || it == '-' || it == '_' || it == ' ' }
+=======
+        // Ensure it doesn't have too many weird symbols (allow periods for truncated names like "Name...")
+        val validCharCount = name.count { it.isLetterOrDigit() || it == '-' || it == '_' || it == ' ' || it == '.' }
+>>>>>>> origin/main
         if (validCharCount < name.length * 0.6) return false
         
         // Skip action keywords and internal UI text
@@ -38,7 +103,12 @@ object OpponentScanner {
             "DEALER", "PASS", "SIT OUT", "SIT-OUT", "SITOUT", "CHOICE", "CHIPS",
             "FOLDED", "JOIN", "SIMILAR", "NLH", "VPIP", "PFR", "WTSD", "WSD",
             "BALANCE", "PROFILE", "HUD", "MONITOR", "MONIT", "RUNS", "GAME", "INTERPRETATION",
+<<<<<<< HEAD
             "EQUITY", "OPPONENT", "LIVE", "STATS", "TELEMETRY", "ADVISOR", "STRATEGY"
+=======
+            "EQUITY", "OPPONENT", "LIVE", "STATS", "TELEMETRY", "ADVISOR", "STRATEGY",
+            "LEVEL", "UP", "FREEROLL", "LATE", "REG", "RANK", "PAID", "TOURNEY", "BUY-IN"
+>>>>>>> origin/main
         )
         if (upper in actions) return false
         
@@ -65,7 +135,14 @@ object OpponentScanner {
         return true
     }
 
+<<<<<<< HEAD
     fun scan(result: Text, cleanBitmap: Bitmap, hudRects: List<Rect> = listOf(), commRect: Rect? = null, holeRect: Rect? = null): List<OpponentState> {
+=======
+    fun scan(result: Text?, cleanBitmap: Bitmap, hudRects: List<Rect> = listOf(), commRect: Rect? = null, holeRect: Rect? = null): List<OpponentState> {
+        if (result == null || PokerHudSharedState.appScreenContext.value != AppScreenState.COINPOKER_TABLE) {
+            return emptyList()
+        }
+>>>>>>> origin/main
         val candidates = mutableListOf<OpponentState>()
         
         // Filter out text that intersects with HUD rectangles, break down into lines to prevent grouping issues
@@ -96,10 +173,18 @@ object OpponentScanner {
             val y = box.centerY().toFloat()
             
             // Define exclusion zones based on the new layout
+<<<<<<< HEAD
             val inTopHeader = y < height * 0.15f || (y < height * 0.20f && x < width * 0.5f)
             // Community cards are roughly in the center third, not fully edge to edge horizontally
             val inCommunityCards = x > width * 0.25f && x < width * 0.75f && y > height * 0.38f && y < height * 0.68f
             val inHeroCards = x > width * 0.53f && x < width * 0.95f && y > height * 0.68f && y < height * 0.98f
+=======
+            val inTopHeader = y < height * 0.09f
+            // Community cards
+            val inCommunityCards = x > width * 0.10f && x < width * 0.90f && y > height * 0.40f && y < height * 0.54f
+            // Hero pocket cards region near the bottom center avatar, slightly off-center to the right
+            val inHeroCards = x > width * 0.44f && x < width * 0.79f && y > height * 0.69f && y < height * 0.83f
+>>>>>>> origin/main
             
             // Check if it's explicitly inside the known rects (redundant but safe)
             val inKnownComm = commRect != null && commRect.contains(x.toInt(), y.toInt())
@@ -122,6 +207,7 @@ object OpponentScanner {
                 if (line === nameLine) continue
                 val box = line.boundingBox ?: continue
                 
+<<<<<<< HEAD
                 // Stack is usually directly below the name
                 val isBelow = box.top >= nameBox.bottom - 30 && box.top < nameBox.bottom + 150
                 val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < 250
@@ -135,12 +221,35 @@ object OpponentScanner {
                     val rawText = textTrimmed.replace(",", "").replace(Regex("[^0-9.]"), "")
                     if (rawText.isNotEmpty() && rawText.count { it == '.' } <= 1) {
                         stackValue = rawText.toFloatOrNull() ?: 0f
+=======
+                // Stack is usually directly below the name or within its horizontal region.
+                val isBelow = box.top >= nameBox.bottom - (height * 0.02f) && box.top < nameBox.bottom + (height * 0.12f)
+                val isAlignedHorizontally = Math.abs(box.centerX() - nameBox.centerX()) < (width * 0.18f)
+                
+                if (isBelow && isAlignedHorizontally) {
+                    val mergedText = mergeRightsideDigits(box, line.text, linesList)
+                    val textTrimmed = mergedText.trim()
+                    // Reject if it contains generic letters (to avoid parsing chat messages as stack sizes)
+                    val genericLetterCount = textTrimmed.count { it.isLetter() && it.uppercaseChar() !in listOf('K', 'M', 'B') }
+                    if (genericLetterCount > 4) continue // More lenient to allow things like "14.2 BBs" or similar anomalies
+
+                    val s = textTrimmed.uppercase().replace(",", ".")
+                    val multiplier = when {
+                        s.contains("K") -> 1000f
+                        s.contains("M") -> 1000000f
+                        else -> 1f
+                    }
+                    val rawText = s.replace(Regex("[^0-9.]"), "")
+                    if (rawText.isNotEmpty() && rawText.count { it == '.' } <= 1) {
+                        stackValue = (rawText.toFloatOrNull() ?: 0f) * multiplier
+>>>>>>> origin/main
                         chipBox = box
                         break
                     }
                 }
             }
 
+<<<<<<< HEAD
             // Require a stack element to confirm this is a player profile
             if (chipBox == null) continue
 
@@ -154,13 +263,25 @@ object OpponentScanner {
                 nameBox.top - 300,
                 nameBox.right + 150,
                 nameBox.bottom + 100
+=======
+            // 3. Find Action (near the name, often above or overlapping)
+            val actionRegion = Rect(
+                (nameBox.left - width * 0.12f).toInt(),
+                (nameBox.top - height * 0.15f).toInt(),
+                (nameBox.right + width * 0.12f).toInt(),
+                (nameBox.bottom + height * 0.05f).toInt()
+>>>>>>> origin/main
             )
 
             var detectedAction = PlayerAction.NONE
             
             for (line in linesList) {
                 val box = line.boundingBox ?: continue
+<<<<<<< HEAD
                 if (box.top > cleanBitmap.height * 0.8f) continue // skip hero action buttons
+=======
+                if (box.top > height * 0.85f) continue // skip hero action buttons
+>>>>>>> origin/main
                 if (actionRegion.contains(box.centerX(), box.centerY())) {
                     val txt = line.text.uppercase(java.util.Locale.US)
                     if (txt.contains("FOLD") || txt.contains("ФОЛД") || txt.contains("ПАС") || txt.contains("СБРОС")) detectedAction = PlayerAction.FOLD
@@ -168,11 +289,36 @@ object OpponentScanner {
                     else if (txt.contains("RAISE") || txt.contains("РЕЙЗ")) detectedAction = PlayerAction.RAISE
                     else if (txt.contains("CHECK") || txt.contains("ЧЕК")) detectedAction = PlayerAction.CHECK
                     else if (txt.contains("ALL-IN") || txt.contains("ALL IN") || txt.contains("ОЛЛ-ИН") || txt.contains("ОЛЛ ИН")) detectedAction = PlayerAction.ALL_IN
+<<<<<<< HEAD
+=======
+                    else if (txt.contains("SIT OUT") || txt.contains("SITTING OUT") || txt.contains("ОТСУТСТВУЕТ") || txt.contains("ВНЕ ИГРЫ") || txt.contains("AWAY")) detectedAction = PlayerAction.SIT_OUT
+>>>>>>> origin/main
                     
                     if (detectedAction != PlayerAction.NONE) break
                 }
             }
             
+<<<<<<< HEAD
+=======
+            // Require a stack element OR a valid action to confirm this is a player profile
+            // This prevents players who went all-in (and have 0/no stack text) from disappearing.
+            if (chipBox == null && detectedAction == PlayerAction.NONE) {
+                // If we also want to keep players with no chips and no action (e.g. sitting out), 
+                // we'd need to match against existing anchors, but we'll do that below by looking up tracked anchors.
+                val matchesExisting = trackedAnchors.any { 
+                    Math.hypot((nameBox.centerX() - it.boundingBox.centerX()).toDouble(), 
+                               (nameBox.centerY() - it.boundingBox.centerY()).toDouble()) < (width * 0.15)
+                }
+                if (!matchesExisting) continue
+            }
+
+            // Create unified bounding box for the player combining their name and stack
+            val playerBox = Rect(nameBox)
+            if (chipBox != null) {
+                playerBox.union(chipBox)
+            }
+            
+>>>>>>> origin/main
             // Fallback color check for fold/call
             if (detectedAction == PlayerAction.NONE) {
                 var greenPixels = 0
@@ -225,7 +371,11 @@ object OpponentScanner {
                 val anchor = iterator.next()
                 
                 // Allow some movement
+<<<<<<< HEAD
                 val anchorRadius = 250.0
+=======
+                val anchorRadius = width * 0.18
+>>>>>>> origin/main
                 
                 val bestCandidate = uniqueCandidates
                     .filter { 
@@ -246,6 +396,7 @@ object OpponentScanner {
                     // Update bounding box strictly to the new candidate to prevent endless growth
                     anchor.boundingBox = android.graphics.Rect(bestCandidate.boundingBox!!)
                     
+<<<<<<< HEAD
                     // Allow name update if the new name is valid, but anchor provides stability
                     anchor.nickname = bestCandidate.nickname
                     
@@ -260,15 +411,70 @@ object OpponentScanner {
                     if (anchor.consecutiveMisses > 15) {
                         iterator.remove() // Player left, or we missed them too many times
                     } else if (anchor.consecutiveHits >= 3) {
+=======
+                    // Allow name update if the new name is valid, but require stability
+                    if (bestCandidate.nickname != anchor.nickname) {
+                        if (bestCandidate.nickname == anchor.pendingNickname) {
+                            anchor.pendingNicknameCount++
+                            if (anchor.pendingNicknameCount >= 3) {
+                                anchor.nickname = bestCandidate.nickname
+                                anchor.pendingNicknameCount = 0
+                            }
+                        } else {
+                            anchor.pendingNickname = bestCandidate.nickname
+                            anchor.pendingNicknameCount = 1
+                        }
+                    } else {
+                        anchor.pendingNicknameCount = 0
+                    }
+                    
+                    // Save last known values
+                    if (bestCandidate.stackSize > 0f) {
+                        anchor.lastKnownStackSize = bestCandidate.stackSize
+                    }
+                    anchor.lastKnownBetSize = bestCandidate.betSize
+                    anchor.lastKnownActive = bestCandidate.isActive
+                    
+                    if (anchor.consecutiveHits >= 3) {
+                        anchor.isMature = true
+                        val usedStackSize = if (bestCandidate.stackSize > 0f) bestCandidate.stackSize else anchor.lastKnownStackSize
+                        finalOpponents.add(bestCandidate.copy(
+                            nickname = anchor.nickname, 
+                            boundingBox = anchor.boundingBox,
+                            stackSize = usedStackSize
+                        ))
+                    }
+                } else {
+                    anchor.consecutiveMisses++
+                    
+                    // Proactive check: if we see an empty seat marker at this player location, remove instantly
+                    val isEmptyMarker = isSeatEmptyMarkerPresent(anchor.boundingBox, linesList, width)
+                    if (isEmptyMarker) {
+                        anchor.consecutiveMisses = 10 // force clean up immediately!
+                    }
+                    
+                    if (anchor.consecutiveMisses > 8) { // Clean up empty positions faster (reduced from 25 to 8)
+                        iterator.remove() // Player left, or we missed them too many times
+                    } else if (anchor.isMature) {
+>>>>>>> origin/main
                         // Remember them for a few frames only if they were confirmed
                         finalOpponents.add(OpponentState(
                             id = 0,
                             nickname = anchor.nickname,
+<<<<<<< HEAD
                             stackSize = 0f,
                             isActive = true,
                             isRandom = true,
                             currentAction = "NONE",
                             boundingBox = anchor.boundingBox
+=======
+                            stackSize = anchor.lastKnownStackSize,
+                            isActive = anchor.lastKnownActive,
+                            isRandom = true,
+                            currentAction = "NONE",
+                            boundingBox = anchor.boundingBox,
+                            betSize = anchor.lastKnownBetSize
+>>>>>>> origin/main
                         ))
                     }
                 }
@@ -276,10 +482,22 @@ object OpponentScanner {
 
             for (candidate in uniqueCandidates) {
                 if (candidate !in matchedCandidates) {
+<<<<<<< HEAD
                     val newAnchor = TrackedAnchor(candidate.boundingBox!!, candidate.nickname, 0, 1)
                     trackedAnchors.add(newAnchor)
                     // We DO NOT add them to finalOpponents immediately on first sighting.
                     // They'll be added on frame 3 to prevent flickering ghosts.
+=======
+                    val newAnchor = TrackedAnchor(
+                        candidate.boundingBox!!, 
+                        candidate.nickname, 
+                        0, 1, false,
+                        lastKnownStackSize = if (candidate.stackSize > 0f) candidate.stackSize else 100f,
+                        lastKnownBetSize = candidate.betSize,
+                        lastKnownActive = candidate.isActive
+                    )
+                    trackedAnchors.add(newAnchor)
+>>>>>>> origin/main
                 }
             }
         }
@@ -301,9 +519,25 @@ object OpponentScanner {
                 
                 if (textUpper.contains("POT") || textUpper.contains("ПОТ") || !textUpper.any { it.isDigit() }) continue
                 
+<<<<<<< HEAD
                 val numStr = textUpper.replace(",", "").replace(Regex("[^0-9.]"), "")
                 if (numStr.isEmpty() || numStr.count { it == '.' } > 1) continue
                 val betVal = numStr.toFloatOrNull() ?: continue
+=======
+                // Reject if it contains too many letters (to avoid parsing "LEVEL 6" or chat bubbles as bets)
+                val genericLetterCount = textUpper.count { it.isLetter() && it !in listOf('K', 'M', 'B', 'S', 'C') }
+                if (genericLetterCount > 2 && !textUpper.contains("BB") && !textUpper.contains("ББ")) continue
+                
+                val s = textUpper.replace(",", ".")
+                val multiplier = when {
+                    s.contains("K") -> 1000f
+                    s.contains("M") -> 1000000f
+                    else -> 1f
+                }
+                val numStr = s.replace(Regex("[^0-9.]"), "")
+                if (numStr.isEmpty() || numStr.count { it == '.' } > 1) continue
+                val betVal = (numStr.toFloatOrNull() ?: continue) * multiplier
+>>>>>>> origin/main
                 if (betVal <= 0f) continue
                 
                 val intersectsPlayer = uniqueCandidates.any { android.graphics.Rect.intersects(it.boundingBox!!, lineBox) }
@@ -314,9 +548,26 @@ object OpponentScanner {
                 if (distToCenterSq < Math.pow(cleanBitmap.width * 0.15, 2.0)) continue
                 
                 val oppBox = opp.boundingBox ?: continue
+<<<<<<< HEAD
                 val distSq = Math.pow((lineBox.centerX() - oppBox.centerX()).toDouble(), 2.0) + Math.pow((lineBox.centerY() - oppBox.centerY()).toDouble(), 2.0)
                 
                 if (distSq < minDistSq && distSq < Math.pow(cleanBitmap.width * 0.15, 2.0)) {
+=======
+                
+                // Directional check: bets are placed in front of the player (towards the center)
+                val vecPx = lineBox.centerX() - oppBox.centerX()
+                val vecPy = lineBox.centerY() - oppBox.centerY()
+                val vecCx = screenCenterX - oppBox.centerX()
+                val vecCy = screenCenterY - oppBox.centerY()
+                
+                // Dot product > 0 means the angle is < 90 degrees (meaning it's roughly towards the center)
+                val dotProduct = vecPx * vecCx + vecPy * vecCy
+                if (dotProduct <= 0) continue
+                
+                val distSq = Math.pow(vecPx.toDouble(), 2.0) + Math.pow(vecPy.toDouble(), 2.0)
+                
+                if (distSq < minDistSq && distSq < Math.pow(cleanBitmap.width * 0.18, 2.0)) {
+>>>>>>> origin/main
                     minDistSq = distSq.toFloat()
                     closestBet = betVal
                 }
@@ -324,6 +575,67 @@ object OpponentScanner {
             opp.copy(betSize = closestBet)
         }
 
+<<<<<<< HEAD
         return opponentsWithBets.mapIndexed { i, opp -> opp.copy(id = i + 1) }
+=======
+        // Find session VPIP mapped to players
+        val opponentsWithVpip = opponentsWithBets.map { opp ->
+            var detectedVpip: Float? = null
+            var vpipBox: Rect? = null
+            
+            val oppBox = opp.boundingBox
+            if (oppBox != null) {
+                for (line in linesList) {
+                    val lineBox = line.boundingBox ?: continue
+                    
+                    // The VPIP window "91" is located to the right side of the avatar, above the name/stack plate.
+                    // oppBox is the union of name and stack text. The avatar is directly above oppBox.
+                    // The name box is often wider than the avatar.
+                    // So VPIP box is vertically ABOVE the oppBox (between top - 2.5*height and top).
+                    // And horizontally on the right side of the avatar (around right half of oppBox or slightly outside).
+                    
+                    // Robust y-bounds based on screen height to handle cases where the stack box wasn't parsed (which shrinks oppBox)
+                    // and lenient horizontal checks to support both active (highlighted) and folded (non-highlighted) players.
+                    val minTopY = oppBox.top - (height * 0.12f)
+                    val maxBottomY = oppBox.top + (height * 0.04f)
+                    val isAbove = lineBox.top >= minTopY && lineBox.bottom <= maxBottomY
+                    
+                    val isRightSide = lineBox.centerX() > oppBox.centerX() - (oppBox.width() * 0.35f) && 
+                                      lineBox.left <= oppBox.right + (oppBox.width() * 0.6f)
+                    
+                    if (isAbove && isRightSide) {
+                        val text = line.text.trim()
+                        
+                        // Most VIP looks like a simple 1-3 digit number (e.g., "91" or "100" or "0").
+                        // Make sure it doesn't contain "$", "BB", letters, etc., to avoid confusing it with blind indicators or bets (though bets are usually below).
+                        val numStr = text.replace(Regex("[^0-9]"), "")
+                        if (numStr.isNotEmpty() && numStr.length <= 3 && !text.contains("BB", ignoreCase = true) && !text.contains("$")) {
+                            val num = numStr.toFloatOrNull()
+                            // VPIP is 0..100.
+                            if (num != null && num in 0f..100f) {
+                                detectedVpip = num
+                                vpipBox = lineBox
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+            var finalVpip = detectedVpip
+            synchronized(trackedAnchors) {
+                val anchor = trackedAnchors.firstOrNull { it.nickname == opp.nickname }
+                if (anchor != null) {
+                    if (detectedVpip != null) {
+                        anchor.lastKnownVpip = detectedVpip
+                    } else {
+                        finalVpip = anchor.lastKnownVpip
+                    }
+                }
+            }
+            opp.copy(sessionVpip = finalVpip, sessionVpipBox = vpipBox)
+        }
+
+        return opponentsWithVpip.mapIndexed { i, opp -> opp.copy(id = i + 1) }
+>>>>>>> origin/main
     }
 }
