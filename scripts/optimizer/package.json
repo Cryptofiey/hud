@@ -1,0 +1,10 @@
+{
+  "name": "bot-strategy-optimizer",
+  "version": "1.0.0",
+  "description": "Автономный модуль проверки и оптимизации стратегий бота L1-L4",
+  "type": "module",
+  "dependencies": {
+    "pokersolver": "^2.1.4",
+    "zx": "^8.0.0"
+  }
+}
