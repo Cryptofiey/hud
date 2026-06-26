@@ -26,6 +26,10 @@ try {
         headers: { 'User-Agent': userAgent }
     });
     
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     let confirmToken = '';
     const textSnapshot = await res.clone().text().then(t => t.slice(0, 10000)).catch(() => '');
     const confirmMatch = textSnapshot.match(/confirm=([a-zA-Z0-9_-]+)/);
@@ -37,6 +41,31 @@ try {
     let downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
     if (confirmToken) {
         downloadUrl += `&confirm=${confirmToken}`;
+<<<<<<< HEAD
+=======
+=======
+    let downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    const textSnapshot = await res.text();
+    
+    // Modern GDrive uses hidden inputs in a form for confirmation
+    const confirmMatch = textSnapshot.match(/name="confirm" value="([a-zA-Z0-9_-]+)"/);
+    const uuidMatch = textSnapshot.match(/name="uuid" value="([a-zA-Z0-9_-]+)"/);
+    
+    if (confirmMatch) {
+        const confirmToken = confirmMatch[1];
+        console.log(`Found GDrive virus scan confirmation token: ${confirmToken}`);
+        downloadUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=${confirmToken}`;
+        if (uuidMatch) {
+            downloadUrl += `&uuid=${uuidMatch[1]}`;
+        }
+    } else {
+        // Fallback for simple confirm=xxx links
+        const confirmMatchLegacy = textSnapshot.match(/confirm=([a-zA-Z0-9_-]+)/);
+        if (confirmMatchLegacy) {
+            downloadUrl += `&confirm=${confirmMatchLegacy[1]}`;
+        }
+>>>>>>> origin/main
+>>>>>>> origin/main
     }
 
     console.log('Downloading file raw buffer...');

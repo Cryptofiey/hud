@@ -20,3 +20,11 @@ local.properties
 debug.keystore
 /apk
 /.build-outputs
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+/downloaded_logs
+/logs.zip
+>>>>>>> origin/main
+>>>>>>> origin/main
