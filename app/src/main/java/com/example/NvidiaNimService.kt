@@ -63,16 +63,24 @@ object NvidiaNimService {
         val custom = getCustomApiKey(context)
         if (custom.isNotEmpty()) return custom
         // Fallback to BuildConfig field generated from .env file
+<<<<<<< HEAD
         val buildConfigKey = try {
+=======
+        return try {
+            val field = BuildConfig::class.java.getField("N_VID_I_A_N_I_M_A_P_I_K_E_Y") // Or direct
+>>>>>>> origin/main
             BuildConfig.NVIDIA_NIM_API_KEY
         } catch (e: Exception) {
             ""
         }
+<<<<<<< HEAD
         if (buildConfigKey.isNotEmpty() && buildConfigKey != "YOUR_NVIDIA_NIM_API_KEY_HERE") {
             return buildConfigKey
         }
         // Default developer API key
         return "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"
+=======
+>>>>>>> origin/main
     }
 
     // JSON Input/Output Schemas as strict definitions for the AI model
