@@ -44,10 +44,7 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-<<<<<<< HEAD
-=======
-      signingConfig = signingConfigs.getByName("debugConfig")
->>>>>>> origin/main
+      signingConfig = signingConfigs.getByName("debug")
     }
     debug {
       signingConfig = signingConfigs.getByName("debugConfig")
