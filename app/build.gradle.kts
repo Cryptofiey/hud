@@ -16,7 +16,7 @@ android {
     targetSdk = 36
     
     // Auto-versioning for GitHub Actions / Obtainium
-    val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+    val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1110
     versionCode = runNumber
     versionName = "1.0.$runNumber"
 
@@ -61,7 +61,7 @@ android {
 }
 
 base {
-  archivesName.set("hud-0.0.${System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1}")
+  archivesName.set("hud-0.0.${System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1110}")
 }
 
 // Re-open android block for ksp since we closed it
