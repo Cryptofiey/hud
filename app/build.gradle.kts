@@ -16,11 +16,7 @@ android {
     targetSdk = 36
     
     // Auto-versioning for GitHub Actions / Obtainium
-<<<<<<< HEAD
     val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1111
-=======
-    val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1110
->>>>>>> origin/main
     versionCode = runNumber
     versionName = "1.0.$runNumber"
 
